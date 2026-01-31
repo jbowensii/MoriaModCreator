@@ -1,3 +1,12 @@
+# GUI Framework
 customtkinter>=5.2.0
+
+# Image processing
 pillow>=10.0.0
+
+# Build/packaging (optional - for creating executables)
 pyinstaller>=6.0.0
+
+# Testing
+pytest>=7.4.0
+pytest-cov>=4.1.0
