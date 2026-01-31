@@ -273,14 +273,14 @@ class BuildManager:
         
         Args:
             json_data: The JSON data to modify.
-            item_name: The export name to find.
+            item_name: The export name or row name to find.
             property_path: Dot-separated property path.
             new_value: The new value to set.
         """
         if 'Exports' not in json_data:
             return
         
-        # Try multiple ObjectName variations - prefer Default__ versions first
+        # First, try ObjectName matching for class-based exports (GameplayEffects, etc.)
         name_variations = [
             f"Default__{item_name}_C",
             f"Default__{item_name}",
@@ -295,6 +295,22 @@ class BuildManager:
                     if 'Data' in export and isinstance(export['Data'], list) and len(export['Data']) > 0:
                         self._set_nested_property_value(export['Data'], property_path, new_value)
                         return
+        
+        # If not found by ObjectName, try DataTable format (Table.Data rows)
+        # This handles files like DT_Items, DT_Armor, DT_Storage, etc.
+        try:
+            table_data = json_data['Exports'][0]['Table']['Data']
+            for row in table_data:
+                if row.get('Name') == item_name:
+                    # Found the row, now set the property in its Value array
+                    value_array = row.get('Value', [])
+                    if value_array:
+                        self._set_nested_property_value(value_array, property_path, new_value)
+                        logger.debug("Applied DataTable change: %s.%s = %s", item_name, property_path, new_value)
+                    return
+        except (KeyError, IndexError, TypeError):
+            # Not a DataTable format, that's fine
+            pass
 
     def _set_nested_property_value(self, data: list, property_path: str, new_value: str):
         """Set a property value using dot notation for nested traversal.

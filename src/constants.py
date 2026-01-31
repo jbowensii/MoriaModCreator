@@ -2,7 +2,7 @@
 
 # Application info
 APP_NAME = "Moria MOD Creator"
-APP_VERSION = "0.1"
+APP_VERSION = "0.3"
 
 # Unreal Engine versions
 UE_VERSION = "VER_UE4_27"  # For UAssetGUI
@@ -32,6 +32,13 @@ TITLE_ICON_SIZE = (40, 40)
 CHECKBOX_STATE_NONE = "none"
 CHECKBOX_STATE_MIXED = "mixed"
 CHECKBOX_STATE_ALL = "all"
+
+# UI Colors
+COLOR_CHECKBOX_DEFAULT = "#1f6aa5"  # Blue - default checkbox color
+COLOR_CHECKBOX_MIXED = "#FFA500"    # Orange - mixed/partial state
+COLOR_STATUS_TEXT = "#FFA500"       # Orange - status bar text
+COLOR_SAVE_BUTTON = "#28a745"       # Green - save button
+COLOR_SAVE_BUTTON_HOVER = "#218838" # Dark green - save button hover
 
 # INI file settings
 CHECKBOX_STATES_FILE = "checkbox_states.ini"

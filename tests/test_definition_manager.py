@@ -1,8 +1,7 @@
 """Unit tests for the definition manager."""
 
-import pytest
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 import tempfile
 import shutil
 

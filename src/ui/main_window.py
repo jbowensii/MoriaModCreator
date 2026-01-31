@@ -9,7 +9,15 @@ from PIL import Image
 import customtkinter as ctk
 
 from src.config import get_definitions_dir, get_output_dir, get_default_mymodfiles_dir
-from src.constants import TOOLBAR_ICON_SIZE, TITLE_ICON_SIZE
+from src.constants import (
+    TOOLBAR_ICON_SIZE,
+    TITLE_ICON_SIZE,
+    COLOR_CHECKBOX_DEFAULT,
+    COLOR_CHECKBOX_MIXED,
+    COLOR_STATUS_TEXT,
+    COLOR_SAVE_BUTTON,
+    COLOR_SAVE_BUTTON_HOVER,
+)
 from src.build_manager import BuildManager
 from src.ui.about_dialog import show_about_dialog
 from src.ui.import_dialog import show_import_dialog
@@ -75,12 +83,14 @@ class MainWindow(ctk.CTk):
         self.current_definition_path = None
         self.select_all_state = "none"
         self.select_all_btn = None
+        self.select_all_var = None  # BooleanVar for right pane select all
         self.row_names = []
         self.row_properties = []
         self.progress_frame = None
         self.progress_label = None
         self.progress_bar = None
         self._current_mod_name = None
+        self.left_select_all_var = None  # BooleanVar for left pane select all
 
         self._create_widgets()
 
@@ -221,7 +231,7 @@ class MainWindow(ctk.CTk):
         """
         self.status_message.configure(
             text=message,
-            text_color="red" if is_error else "#FFA500"
+            text_color="red" if is_error else COLOR_STATUS_TEXT
         )
 
     def clear_status_message(self):
@@ -600,9 +610,9 @@ class MainWindow(ctk.CTk):
         checked_count = sum(1 for var in self.definition_vars.values() if var.get())
         total_count = len(self.definition_vars)
         
-        # Default checkbox color (from CustomTkinter theme)
-        default_color = ("#1f6aa5", "#1f6aa5")  # Blue
-        mixed_color = ("#FFA500", "#FFA500")  # Orange for mixed state
+        # Checkbox colors from constants
+        default_color = (COLOR_CHECKBOX_DEFAULT, COLOR_CHECKBOX_DEFAULT)
+        mixed_color = (COLOR_CHECKBOX_MIXED, COLOR_CHECKBOX_MIXED)
         
         if checked_count == 0:
             # None checked
@@ -674,10 +684,9 @@ class MainWindow(ctk.CTk):
         checkbox = self.definition_checkboxes[dir_path]
         state = self._get_directory_child_state(dir_path)
         
-        # Update checkbox state and color to show tri-state
-        # Default checkbox color (from CustomTkinter theme)
-        default_color = ("#1f6aa5", "#1f6aa5")  # Blue
-        mixed_color = ("#FFA500", "#FFA500")  # Orange for mixed state
+        # Checkbox colors from constants
+        default_color = (COLOR_CHECKBOX_DEFAULT, COLOR_CHECKBOX_DEFAULT)
+        mixed_color = (COLOR_CHECKBOX_MIXED, COLOR_CHECKBOX_MIXED)
         
         if state == "none":
             checkbox.deselect()
@@ -1596,8 +1605,8 @@ class MainWindow(ctk.CTk):
             text="Save",
             width=80,
             height=32,
-            fg_color="#28a745",
-            hover_color="#218838",
+            fg_color=COLOR_SAVE_BUTTON,
+            hover_color=COLOR_SAVE_BUTTON_HOVER,
             text_color="white",
             font=ctk.CTkFont(weight="bold"),
             command=self._on_save_click
@@ -1665,9 +1674,9 @@ class MainWindow(ctk.CTk):
         checked_count = sum(1 for var in self.row_checkbox_vars if var.get())
         total_count = len(self.row_checkbox_vars)
         
-        # Default checkbox color (from CustomTkinter theme)
-        default_color = ("#1f6aa5", "#1f6aa5")  # Blue
-        mixed_color = ("#FFA500", "#FFA500")  # Orange for mixed state
+        # Checkbox colors from constants
+        default_color = (COLOR_CHECKBOX_DEFAULT, COLOR_CHECKBOX_DEFAULT)
+        mixed_color = (COLOR_CHECKBOX_MIXED, COLOR_CHECKBOX_MIXED)
         
         if checked_count == 0:
             # None checked

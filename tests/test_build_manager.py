@@ -1,9 +1,7 @@
 """Unit tests for the build manager."""
 
-import json
-import pytest
 from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 import tempfile
 import shutil
 
@@ -105,6 +103,127 @@ class TestApplyJsonChange:
         # Should not raise, but value unchanged
         self.manager._apply_json_change(json_data, "TestObject", "Property", "200")
         assert json_data["Exports"][0]["Data"][0]["Value"] == 100
+
+    def test_apply_change_to_datatable_row(self):
+        """Test applying a change to a DataTable format (Table.Data rows)."""
+        json_data = {
+            "Exports": [
+                {
+                    "ObjectName": "DT_Items",
+                    "Table": {
+                        "Data": [
+                            {
+                                "Name": "Scrap",
+                                "Value": [
+                                    {"Name": "MaxStackSize", "Value": 99}
+                                ]
+                            },
+                            {
+                                "Name": "Wood",
+                                "Value": [
+                                    {"Name": "MaxStackSize", "Value": 99}
+                                ]
+                            }
+                        ]
+                    }
+                }
+            ]
+        }
+        
+        self.manager._apply_json_change(json_data, "Scrap", "MaxStackSize", "9999")
+        
+        # Scrap should be updated
+        assert json_data["Exports"][0]["Table"]["Data"][0]["Value"][0]["Value"] == 9999
+        # Wood should remain unchanged
+        assert json_data["Exports"][0]["Table"]["Data"][1]["Value"][0]["Value"] == 99
+
+    def test_apply_change_datatable_nested_property(self):
+        """Test applying a change to a nested property in DataTable format."""
+        json_data = {
+            "Exports": [
+                {
+                    "ObjectName": "DT_Storage",
+                    "Table": {
+                        "Data": [
+                            {
+                                "Name": "Dwarf.Inventory",
+                                "Value": [
+                                    {
+                                        "Name": "Dimensions",
+                                        "Value": [
+                                            {"Name": "Width", "Value": 8},
+                                            {"Name": "Height", "Value": 4}
+                                        ]
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                }
+            ]
+        }
+        
+        self.manager._apply_json_change(json_data, "Dwarf.Inventory", "Dimensions.Width", "12")
+        
+        assert json_data["Exports"][0]["Table"]["Data"][0]["Value"][0]["Value"][0]["Value"] == 12
+
+    def test_apply_change_datatable_row_not_found(self):
+        """Test applying a change when DataTable row is not found."""
+        json_data = {
+            "Exports": [
+                {
+                    "ObjectName": "DT_Items",
+                    "Table": {
+                        "Data": [
+                            {
+                                "Name": "Scrap",
+                                "Value": [
+                                    {"Name": "MaxStackSize", "Value": 99}
+                                ]
+                            }
+                        ]
+                    }
+                }
+            ]
+        }
+        
+        # Should not raise, and Scrap should remain unchanged
+        self.manager._apply_json_change(json_data, "NonExistentItem", "MaxStackSize", "9999")
+        assert json_data["Exports"][0]["Table"]["Data"][0]["Value"][0]["Value"] == 99
+
+    def test_apply_change_prefers_objectname_over_datatable(self):
+        """Test that ObjectName matching takes priority over DataTable format."""
+        # This tests the case where both formats might match
+        json_data = {
+            "Exports": [
+                {
+                    "ObjectName": "Default__TestItem_C",
+                    "Data": [
+                        {"Name": "MaxStackSize", "Value": 50}
+                    ]
+                },
+                {
+                    "ObjectName": "DT_Items",
+                    "Table": {
+                        "Data": [
+                            {
+                                "Name": "TestItem",
+                                "Value": [
+                                    {"Name": "MaxStackSize", "Value": 99}
+                                ]
+                            }
+                        ]
+                    }
+                }
+            ]
+        }
+        
+        self.manager._apply_json_change(json_data, "TestItem", "MaxStackSize", "9999")
+        
+        # ObjectName match should be updated (priority)
+        assert json_data["Exports"][0]["Data"][0]["Value"] == 9999
+        # DataTable should remain unchanged (fallback not used)
+        assert json_data["Exports"][1]["Table"]["Data"][0]["Value"][0]["Value"] == 99
 
 
 class TestSetNestedPropertyValue:
