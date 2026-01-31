@@ -52,7 +52,7 @@ class BuildManager:
             message: Status message.
             progress: Progress percentage (0.0 to 1.0).
         """
-        logger.info(f"Build progress: {progress:.0%} - {message}")
+        logger.info("Build progress: %.0f%% - %s", progress * 100, message)
         if self.progress_callback:
             self.progress_callback(message, progress)
 
@@ -100,7 +100,7 @@ class BuildManager:
             else:
                 return False, "Could not create zip file"
 
-        except Exception as e:
+        except (OSError, ValueError, KeyError) as e:
             logger.exception("Build failed with exception")
             return False, str(e)
 
@@ -130,8 +130,8 @@ class BuildManager:
                     success_count += 1
                 else:
                     error_count += 1
-            except Exception as e:
-                logger.error(f"Error processing {def_file.name}: {e}")
+            except (OSError, ET.ParseError, json.JSONDecodeError) as e:
+                logger.error("Error processing %s: %s", def_file.name, e)
                 error_count += 1
         
         return success_count, error_count
@@ -158,12 +158,12 @@ class BuildManager:
             
             mod_element = root.find('mod')
             if mod_element is None:
-                logger.error(f"No <mod> element in {def_file.name}")
+                logger.error("No <mod> element in %s", def_file.name)
                 return False
             
             mod_file_path = mod_element.get('file', '')
             if not mod_file_path:
-                logger.error(f"No file attribute in <mod> element of {def_file.name}")
+                logger.error("No file attribute in <mod> element of %s", def_file.name)
                 return False
             
             # Normalize the path
@@ -172,7 +172,7 @@ class BuildManager:
             # Source and destination files
             source_file = jsondata_dir / normalized_path
             if not source_file.exists():
-                logger.error(f"Source file not found: {source_file}")
+                logger.error("Source file not found: %s", source_file)
                 return False
             
             dest_file = mymodfiles_dir / normalized_path
@@ -203,10 +203,10 @@ class BuildManager:
             return True
             
         except ET.ParseError as e:
-            logger.error(f"XML parse error in {def_file.name}: {e}")
+            logger.error("XML parse error in %s: %s", def_file.name, e)
             return False
         except json.JSONDecodeError as e:
-            logger.error(f"JSON parse error: {e}")
+            logger.error("JSON parse error: %s", e)
             return False
 
     def _apply_json_change(
@@ -309,7 +309,7 @@ class BuildManager:
         uassetgui_path = utilities_dir / UASSETGUI_EXE
         
         if not uassetgui_path.exists():
-            logger.error(f"{UASSETGUI_EXE} not found at {uassetgui_path}")
+            logger.error("%s not found at %s", UASSETGUI_EXE, uassetgui_path)
             return False
         
         mymodfiles_base = get_default_mymodfiles_dir() / mod_name
@@ -346,18 +346,19 @@ class BuildManager:
                     capture_output=True,
                     text=True,
                     timeout=BUILD_TIMEOUT,
-                    creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0
+                    creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0,
+                    check=False
                 )
                 
                 if result.returncode != 0 or not uasset_file.exists():
-                    logger.error(f"Failed to convert {json_file.name}: {result.stderr}")
+                    logger.error("Failed to convert %s: %s", json_file.name, result.stderr)
                     return False
                     
             except subprocess.TimeoutExpired:
-                logger.error(f"Timeout converting {json_file.name}")
+                logger.error("Timeout converting %s", json_file.name)
                 return False
-            except Exception as e:
-                logger.error(f"Error converting {json_file.name}: {e}")
+            except OSError as e:
+                logger.error("Error converting %s: %s", json_file.name, e)
                 return False
         
         return True
@@ -375,7 +376,7 @@ class BuildManager:
         retoc_path = utilities_dir / RETOC_EXE
         
         if not retoc_path.exists():
-            logger.error(f"{RETOC_EXE} not found at {retoc_path}")
+            logger.error("%s not found at %s", RETOC_EXE, retoc_path)
             return False
         
         mymodfiles_base = get_default_mymodfiles_dir() / mod_name
@@ -399,19 +400,20 @@ class BuildManager:
                 cmd,
                 capture_output=True,
                 text=True,
-                cwd=str(utilities_dir)
+                cwd=str(utilities_dir),
+                check=False
             )
             
             if result.returncode != 0:
-                logger.error(f"retoc failed with code {result.returncode}")
-                logger.error(f"stdout: {result.stdout}")
-                logger.error(f"stderr: {result.stderr}")
+                logger.error("retoc failed with code %s", result.returncode)
+                logger.error("stdout: %s", result.stdout)
+                logger.error("stderr: %s", result.stderr)
                 return False
             
             return True
             
-        except Exception as e:
-            logger.error(f"Error running retoc: {e}")
+        except OSError as e:
+            logger.error("Error running retoc: %s", e)
             return False
 
     def _create_zip(self, mod_name: str) -> Path | None:
@@ -427,7 +429,7 @@ class BuildManager:
         final_dir = mymodfiles_base / FINALMOD_DIR
         
         if not final_dir.exists():
-            logger.error(f"finalmod directory not found: {final_dir}")
+            logger.error("finalmod directory not found: %s", final_dir)
             return None
         
         downloads_dir = Path.home() / 'Downloads'
@@ -442,9 +444,9 @@ class BuildManager:
                         rel_path = file_path.relative_to(final_dir)
                         zipf.write(file_path, rel_path)
             
-            logger.info(f"Created mod zip: {zip_path}")
+            logger.info("Created mod zip: %s", zip_path)
             return zip_path
             
-        except Exception as e:
-            logger.error(f"Error creating zip file: {e}")
+        except OSError as e:
+            logger.error("Error creating zip file: %s", e)
             return None

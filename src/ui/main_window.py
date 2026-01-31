@@ -1,17 +1,17 @@
 """Main application window for Moria MOD Creator."""
 
 import configparser
+import json
 import logging
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from PIL import Image
 import customtkinter as ctk
 
-from src.config import get_utilities_dir, get_definitions_dir, get_output_dir, get_default_mymodfiles_dir
-from src.constants import TOOLBAR_ICON_SIZE, TITLE_ICON_SIZE, CHECKBOX_STATE_NONE, CHECKBOX_STATE_MIXED, CHECKBOX_STATE_ALL
+from src.config import get_definitions_dir, get_output_dir, get_default_mymodfiles_dir
+from src.constants import TOOLBAR_ICON_SIZE, TITLE_ICON_SIZE
 from src.build_manager import BuildManager
 from src.ui.about_dialog import show_about_dialog
-from src.ui.utility_check_dialog import find_utility
 from src.ui.import_dialog import show_import_dialog
 from src.ui.json_convert_dialog import show_json_convert_dialog
 from src.ui.mod_name_dialog import show_mod_name_dialog
@@ -59,6 +59,26 @@ class MainWindow(ctk.CTk):
         self.row_entries: list[ctk.CTkEntry] = []
         self.row_entry_vars: list[ctk.StringVar] = []
         self.row_values: list[str] = []  # Original values for resetting
+        
+        # Initialize widget attributes (created in helper methods)
+        self.content_frame = None
+        self.main_content = None
+        self.status_bar = None
+        self.save_btn = None
+        self.status_message = None
+        self.current_definitions_dir = None
+        self.definitions_list = None
+        self.mod_name_var = None
+        self.mod_name_entry = None
+        self.current_definition_path = None
+        self.select_all_state = "none"
+        self.select_all_btn = None
+        self.row_names = []
+        self.row_properties = []
+        self.progress_frame = None
+        self.progress_label = None
+        self.progress_bar = None
+        self._current_mod_name = None
 
         self._create_widgets()
 
@@ -108,7 +128,7 @@ class MainWindow(ctk.CTk):
                 )
                 icon_label = ctk.CTkLabel(left_frame, image=icon_image, text="")
                 icon_label.pack(side="left", padx=(0, 10))
-            except Exception:
+            except (OSError, ValueError):
                 pass
 
         title_label = ctk.CTkLabel(
@@ -506,8 +526,8 @@ class MainWindow(ctk.CTk):
                             # Reconstruct path from key (replace | with \ and ~ with :)
                             path_str = key.replace('|', '\\').replace('~', ':')
                             self._checkbox_states[path_str] = True
-            except Exception as e:
-                logger.error(f"Error loading checkbox states: {e}")
+            except (OSError, configparser.Error) as e:
+                logger.error("Error loading checkbox states: %s", e)
 
     def _save_checkbox_states(self):
         """Save checkbox states to the INI file."""
@@ -534,8 +554,8 @@ class MainWindow(ctk.CTk):
         try:
             with open(ini_path, 'w', encoding='utf-8') as f:
                 config.write(f)
-        except Exception as e:
-            logger.error(f"Error saving checkbox states: {e}")
+        except OSError as e:
+            logger.error("Error saving checkbox states: %s", e)
 
     def _get_saved_checkbox_state(self, path: Path) -> bool:
         """Get the saved checkbox state for a path.
@@ -669,9 +689,7 @@ class MainWindow(ctk.CTk):
             title_elem = root.find('title')
             if title_elem is not None and title_elem.text:
                 return title_elem.text.strip()
-        except ET.ParseError:
-            pass
-        except Exception:
+        except (ET.ParseError, OSError):
             pass
         # Fallback to filename without extension
         return file_path.stem
@@ -724,9 +742,7 @@ class MainWindow(ctk.CTk):
             desc_elem = root.find('description')
             if desc_elem is not None and desc_elem.text:
                 return desc_elem.text.strip()
-        except ET.ParseError:
-            pass
-        except Exception:
+        except (ET.ParseError, OSError):
             pass
         return ""
 
@@ -745,9 +761,7 @@ class MainWindow(ctk.CTk):
             author_elem = root.find('author')
             if author_elem is not None and author_elem.text:
                 return author_elem.text.strip()
-        except ET.ParseError:
-            pass
-        except Exception:
+        except (ET.ParseError, OSError):
             pass
         return ""
 
@@ -775,9 +789,7 @@ class MainWindow(ctk.CTk):
                         'property': prop,
                         'value': value
                     })
-        except ET.ParseError:
-            pass
-        except Exception:
+        except (ET.ParseError, OSError):
             pass
         # Sort by item name
         return sorted(changes, key=lambda x: x['item'].lower())
@@ -797,9 +809,7 @@ class MainWindow(ctk.CTk):
             mod_elem = root.find('mod')
             if mod_elem is not None:
                 return mod_elem.get('file', None)
-        except ET.ParseError:
-            pass
-        except Exception:
+        except (ET.ParseError, OSError):
             pass
         return None
 
@@ -823,7 +833,7 @@ class MainWindow(ctk.CTk):
             if full_path.exists():
                 with open(full_path, 'r', encoding='utf-8') as f:
                     return json.load(f)
-        except Exception:
+        except (OSError, json.JSONDecodeError):
             pass
         return None
 
@@ -870,7 +880,7 @@ class MainWindow(ctk.CTk):
                 pass
             
             return lookup
-        except Exception:
+        except (OSError, json.JSONDecodeError, KeyError):
             return {}
 
     def _get_nested_property_value(self, data: list | dict, property_path: str) -> str:
@@ -1141,14 +1151,6 @@ class MainWindow(ctk.CTk):
             
             # Skip class definition exports (non-Default__ exports that are just class defs)
             # Focus on Default__ exports which contain actual property values
-            # But also check if there's a direct match in changes_lookup
-            
-            # Check for direct match in changes_lookup
-            has_direct_match = False
-            for lookup_item_name in changes_lookup:
-                if lookup_item_name == item_name or lookup_item_name in item_name:
-                    has_direct_match = True
-                    break
             
             # For each property we're tracking, try to get the value from this export
             for prop_name in all_properties:
@@ -1453,7 +1455,7 @@ class MainWindow(ctk.CTk):
             else:
                 self.set_status_message(f"Build failed: {message}", is_error=True)
                 
-        except Exception as e:
+        except (OSError, RuntimeError) as e:
             logger.exception("Build failed with exception")
             self._hide_build_progress()
             self.set_status_message(f"Build failed: {e}", is_error=True)
@@ -1582,7 +1584,7 @@ class MainWindow(ctk.CTk):
             else:
                 self.set_status_message(f"Saved {changes_added} changes to {file_path.name}")
             
-        except Exception as e:
+        except (ET.ParseError, OSError) as e:
             self.set_status_message(f"Error saving: {e}", is_error=True)
 
     def _indent_xml(self, elem, level=0):
@@ -1598,10 +1600,12 @@ class MainWindow(ctk.CTk):
                 elem.text = indent + "  "
             if not elem.tail or not elem.tail.strip():
                 elem.tail = indent
+            last_child = None
             for child in elem:
                 self._indent_xml(child, level + 1)
-            if not child.tail or not child.tail.strip():
-                child.tail = indent
+                last_child = child
+            if last_child is not None and (not last_child.tail or not last_child.tail.strip()):
+                last_child.tail = indent
         else:
             if level and (not elem.tail or not elem.tail.strip()):
                 elem.tail = indent
@@ -1635,7 +1639,7 @@ class MainWindow(ctk.CTk):
                     hover_color=("gray75", "gray25"),
                     command=command
                 )
-            except Exception:
+            except (OSError, ValueError):
                 # Fallback to text button
                 btn = ctk.CTkButton(
                     parent,
@@ -1661,7 +1665,7 @@ class MainWindow(ctk.CTk):
         btn.pack(side="left", padx=5)
 
         # Store tooltip reference (for future tooltip implementation)
-        btn._tooltip_text = tooltip
+        btn.tooltip_text = tooltip
 
     def _run_import(self):
         """Run the retoc import process."""

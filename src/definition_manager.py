@@ -82,8 +82,8 @@ class DefinitionManager:
                         # Reconstruct path from key (replace | with \ and ~ with :)
                         path_str = key.replace('|', '\\').replace('~', ':')
                         self._checkbox_states[path_str] = True
-        except Exception as e:
-            logger.error(f"Error loading checkbox states: {e}")
+        except (OSError, configparser.Error) as e:
+            logger.error("Error loading checkbox states: %s", e)
 
     def save_checkbox_states(self, ui_states: dict[Path, bool] | None = None):
         """Save checkbox states to the INI file.
@@ -115,8 +115,8 @@ class DefinitionManager:
             ini_path.parent.mkdir(parents=True, exist_ok=True)
             with open(ini_path, 'w', encoding='utf-8') as f:
                 config.write(f)
-        except Exception as e:
-            logger.error(f"Error saving checkbox states: {e}")
+        except OSError as e:
+            logger.error("Error saving checkbox states: %s", e)
 
     def get_saved_state(self, path: Path) -> bool:
         """Get the saved checkbox state for a path.
@@ -215,10 +215,10 @@ class DefinitionManager:
             return result
             
         except ET.ParseError as e:
-            logger.error(f"XML parse error in {file_path}: {e}")
+            logger.error("XML parse error in %s: %s", file_path, e)
             return None
-        except Exception as e:
-            logger.error(f"Error parsing {file_path}: {e}")
+        except OSError as e:
+            logger.error("Error parsing %s: %s", file_path, e)
             return None
 
     @staticmethod
@@ -237,7 +237,7 @@ class DefinitionManager:
             desc_elem = root.find('description')
             if desc_elem is not None and desc_elem.text:
                 return desc_elem.text.strip()
-        except Exception:
+        except (OSError, ET.ParseError):
             pass
         return ""
 
@@ -257,6 +257,6 @@ class DefinitionManager:
             author_elem = root.find('author')
             if author_elem is not None and author_elem.text:
                 return author_elem.text.strip()
-        except Exception:
+        except (OSError, ET.ParseError):
             pass
         return ""

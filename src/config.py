@@ -9,9 +9,14 @@ from pathlib import Path
 COLOR_SCHEMES = ["Match Windows Theme", "Light Mode", "Dark Mode"]
 DEFAULT_COLOR_SCHEME = "Match Windows Theme"
 
-# Config cache
-_config_cache: configparser.ConfigParser | None = None
-_config_cache_mtime: float | None = None
+
+class _ConfigCache:
+    """Internal class to hold config cache state without using globals."""
+    config: configparser.ConfigParser | None = None
+    mtime: float | None = None
+
+
+_cache = _ConfigCache()
 
 
 def get_appdata_dir() -> Path:
@@ -59,26 +64,24 @@ def load_config() -> configparser.ConfigParser:
 
     The config is cached and only reloaded if the file has been modified.
     """
-    global _config_cache, _config_cache_mtime
-
     config_path = get_config_path()
 
     # Check if we need to reload
     if config_path.exists():
         current_mtime = config_path.stat().st_mtime
-        if _config_cache is not None and _config_cache_mtime == current_mtime:
-            return _config_cache
+        if _cache.config is not None and _cache.mtime == current_mtime:
+            return _cache.config
 
         # Load and cache
         config = configparser.ConfigParser()
         config.read(config_path)
-        _config_cache = config
-        _config_cache_mtime = current_mtime
+        _cache.config = config
+        _cache.mtime = current_mtime
         return config
     else:
         # No config file, return empty config
-        _config_cache = None
-        _config_cache_mtime = None
+        _cache.config = None
+        _cache.mtime = None
         return configparser.ConfigParser()
 
 
@@ -102,11 +105,9 @@ def save_config(
         definitions_dir: The path to the MOD Definitions directory.
         color_scheme: The color scheme setting.
     """
-    global _config_cache, _config_cache_mtime
-
     # Invalidate cache before saving
-    _config_cache = None
-    _config_cache_mtime = None
+    _cache.config = None
+    _cache.mtime = None
 
     config = configparser.ConfigParser()
     config['Game'] = {
@@ -130,7 +131,7 @@ def save_config(
     Path(definitions_dir).mkdir(parents=True, exist_ok=True)
 
     config_path = get_config_path()
-    with open(config_path, 'w') as f:
+    with open(config_path, 'w', encoding='utf-8') as f:
         config.write(f)
 
 
@@ -227,7 +228,7 @@ def validate_config() -> list[str]:
     if not output_dir.exists():
         try:
             output_dir.mkdir(parents=True, exist_ok=True)
-        except Exception as e:
+        except OSError as e:
             issues.append(f"Cannot create output directory: {e}")
     
     # Check mymodfiles directory
@@ -235,7 +236,7 @@ def validate_config() -> list[str]:
     if not mymodfiles_dir.exists():
         try:
             mymodfiles_dir.mkdir(parents=True, exist_ok=True)
-        except Exception as e:
+        except OSError as e:
             issues.append(f"Cannot create mymodfiles directory: {e}")
     
     # Check definitions directory
@@ -243,7 +244,7 @@ def validate_config() -> list[str]:
     if not definitions_dir.exists():
         try:
             definitions_dir.mkdir(parents=True, exist_ok=True)
-        except Exception as e:
+        except OSError as e:
             issues.append(f"Cannot create definitions directory: {e}")
     
     # Check game install path

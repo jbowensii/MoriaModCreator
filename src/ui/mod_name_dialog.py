@@ -1,6 +1,5 @@
 """Mod Name dialog for Moria MOD Creator."""
 
-from pathlib import Path
 import customtkinter as ctk
 
 from src.config import get_default_mymodfiles_dir
@@ -190,7 +189,7 @@ class ModNameDialog(ctk.CTkToplevel):
             self.result = mod_name
             self.destroy()
 
-        except Exception as e:
+        except OSError as e:
             # Show error in entry
             self.name_entry.configure(border_color="red")
             print(f"Error creating mod directory: {e}")
