@@ -283,6 +283,77 @@ class TestSetNestedPropertyValue:
         self.manager._set_nested_property_value(data, "Property", "200")
         assert data[0]["Value"] == 100
 
+    def test_array_index_simple(self):
+        """Test array indexing with bracket notation."""
+        data = [
+            {
+                "Name": "StageDataList",
+                "Value": [
+                    {"Name": "StageDataList", "Value": [
+                        {"Name": "MonumentProgressonPointsNeeded", "Value": 0}
+                    ]},
+                    {"Name": "StageDataList", "Value": [
+                        {"Name": "MonumentProgressonPointsNeeded", "Value": 180}
+                    ]},
+                    {"Name": "StageDataList", "Value": [
+                        {"Name": "MonumentProgressonPointsNeeded", "Value": 0}
+                    ]}
+                ]
+            }
+        ]
+        # Change Stage 2 (index 1) progression points
+        self.manager._set_nested_property_value(data, "StageDataList[1].MonumentProgressonPointsNeeded", "100")
+        # Stage 2 should be updated
+        assert data[0]["Value"][1]["Value"][0]["Value"] == 100
+        # Stage 1 and 3 should remain unchanged
+        assert data[0]["Value"][0]["Value"][0]["Value"] == 0
+        assert data[0]["Value"][2]["Value"][0]["Value"] == 0
+
+    def test_array_index_out_of_bounds(self):
+        """Test array indexing with out of bounds index."""
+        data = [
+            {
+                "Name": "StageDataList",
+                "Value": [
+                    {"Name": "StageDataList", "Value": [
+                        {"Name": "MonumentProgressonPointsNeeded", "Value": 0}
+                    ]}
+                ]
+            }
+        ]
+        # Index 5 is out of bounds - should not raise, value unchanged
+        self.manager._set_nested_property_value(data, "StageDataList[5].MonumentProgressonPointsNeeded", "100")
+        assert data[0]["Value"][0]["Value"][0]["Value"] == 0
+
+    def test_array_index_multiple_levels(self):
+        """Test array indexing with multiple array indices."""
+        data = [
+            {
+                "Name": "StageDataList",
+                "Value": [
+                    {"Name": "StageDataList", "Value": [
+                        {"Name": "StageBuildItems", "Value": [
+                            {"Name": "StageBuildItems", "Value": [
+                                {"Name": "Count", "Value": 100}
+                            ]},
+                            {"Name": "StageBuildItems", "Value": [
+                                {"Name": "Count", "Value": 20}
+                            ]}
+                        ]}
+                    ]}
+                ]
+            }
+        ]
+        # Change the count of the second build item in stage 1
+        self.manager._set_nested_property_value(
+            data, 
+            "StageDataList[0].StageBuildItems[1].Count", 
+            "50"
+        )
+        assert data[0]["Value"][0]["Value"][0]["Value"][1]["Value"][0]["Value"] == 50
+        # First item unchanged
+        assert data[0]["Value"][0]["Value"][0]["Value"][0]["Value"][0]["Value"] == 100
+
 
 class TestBuildProcess:
     """Integration tests for the build process."""

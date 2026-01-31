@@ -10,6 +10,7 @@ This module handles all build-related operations including:
 
 import json
 import logging
+import re
 import shutil
 import subprocess
 import xml.etree.ElementTree as ET
@@ -315,25 +316,51 @@ class BuildManager:
     def _set_nested_property_value(self, data: list, property_path: str, new_value: str):
         """Set a property value using dot notation for nested traversal.
         
+        Supports array indexing with bracket notation, e.g.:
+        - "StageDataList[1].MonumentProgressonPointsNeeded"
+        - "Value[0].Count"
+        
         Args:
             data: The data list to modify.
-            property_path: Dot-separated property path.
+            property_path: Dot-separated property path with optional array indices.
             new_value: The new value to set.
         """
         if not data or not property_path:
             return
         
-        parts = property_path.split('.')
+        # Parse property path into parts, handling array indices
+        # e.g., "StageDataList[1].MonumentProgressonPointsNeeded" -> [("StageDataList", 1), ("MonumentProgressonPointsNeeded", None)]
+        parts = []
+        for segment in property_path.split('.'):
+            match = re.match(r'^(\w+)(?:\[(\d+)\])?$', segment)
+            if match:
+                name = match.group(1)
+                index = int(match.group(2)) if match.group(2) is not None else None
+                parts.append((name, index))
+            else:
+                parts.append((segment, None))
+        
         current = data
         
         # Traverse to the parent of the target property
-        for part in parts[:-1]:
+        for name, index in parts[:-1]:
             if isinstance(current, list):
                 found = False
                 for item in current:
-                    if isinstance(item, dict) and item.get('Name') == part:
+                    if isinstance(item, dict) and item.get('Name') == name:
                         if 'Value' in item:
                             current = item['Value']
+                            # Handle array indexing
+                            if index is not None and isinstance(current, list):
+                                if 0 <= index < len(current):
+                                    indexed_item = current[index]
+                                    # If indexed item has a Value, traverse into it
+                                    if isinstance(indexed_item, dict) and 'Value' in indexed_item:
+                                        current = indexed_item['Value']
+                                    else:
+                                        current = indexed_item
+                                else:
+                                    return  # Index out of bounds
                             found = True
                             break
                 if not found:
@@ -342,28 +369,42 @@ class BuildManager:
                 return
         
         # Set the final property value
-        target_name = parts[-1]
+        target_name, target_index = parts[-1]
         if isinstance(current, list):
             for item in current:
                 if isinstance(item, dict) and item.get('Name') == target_name:
+                    # Handle array indexing on the final property
+                    if target_index is not None:
+                        if 'Value' in item and isinstance(item['Value'], list):
+                            if 0 <= target_index < len(item['Value']):
+                                indexed_item = item['Value'][target_index]
+                                if isinstance(indexed_item, dict) and 'Value' in indexed_item:
+                                    old_value = indexed_item['Value']
+                                    indexed_item['Value'] = self._convert_value(old_value, new_value)
+                        return
+                    
                     if 'Value' in item:
                         old_value = item['Value']
-                        # Check bool BEFORE int because bool is a subclass of int in Python
-                        if isinstance(old_value, bool):
-                            item['Value'] = new_value.lower() in ('true', '1', 'yes')
-                        elif isinstance(old_value, float):
-                            try:
-                                item['Value'] = float(new_value)
-                            except ValueError:
-                                item['Value'] = new_value
-                        elif isinstance(old_value, int):
-                            try:
-                                item['Value'] = int(float(new_value))
-                            except ValueError:
-                                item['Value'] = new_value
-                        else:
-                            item['Value'] = new_value
+                        item['Value'] = self._convert_value(old_value, new_value)
                     return
+    
+    def _convert_value(self, old_value, new_value: str):
+        """Convert new_value to match the type of old_value."""
+        # Check bool BEFORE int because bool is a subclass of int in Python
+        if isinstance(old_value, bool):
+            return new_value.lower() in ('true', '1', 'yes')
+        elif isinstance(old_value, float):
+            try:
+                return float(new_value)
+            except ValueError:
+                return new_value
+        elif isinstance(old_value, int):
+            try:
+                return int(float(new_value))
+            except ValueError:
+                return new_value
+        else:
+            return new_value
 
     def _remove_gameplay_tag(
         self,

@@ -3,6 +3,7 @@
 import configparser
 import json
 import logging
+import re
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from PIL import Image
@@ -1019,12 +1020,74 @@ class MainWindow(ctk.CTk):
         except (OSError, json.JSONDecodeError, KeyError):
             return {}
 
+    def _expand_wildcard_property(self, item_data: dict, property_pattern: str) -> list[tuple[str, str]]:
+        """Expand a property pattern with [*] wildcard to all matching indices.
+        
+        Args:
+            item_data: The item's data from the JSON.
+            property_pattern: Property path that may contain [*] wildcard.
+            
+        Returns:
+            List of (expanded_property, value) tuples. If no wildcard, returns single item.
+        """
+        if '[*]' not in property_pattern:
+            # No wildcard - return single property
+            value = self._get_item_property_value(item_data, property_pattern)
+            if value:
+                return [(property_pattern, value)]
+            return []
+        
+        # Find the array name and rest of path
+        # e.g., "StageDataList[*].MonumentProgressonPointsNeeded" 
+        # -> array_name="StageDataList", rest=".MonumentProgressonPointsNeeded"
+        match = re.match(r'^(.*?)\[\*\](.*)$', property_pattern)
+        if not match:
+            return []
+        
+        array_name = match.group(1)
+        rest_of_path = match.group(2)
+        if rest_of_path.startswith('.'):
+            rest_of_path = rest_of_path[1:]  # Remove leading dot
+        
+        # Get the array from item data
+        value_array = item_data.get('Value', [])
+        if not value_array:
+            return []
+        
+        # Find the array property
+        array_data = None
+        for prop in value_array:
+            if prop.get('Name') == array_name and 'Value' in prop:
+                array_data = prop['Value']
+                break
+        
+        if not array_data or not isinstance(array_data, list):
+            return []
+        
+        # Expand to all indices
+        results = []
+        for i, array_item in enumerate(array_data):
+            expanded_prop = f"{array_name}[{i}]"
+            if rest_of_path:
+                expanded_prop += f".{rest_of_path}"
+            
+            # Get the value for this specific index
+            value = self._get_item_property_value(item_data, expanded_prop)
+            if value:
+                results.append((expanded_prop, value))
+        
+        return results
+
     def _get_nested_property_value(self, data: list | dict, property_path: str) -> str:
         """Get a property value using dot notation for nested traversal.
 
+        Supports array indexing with bracket notation, e.g.:
+        - "StageDataList[1].MonumentProgressonPointsNeeded"
+        - "StageBuildItems[0].Count"
+
         Args:
             data: The data to search (list of properties or dict).
-            property_path: Dot-separated property path (e.g., "DurationMagnitude.ScalableFloatMagnitude.Value").
+            property_path: Dot-separated property path with optional array indices.
 
         Returns:
             The property value as a string, or empty string if not found.
@@ -1032,25 +1095,57 @@ class MainWindow(ctk.CTk):
         if not data or not property_path:
             return ''
         
-        parts = property_path.split('.')
+        # Parse property path into parts, handling array indices
+        # e.g., "StageDataList[1].MonumentProgressonPointsNeeded" -> [("StageDataList", 1), ("MonumentProgressonPointsNeeded", None)]
+        parts = []
+        for segment in property_path.split('.'):
+            match = re.match(r'^(\w+)(?:\[(\d+)\])?$', segment)
+            if match:
+                name = match.group(1)
+                index = int(match.group(2)) if match.group(2) is not None else None
+                parts.append((name, index))
+            else:
+                parts.append((segment, None))
+        
         current = data
         
-        for part in parts:
+        for name, index in parts:
             if isinstance(current, list):
                 # Search for property by Name in list
                 found = False
                 for item in current:
-                    if isinstance(item, dict) and item.get('Name') == part:
+                    if isinstance(item, dict) and item.get('Name') == name:
                         # Check if this has a Value that is a list (nested struct)
                         if 'Value' in item:
                             current = item['Value']
+                            # Handle array indexing
+                            if index is not None and isinstance(current, list):
+                                if 0 <= index < len(current):
+                                    indexed_item = current[index]
+                                    # If indexed item has a Value, traverse into it
+                                    if isinstance(indexed_item, dict) and 'Value' in indexed_item:
+                                        current = indexed_item['Value']
+                                    else:
+                                        current = indexed_item
+                                else:
+                                    return ''  # Index out of bounds
                             found = True
                             break
                 if not found:
                     return ''
             elif isinstance(current, dict):
-                if part in current:
-                    current = current[part]
+                if name in current:
+                    current = current[name]
+                    # Handle array indexing
+                    if index is not None and isinstance(current, list):
+                        if 0 <= index < len(current):
+                            indexed_item = current[index]
+                            if isinstance(indexed_item, dict) and 'Value' in indexed_item:
+                                current = indexed_item['Value']
+                            else:
+                                current = indexed_item
+                        else:
+                            return ''
                 elif 'Value' in current:
                     # Try to traverse into Value
                     current = current['Value']
@@ -1058,14 +1153,24 @@ class MainWindow(ctk.CTk):
                     if isinstance(current, list):
                         found = False
                         for item in current:
-                            if isinstance(item, dict) and item.get('Name') == part:
+                            if isinstance(item, dict) and item.get('Name') == name:
                                 current = item.get('Value', item)
+                                # Handle array indexing
+                                if index is not None and isinstance(current, list):
+                                    if 0 <= index < len(current):
+                                        indexed_item = current[index]
+                                        if isinstance(indexed_item, dict) and 'Value' in indexed_item:
+                                            current = indexed_item['Value']
+                                        else:
+                                            current = indexed_item
+                                    else:
+                                        return ''
                                 found = True
                                 break
                         if not found:
                             return ''
-                    elif isinstance(current, dict) and part in current:
-                        current = current[part]
+                    elif isinstance(current, dict) and name in current:
+                        current = current[name]
                     else:
                         return ''
                 else:
@@ -1105,8 +1210,8 @@ class MainWindow(ctk.CTk):
         if not value_array:
             return ''
         
-        # Check if property uses dot notation (nested path)
-        if '.' in property_name:
+        # Check if property uses dot notation or array indexing (nested path)
+        if '.' in property_name or '[' in property_name:
             return self._get_nested_property_value(value_array, property_name)
         
         # Simple property lookup
@@ -1299,6 +1404,30 @@ class MainWindow(ctk.CTk):
                             'value': '',              # No current tags
                             'new_value': '',
                             'has_mod': False
+                        })
+                    continue
+                
+                # Check if property has wildcard [*] - expand to all array indices
+                if '[*]' in prop_name:
+                    expanded_props = self._expand_wildcard_property(item, prop_name)
+                    for expanded_prop, current_value in expanded_props:
+                        # Check if there's an XML change for this specific item/property
+                        has_mod = item_name in changes_lookup and expanded_prop in changes_lookup[item_name]
+                        if has_mod:
+                            new_value = changes_lookup[item_name][expanded_prop]
+                        elif prop_name in none_defaults:
+                            # Use NONE default value but don't check the item
+                            new_value = none_defaults[prop_name]
+                        else:
+                            new_value = current_value
+                        
+                        display_data.append({
+                            'row_name': item_name,
+                            'name': display_name,
+                            'property': expanded_prop,  # Use expanded property with actual index
+                            'value': current_value,
+                            'new_value': new_value,
+                            'has_mod': has_mod
                         })
                     continue
                 
