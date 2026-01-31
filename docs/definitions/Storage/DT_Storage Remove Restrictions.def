@@ -1,0 +1,29 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<definition>
+  <title>Epic Packs Everywhere Remove Restrictions</title>
+  <author>Nexus Mods Member: @MereakFirmaxe</author>
+  <description>For all valid items in DT_Storage, Remove Restrictions</description>
+  <mod file="\Moria\Content\Tech\Data\Items\DT_Storage.json">
+    <delete item="AdventurersPack" property="ExcludeItems" value="Item.EpicPack" />
+    <delete item="AdventurersPack" property="ExcludeItems" value="Item.EpicItem" />
+    <delete item="AdventurersPack_Krampus" property="ExcludeItems" value="Item.EpicPack" />
+    <delete item="AdventurersPack_Krampus" property="ExcludeItems" value="Item.EpicItem" />
+    <delete item="AdventurersPack_Large" property="ExcludeItems" value="Item.EpicPack" />
+    <delete item="AdventurersPack_Large" property="ExcludeItems" value="Item.EpicItem" />
+    <delete item="AdventurersPack_Small" property="ExcludeItems" value="Item.EpicPack" />
+    <delete item="AdventurersPack_Small" property="ExcludeItems" value="Item.EpicItem" />
+    <delete item="Chest" property="ExcludeItems" value="Item.EpicPack" />
+    <delete item="Chest" property="ExcludeItems" value="Item.EpicItem" />
+    <delete item="Chest_Advanced" property="ExcludeItems" value="Item.EpicItem" />
+    <delete item="Chest_Advanced" property="ExcludeItems" value="Item.EpicPack" />
+    <delete item="Chest_DwarvenPuzzle" property="ExcludeItems" value="Item.EpicItem" />
+    <delete item="Chest_DwarvenPuzzle" property="ExcludeItems" value="Item.EpicPack" />
+    <delete item="Chest_Exploration" property="ExcludeItems" value="Item.EpicPack" />
+    <delete item="Chest_Exploration" property="ExcludeItems" value="Item.EpicItem" />
+    <delete item="Chest_Ornate" property="ExcludeItems" value="Item.EpicItem" />
+    <delete item="Chest_Ornate" property="ExcludeItems" value="Item.EpicPack" />
+    <delete item="Dwarf.BodyInventory" property="ExcludeItems" value="Item.EpicPack" />
+    <delete item="Dwarf.BodyInventory" property="ExcludeItems" value="Item.EpicItem" />
+    <delete item="Dwarf.Inventory" property="ExcludeItems" value="Item.EpicPack" />
+  </mod>
+</definition>

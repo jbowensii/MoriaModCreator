@@ -1,0 +1,9 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<definition>
+  <title>Epic Packs Everywhere Remove Allowed</title>
+  <author>Nexus Mods Member: @MereakFirmaxe</author>
+  <description>For all valid items in DT_Storage, Remove Allowed</description>
+  <mod file="\Moria\Content\Tech\Data\Items\DT_Storage.json">
+    <change item="NONE" property="AllowedItems" value="NULL"/>
+   </mod>
+</definition>
