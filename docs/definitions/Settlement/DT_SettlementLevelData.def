@@ -1,0 +1,15 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<definition>
+  <title>Settlement Level</title>
+  <author>Nexus Mods Member:sqitley made UnlockedNPCs</author>
+  <description>Increase NPCs at all settlement levels.  Original Mod put them at 99 but my experience was that it made my computer very slow recomment a cap at 40.</description>
+  <mod file="Moria\Content\Tech\Data\Settlements\DT_SettlementLevelData.json">
+    <change item="1" property="LevelData.MaxNpcsAllowed" value="40" />
+    <change item="2" property="LevelData.MaxNpcsAllowed" value="40" />
+    <change item="3" property="LevelData.MaxNpcsAllowed" value="40" />
+    <change item="4" property="LevelData.MaxNpcsAllowed" value="40" />
+    <change item="5" property="LevelData.MaxNpcsAllowed" value="40" />
+    <change item="6" property="LevelData.MaxNpcsAllowed" value="40" />
+    <change item="7" property="LevelData.MaxNpcsAllowed" value="40" />
+  </mod>
+</definition>

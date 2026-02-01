@@ -1,0 +1,16 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<definition>
+  <title>World Level</title>
+  <author>Nexus Mods Member:sqitley made UnlockedNPCs</author>
+  <description>Increase number of NPCs in one place at all settlement levels.  Original Mod put them at 99 but my experience was that it made my computer very slow recomment a cap at 40.</description>
+  <mod file="Moria\Content\Tech\Data\Settlements\DT_WorldLevelData.json">
+    <change item="Beacon" property="LevelData.ActiveSettlementCap" value="40" />
+    <change item="FirstSettlement" property="LevelData.ActiveSettlementCap" value="40" />
+    <change item="Monument_1" property="LevelData.ActiveSettlementCap" value="40" />
+    <change item="Monument_2" property="LevelData.ActiveSettlementCap" value="40" />
+    <change item="Monument_3" property="LevelData.ActiveSettlementCap" value="40" />
+    <change item="Monument_4" property="LevelData.ActiveSettlementCap" value="40" />
+    <change item="Monument_5" property="LevelData.ActiveSettlementCap" value="40" />
+    <change item="Monument_6" property="LevelData.ActiveSettlementCap" value="40" />
+  </mod>
+</definition>
