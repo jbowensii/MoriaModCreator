@@ -97,6 +97,30 @@ class MainWindow(ctk.CTk):
         self.progress_bar = None
         self._current_mod_name = None
         self.left_select_all_var = None  # BooleanVar for left pane select all
+        
+        # Virtual scroll attributes
+        self.virtual_display_data = []
+        self.row_checked = []
+        self.row_new_values = []
+        self.row_height = 32
+        self.visible_row_count = 20
+        self.buffer_rows = 5
+        self.scroll_position = 0
+        self.row_name_labels = []
+        self.row_property_labels = []
+        self.row_value_labels = []
+        self.widget_to_data_idx = {}
+        self.virtual_canvas = None
+        self.virtual_scrollbar = None
+        self.rows_frame = None
+        self.canvas_window = None
+        self.tree = None
+        self.tree_items = []
+        self.tree_edit_entry = None
+        self.search_var = None
+        self.search_entry = None
+        self.search_last_index = -1
+        self.search_last_text = ""
 
         self._create_widgets()
 
@@ -1681,11 +1705,18 @@ class MainWindow(ctk.CTk):
         for widget in self.main_content.winfo_children():
             widget.destroy()
 
+        # Show loading indicator in status bar
+        self.set_status_message("Loading definition data...")
+        self.update_idletasks()  # Force UI update to show the message
+
         # Get description and build display data from game files
         title = self._get_definition_title(file_path)
         author = self._get_definition_author(file_path)
         description = self._get_definition_description(file_path)
         display_data = self._build_display_data(file_path)
+        
+        # Clear loading message
+        self.clear_status_message()
 
         # Create details frame
         details_frame = ctk.CTkFrame(self.main_content)
@@ -1718,149 +1749,75 @@ class MainWindow(ctk.CTk):
             ctk.CTkLabel(desc_row, text="DESCRIPTION:", font=label_font, width=100, anchor="w").pack(side="left")
             ctk.CTkLabel(desc_row, text=description, font=value_font, anchor="w").pack(side="left", fill="x", expand=True)
 
-        # Table header
+        # Table header with tri-state checkbox only (column headers are in Treeview)
         header_frame = ctk.CTkFrame(details_frame, fg_color="transparent")
         header_frame.pack(fill="x", padx=10, pady=(10, 0))
-
-        # Configure columns with weights for alignment (checkbox, name, property, value, new)
-        header_frame.grid_columnconfigure(0, weight=0, minsize=30)  # Checkbox column
-        header_frame.grid_columnconfigure(1, weight=3, uniform="col")  # Name - larger
-        header_frame.grid_columnconfigure(2, weight=2, uniform="col")  # Property - moved towards Name
-        header_frame.grid_columnconfigure(3, weight=1, uniform="col")
-        header_frame.grid_columnconfigure(4, weight=1, uniform="col")
-
-        header_font = ctk.CTkFont(size=16, weight="bold")
         
         # Header tri-state checkbox for select all/none/mixed (uses color to indicate mixed)
         self.select_all_state = "none"  # Track state: "none", "all", "mixed"
         self.select_all_var = ctk.BooleanVar(value=False)
         self.select_all_btn = ctk.CTkCheckBox(
             header_frame,
-            text="",
+            text="Select All / None",
             variable=self.select_all_var,
             width=20,
+            font=ctk.CTkFont(size=14),
             command=self._on_select_all_toggle
         )
-        self.select_all_btn.grid(row=0, column=0, sticky="w")
+        self.select_all_btn.pack(side="left")
+
+        # Virtual scrolling container - uses canvas for efficient scrolling
+        self._setup_virtual_scroll_table(details_frame, display_data)
         
-        ctk.CTkLabel(header_frame, text="Name", font=header_font, anchor="w").grid(
-            row=0, column=1, sticky="ew", padx=(0, 10))
-        ctk.CTkLabel(header_frame, text="Property", font=header_font, anchor="w").grid(
-            row=0, column=2, sticky="ew", padx=(0, 10))
-        ctk.CTkLabel(header_frame, text="Value", font=header_font, anchor="w").grid(
-            row=0, column=3, sticky="ew", padx=(0, 10))
-        ctk.CTkLabel(header_frame, text="New", font=header_font, anchor="w").grid(
-            row=0, column=4, sticky="ew")
-
-        # Scrollable table for changes
-        changes_frame = ctk.CTkScrollableFrame(details_frame)
-        changes_frame.pack(fill="both", expand=True, padx=10, pady=(5, 10))
-
-        # Configure columns for changes with weights for alignment
-        changes_frame.grid_columnconfigure(0, weight=0, minsize=30)  # Checkbox column
-        changes_frame.grid_columnconfigure(1, weight=3, uniform="col")  # Name - larger
-        changes_frame.grid_columnconfigure(2, weight=2, uniform="col")  # Property - moved towards Name
-        changes_frame.grid_columnconfigure(3, weight=1, uniform="col")
-        changes_frame.grid_columnconfigure(4, weight=1, uniform="col")
-
-        # Clear row tracking lists
-        self.row_checkboxes = []
-        self.row_checkbox_vars = []
-        self.row_entries = []
-        self.row_entry_vars = []
-        self.row_values = []
-        self.row_names = []      # Original item names for XML
-        self.row_properties = [] # Property names for XML
-        self.row_frames = []     # Row frames for highlighting
-
-        # Display the data in table format
-        if display_data:
-            row_font = ctk.CTkFont(size=16)
-            for i, item in enumerate(display_data):
-                # Store original value for reset
-                self.row_values.append(str(item['value']))
-                # Store row_name and property for XML saving
-                self.row_names.append(item['row_name'])
-                self.row_properties.append(item['property'])
-                
-                # Checkbox - checked if has XML modification
-                var = ctk.BooleanVar(value=item.get('has_mod', False))
-                self.row_checkbox_vars.append(var)
-                
-                # New column - editable input field with new_value as default
-                new_var = ctk.StringVar(value=str(item['new_value']))
-                self.row_entry_vars.append(new_var)
-                
-                # Create row frame for highlighting
-                row_frame = ctk.CTkFrame(changes_frame, fg_color="transparent")
-                row_frame.grid(row=i, column=0, columnspan=5, sticky="ew", pady=1)
-                self.row_frames.append(row_frame)
-                
-                # Configure columns within row frame
-                row_frame.grid_columnconfigure(0, weight=0, minsize=30)
-                row_frame.grid_columnconfigure(1, weight=3, uniform="col")
-                row_frame.grid_columnconfigure(2, weight=2, uniform="col")
-                row_frame.grid_columnconfigure(3, weight=1, uniform="col")
-                row_frame.grid_columnconfigure(4, weight=1, uniform="col")
-                
-                checkbox = ctk.CTkCheckBox(
-                    row_frame,
-                    text="",
-                    variable=var,
-                    width=20,
-                    command=lambda idx=i: self._on_row_checkbox_toggle(idx)
-                )
-                checkbox.grid(row=0, column=0, sticky="w", pady=2)
-                self.row_checkboxes.append(checkbox)
-
-                ctk.CTkLabel(
-                    row_frame,
-                    text=item['name'],
-                    font=row_font,
-                    anchor="w"
-                ).grid(row=0, column=1, sticky="w", padx=(0, 10), pady=2)
-
-                ctk.CTkLabel(
-                    row_frame,
-                    text=item['property'],
-                    font=row_font,
-                    anchor="w"
-                ).grid(row=0, column=2, sticky="w", padx=(0, 10), pady=2)
-
-                ctk.CTkLabel(
-                    row_frame,
-                    text=item['value'],
-                    font=row_font,
-                    anchor="w"
-                ).grid(row=0, column=3, sticky="w", padx=(0, 10), pady=2)
-
-                new_entry = ctk.CTkEntry(
-                    row_frame,
-                    textvariable=new_var,
-                    font=row_font,
-                    width=80,
-                    height=28
-                )
-                new_entry.grid(row=0, column=4, sticky="w", pady=2)
-                self.row_entries.append(new_entry)
-                
-                # Apply initial highlight if checked
-                self._update_row_highlight(i)
-            
-            # Update select all checkbox state based on initial row states
-            self._update_select_all_checkbox_state()
-        else:
-            no_changes_label = ctk.CTkLabel(
-                changes_frame,
-                text="No data found - ensure game files are imported and converted",
-                text_color="gray",
-                font=ctk.CTkFont(size=16)
-            )
-            no_changes_label.grid(row=0, column=0, columnspan=5, pady=20)
-        
-        # Add Save button at bottom of right pane
+        # Add Save button row at bottom of right pane with row count
         save_button_frame = ctk.CTkFrame(details_frame, fg_color="transparent")
         save_button_frame.pack(fill="x", padx=10, pady=(10, 10))
+        
+        # Row count on the left
+        total_rows = len(display_data) if display_data else 0
+        row_count_label = ctk.CTkLabel(
+            save_button_frame,
+            text=f"Total: {total_rows} rows",
+            font=ctk.CTkFont(size=12),
+            text_color="gray"
+        )
+        row_count_label.pack(side="left")
+        
+        # Search section in center
+        search_frame = ctk.CTkFrame(save_button_frame, fg_color="transparent")
+        search_frame.pack(side="left", expand=True)
+        
+        # Search entry
+        self.search_var = ctk.StringVar()
+        self.search_var.trace_add("write", self._on_search_text_changed)
+        self.search_entry = ctk.CTkEntry(
+            search_frame,
+            textvariable=self.search_var,
+            width=200,
+            height=32,
+            placeholder_text="Search name...",
+            font=ctk.CTkFont(size=14)
+        )
+        self.search_entry.pack(side="left", padx=(0, 5))
+        self.search_entry.bind("<Return>", lambda e: self._on_search_next())
+        
+        # Search button (purple)
+        search_btn = ctk.CTkButton(
+            search_frame,
+            text="Find Next",
+            width=80,
+            height=32,
+            fg_color="#8B5CF6",  # Purple
+            hover_color="#7C3AED",  # Darker purple on hover
+            text_color="white",
+            font=ctk.CTkFont(weight="bold"),
+            command=self._on_search_next
+        )
+        search_btn.pack(side="left")
+        
+        # Track search position
+        self.search_last_index = -1
+        self.search_last_text = ""
         
         self.save_btn = ctk.CTkButton(
             save_button_frame,
@@ -1875,66 +1832,317 @@ class MainWindow(ctk.CTk):
         )
         self.save_btn.pack(side="right")
 
+    def _setup_virtual_scroll_table(self, parent: ctk.CTkFrame, display_data: list[dict]):
+        """Set up a virtual scrolling table that only renders visible rows.
+        
+        Uses tkinter Treeview which natively supports virtual scrolling for large datasets.
+        
+        Args:
+            parent: Parent frame to contain the table.
+            display_data: List of row data dictionaries.
+        """
+        import tkinter.ttk as ttk
+        
+        # Store display data for access by other methods
+        self.virtual_display_data = display_data if display_data else []
+        
+        # Data model - stores state for ALL rows (not tied to widgets)
+        self.row_values = []      # Original values
+        self.row_names = []       # Item names for XML
+        self.row_properties = []  # Property names for XML
+        self.row_checked = []     # Checkbox states (bool)
+        self.row_new_values = []  # New value entries (str)
+        
+        # Initialize data model from display_data
+        for item in self.virtual_display_data:
+            self.row_values.append(str(item['value']))
+            self.row_names.append(item['row_name'])
+            self.row_properties.append(item['property'])
+            self.row_checked.append(item.get('has_mod', False))
+            self.row_new_values.append(str(item['new_value']))
+        
+        if not self.virtual_display_data:
+            # Show empty state message
+            empty_frame = ctk.CTkFrame(parent, fg_color="transparent")
+            empty_frame.pack(fill="both", expand=True, padx=10, pady=10)
+            ctk.CTkLabel(
+                empty_frame,
+                text="No data found - ensure game files are imported and converted",
+                text_color="gray",
+                font=ctk.CTkFont(size=16)
+            ).pack(pady=20)
+            return
+        
+        # Create container frame
+        container = ctk.CTkFrame(parent)
+        container.pack(fill="both", expand=True, padx=10, pady=(5, 10))
+        
+        # Style the Treeview to match dark theme
+        style = ttk.Style()
+        bg_color = self._get_theme_color(ctk.ThemeManager.theme["CTkFrame"]["fg_color"])
+        fg_color = self._get_theme_color(("gray10", "gray90"))
+        selected_color = self._get_theme_color(("gray80", "gray30"))
+        
+        style.theme_use("clam")
+        style.configure("Virtual.Treeview",
+                        background=bg_color,
+                        foreground=fg_color,
+                        fieldbackground=bg_color,
+                        rowheight=44,
+                        font=("", 20))
+        style.configure("Virtual.Treeview.Heading",
+                        background=self._get_theme_color(("gray85", "gray25")),
+                        foreground=fg_color,
+                        font=("", 20, "bold"))
+        style.map("Virtual.Treeview",
+                  background=[("selected", selected_color)],
+                  foreground=[("selected", fg_color)])
+        
+        # Create Treeview with columns
+        columns = ("checked", "name", "property", "value", "new")
+        self.tree = ttk.Treeview(container, columns=columns, show="headings", 
+                                  style="Virtual.Treeview", selectmode="extended")
+        
+        # Configure columns - make them resizable
+        self.tree.heading("checked", text="☑")
+        self.tree.heading("name", text="Name")
+        self.tree.heading("property", text="Property")
+        self.tree.heading("value", text="Value")
+        self.tree.heading("new", text="New")
+        
+        self.tree.column("checked", width=40, minwidth=30, stretch=False, anchor="center")
+        self.tree.column("name", width=250, minwidth=100, stretch=True)
+        self.tree.column("property", width=200, minwidth=80, stretch=True)
+        self.tree.column("value", width=120, minwidth=60, stretch=True)
+        self.tree.column("new", width=120, minwidth=60, stretch=True)
+        
+        # Add scrollbar
+        scrollbar = ttk.Scrollbar(container, orient="vertical", command=self.tree.yview)
+        self.tree.configure(yscrollcommand=scrollbar.set)
+        
+        scrollbar.pack(side="right", fill="y")
+        self.tree.pack(side="left", fill="both", expand=True)
+        
+        # Populate tree with data
+        self.tree_items = []  # Store item IDs for reference
+        for i, item in enumerate(self.virtual_display_data):
+            checked_symbol = "☑" if self.row_checked[i] else "☐"
+            item_id = self.tree.insert("", "end", values=(
+                checked_symbol,
+                item['name'],
+                item['property'],
+                item['value'],
+                self.row_new_values[i]
+            ), tags=("checked" if self.row_checked[i] else "unchecked",))
+            self.tree_items.append(item_id)
+        
+        # Configure tag colors for checked rows
+        self.tree.tag_configure("checked", background=selected_color)
+        self.tree.tag_configure("unchecked", background=bg_color)
+        
+        # Bind events
+        self.tree.bind("<Double-1>", self._on_tree_double_click)
+        self.tree.bind("<Button-1>", self._on_tree_click)
+        self.tree.bind("<MouseWheel>", lambda e: None)  # Let default scrolling work
+        
+        # Store reference to editing entry
+        self.tree_edit_entry = None
+        
+        # Update select all checkbox state
+        self._update_select_all_checkbox_state()
+    
+    def _get_tree_data_index(self, item_id: str) -> int:
+        """Get the data index for a tree item ID."""
+        try:
+            return self.tree_items.index(item_id)
+        except (ValueError, AttributeError):
+            return -1
+    
+    def _on_tree_click(self, event):
+        """Handle single click on tree - toggle checkbox if clicked on first column."""
+        region = self.tree.identify_region(event.x, event.y)
+        if region != "cell":
+            return
+        
+        column = self.tree.identify_column(event.x)
+        item_id = self.tree.identify_row(event.y)
+        
+        if not item_id:
+            return
+        
+        data_idx = self._get_tree_data_index(item_id)
+        if data_idx < 0:
+            return
+        
+        # If clicked on checkbox column, toggle it
+        if column == "#1":  # First column (checked)
+            self.row_checked[data_idx] = not self.row_checked[data_idx]
+            is_checked = self.row_checked[data_idx]
+            
+            # If unchecking, reset new value to original
+            if not is_checked:
+                self.row_new_values[data_idx] = self.row_values[data_idx]
+            
+            # Update display
+            checked_symbol = "☑" if is_checked else "☐"
+            values = list(self.tree.item(item_id, "values"))
+            values[0] = checked_symbol
+            values[4] = self.row_new_values[data_idx]
+            self.tree.item(item_id, values=values, 
+                          tags=("checked" if is_checked else "unchecked",))
+            
+            self._update_select_all_checkbox_state()
+    
+    def _on_tree_double_click(self, event):
+        """Handle double-click to edit the New column."""
+        region = self.tree.identify_region(event.x, event.y)
+        if region != "cell":
+            return
+        
+        column = self.tree.identify_column(event.x)
+        item_id = self.tree.identify_row(event.y)
+        
+        if not item_id:
+            return
+        
+        # Only allow editing the "new" column (#5)
+        if column != "#5":
+            return
+        
+        data_idx = self._get_tree_data_index(item_id)
+        if data_idx < 0:
+            return
+        
+        # Get cell bounding box
+        bbox = self.tree.bbox(item_id, column)
+        if not bbox:
+            return
+        
+        x, y, width, height = bbox
+        
+        # Destroy any existing edit entry
+        if self.tree_edit_entry:
+            self.tree_edit_entry.destroy()
+        
+        # Create entry for editing using tkinter Entry for better compatibility
+        import tkinter as tk
+        current_value = self.row_new_values[data_idx]
+        self.tree_edit_entry = tk.Entry(
+            self.tree,
+            font=("", 18),
+            bg=self._get_theme_color(("white", "gray20")),
+            fg=self._get_theme_color(("black", "white")),
+            insertbackground=self._get_theme_color(("black", "white"))
+        )
+        self.tree_edit_entry.place(x=x, y=y, width=width, height=height)
+        self.tree_edit_entry.insert(0, current_value)
+        self.tree_edit_entry.select_range(0, tk.END)
+        self.tree_edit_entry.focus_set()
+        
+        def save_edit(event=None):
+            new_value = self.tree_edit_entry.get()
+            self.row_new_values[data_idx] = new_value
+            
+            # Update tree display
+            values = list(self.tree.item(item_id, "values"))
+            values[4] = new_value
+            self.tree.item(item_id, values=values)
+            
+            self.tree_edit_entry.destroy()
+            self.tree_edit_entry = None
+        
+        def cancel_edit(event=None):
+            self.tree_edit_entry.destroy()
+            self.tree_edit_entry = None
+        
+        self.tree_edit_entry.bind("<Return>", save_edit)
+        self.tree_edit_entry.bind("<Escape>", cancel_edit)
+        self.tree_edit_entry.bind("<FocusOut>", save_edit)
+    
+    def _get_theme_color(self, color_tuple):
+        """Get the appropriate color based on current appearance mode."""
+        if isinstance(color_tuple, (list, tuple)) and len(color_tuple) == 2:
+            mode = ctk.get_appearance_mode()
+            return color_tuple[0] if mode == "Light" else color_tuple[1]
+        return color_tuple
+
     def _on_select_all_toggle(self):
         """Handle select all button toggle - cycles between all checked and all unchecked."""
+        if not hasattr(self, 'tree') or not hasattr(self, 'tree_items'):
+            return
+        
         # If currently none or mixed, select all. If all, deselect all.
-        if self.select_all_state == "all":
-            # Uncheck all
-            for i, var in enumerate(self.row_checkbox_vars):
-                var.set(False)
-                self.row_entry_vars[i].set(self.row_values[i])
-                self._update_row_highlight(i)
-        else:
-            # Check all
-            for i, var in enumerate(self.row_checkbox_vars):
-                var.set(True)
-                self._update_row_highlight(i)
+        new_state = self.select_all_state != "all"
+        
+        bg_color = self._get_theme_color(ctk.ThemeManager.theme["CTkFrame"]["fg_color"])
+        selected_color = self._get_theme_color(("gray80", "gray30"))
+        
+        for i, item_id in enumerate(self.tree_items):
+            self.row_checked[i] = new_state
+            if not new_state:
+                self.row_new_values[i] = self.row_values[i]
+            
+            # Update tree display
+            checked_symbol = "☑" if new_state else "☐"
+            values = list(self.tree.item(item_id, "values"))
+            values[0] = checked_symbol
+            values[4] = self.row_new_values[i]
+            self.tree.item(item_id, values=values,
+                          tags=("checked" if new_state else "unchecked",))
         
         # Update button state
         self._update_select_all_checkbox_state()
 
-    def _on_row_checkbox_toggle(self, idx: int):
-        """Handle individual row checkbox toggle.
-        
-        Args:
-            idx: Index of the row that was toggled.
-        """
-        if not self.row_checkbox_vars[idx].get():
-            # Unchecked - set New to Value
-            self.row_entry_vars[idx].set(self.row_values[idx])
-        
-        # Update row highlight
-        self._update_row_highlight(idx)
-        
-        # Update header checkbox state based on row checkboxes
-        self._update_select_all_checkbox_state()
+    def _on_search_text_changed(self, *args):
+        """Reset search position when search text changes."""
+        current_text = self.search_var.get().strip().lower()
+        if current_text != self.search_last_text:
+            self.search_last_index = -1
+            self.search_last_text = current_text
 
-    def _update_row_highlight(self, idx: int):
-        """Update the background highlight for a row based on checkbox state.
-        
-        Args:
-            idx: Index of the row.
-        """
-        if idx >= len(self.row_frames) or idx >= len(self.row_checkbox_vars):
+    def _on_search_next(self):
+        """Find next match for the search text."""
+        if not hasattr(self, 'tree') or not self.tree or not hasattr(self, 'tree_items') or not self.tree_items:
+            self.set_status_message("No data to search", is_error=True)
             return
         
-        row_frame = self.row_frames[idx]
-        is_checked = self.row_checkbox_vars[idx].get()
+        search_text = self.search_var.get().strip().lower()
+        if not search_text:
+            return
         
-        if is_checked:
-            # Highlight with a subtle color
-            row_frame.configure(fg_color=("gray85", "gray25"))
-        else:
-            # Reset to transparent
-            row_frame.configure(fg_color="transparent")
+        # Start searching from the position after the last found item
+        start_index = self.search_last_index + 1
+        total_items = len(self.tree_items)
+        
+        # Search from start_index to end, then wrap around from beginning
+        for offset in range(total_items):
+            i = (start_index + offset) % total_items
+            item_name = self.virtual_display_data[i]['name'].lower()
+            
+            if search_text in item_name:
+                # Found - scroll to this item and select it
+                item_id = self.tree_items[i]
+                self.tree.see(item_id)
+                self.tree.selection_set(item_id)
+                self.tree.focus(item_id)
+                self.search_last_index = i
+                
+                # Show match count info
+                match_num = offset + 1 if offset < total_items else 1
+                self.set_status_message(f"Found: {self.virtual_display_data[i]['name']}")
+                return
+        
+        # No match found
+        self.set_status_message(f"No match found for '{self.search_var.get()}'", is_error=True)
+        self.search_last_index = -1
 
     def _update_select_all_checkbox_state(self):
         """Update the select all button to reflect the state of row checkboxes."""
-        if not self.row_checkbox_vars:
+        if not hasattr(self, 'row_checked') or not self.row_checked:
             return
         
-        checked_count = sum(1 for var in self.row_checkbox_vars if var.get())
-        total_count = len(self.row_checkbox_vars)
+        checked_count = sum(1 for checked in self.row_checked if checked)
+        total_count = len(self.row_checked)
         
         # Checkbox colors from constants
         default_color = (COLOR_CHECKBOX_DEFAULT, COLOR_CHECKBOX_DEFAULT)
@@ -2089,15 +2297,16 @@ class MainWindow(ctk.CTk):
             changes_added = 0
             properties_used = {}  # Track property -> value for NONE fallback
             
-            for i, checkbox_var in enumerate(self.row_checkbox_vars):
+            # Use the virtual scroll data model
+            for i in range(len(self.row_checked)):
                 prop_name = self.row_properties[i]
-                new_value = self.row_entry_vars[i].get().strip()
+                new_value = self.row_new_values[i].strip() if self.row_new_values[i] else ""
                 
                 # Track the first value seen for each property (for NONE fallback)
                 if prop_name not in properties_used:
                     properties_used[prop_name] = new_value
                 
-                if checkbox_var.get():  # Only add if checked
+                if self.row_checked[i]:  # Only add if checked
                     row_name = self.row_names[i]
                     original_value = self.row_values[i]
                     
