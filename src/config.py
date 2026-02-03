@@ -213,12 +213,12 @@ EPIC_PATH = r"C:\Program Files\Epic Games\ReturnToMoria\Moria\Content\Paks"
 
 def validate_config() -> list[str]:
     """Validate the current configuration and return a list of issues.
-    
+
     Returns:
         List of validation issue messages. Empty if all valid.
     """
     issues = []
-    
+
     # Check utilities directory
     utilities_dir = get_utilities_dir()
     if not utilities_dir.exists():
@@ -229,7 +229,7 @@ def validate_config() -> list[str]:
         for util in required_utils:
             if not (utilities_dir / util).exists():
                 issues.append(f"Required utility not found: {util}")
-    
+
     # Check output directory
     output_dir = get_output_dir()
     if not output_dir.exists():
@@ -237,7 +237,7 @@ def validate_config() -> list[str]:
             output_dir.mkdir(parents=True, exist_ok=True)
         except OSError as e:
             issues.append(f"Cannot create output directory: {e}")
-    
+
     # Check mymodfiles directory
     mymodfiles_dir = get_default_mymodfiles_dir()
     if not mymodfiles_dir.exists():
@@ -245,7 +245,7 @@ def validate_config() -> list[str]:
             mymodfiles_dir.mkdir(parents=True, exist_ok=True)
         except OSError as e:
             issues.append(f"Cannot create mymodfiles directory: {e}")
-    
+
     # Check definitions directory
     definitions_dir = get_definitions_dir()
     if not definitions_dir.exists():
@@ -253,18 +253,18 @@ def validate_config() -> list[str]:
             definitions_dir.mkdir(parents=True, exist_ok=True)
         except OSError as e:
             issues.append(f"Cannot create definitions directory: {e}")
-    
+
     # Check game install path
     game_path = get_game_install_path()
     if game_path and not Path(game_path).exists():
         issues.append(f"Game installation path not found: {game_path}")
-    
+
     return issues
 
 
 def is_config_valid() -> bool:
     """Check if the configuration is valid.
-    
+
     Returns:
         True if configuration is valid, False otherwise.
     """
@@ -299,4 +299,3 @@ def get_available_install_options() -> list[tuple[str, str]]:
     options.append(("Custom", ""))
 
     return options
-

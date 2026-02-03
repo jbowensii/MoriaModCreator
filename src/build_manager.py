@@ -39,16 +39,16 @@ class BuildManager:
 
     def __init__(self, progress_callback: Callable[[str, float], None] | None = None):
         """Initialize the build manager.
-        
+
         Args:
-            progress_callback: Optional callback function(message, progress_percent) 
+            progress_callback: Optional callback function(message, progress_percent)
                               for reporting progress.
         """
         self.progress_callback = progress_callback
 
     def _report_progress(self, message: str, progress: float):
         """Report progress if callback is set.
-        
+
         Args:
             message: Status message.
             progress: Progress percentage (0.0 to 1.0).
@@ -59,11 +59,11 @@ class BuildManager:
 
     def build(self, mod_name: str, def_files: list[Path]) -> tuple[bool, str]:
         """Build a complete mod from definition files.
-        
+
         Args:
             mod_name: Name of the mod.
             def_files: List of definition file paths.
-            
+
         Returns:
             Tuple of (success, message).
         """
@@ -74,14 +74,14 @@ class BuildManager:
             # Step 0: Clear previous build files
             self._report_progress("Cleaning previous build files...", 0.0)
             self._clean_build_directories(mod_name)
-            
+
             # Step 1: Process definition files (5-40%)
             self._report_progress("Processing definition files...", 0.05)
             success_count, error_count = self._process_definitions(mod_name, def_files)
-            
+
             if error_count > 0:
                 return False, f"{success_count} succeeded, {error_count} failed"
-            
+
             if success_count == 0:
                 return False, "No files were processed"
 
@@ -98,7 +98,7 @@ class BuildManager:
             # Step 4: Create zip (90-100%)
             self._report_progress("Creating zip file...", 0.9)
             zip_path = self._create_zip(mod_name)
-            
+
             if zip_path:
                 self._report_progress("Build complete!", 1.0)
                 return True, f"Mod saved to: {zip_path}"
@@ -111,18 +111,18 @@ class BuildManager:
 
     def _clean_build_directories(self, mod_name: str):
         """Clean the build directories before starting a new build.
-        
+
         Args:
             mod_name: Name of the mod.
         """
         mymodfiles_base = get_default_mymodfiles_dir() / mod_name
-        
+
         dirs_to_clean = [
             mymodfiles_base / JSONFILES_DIR,
             mymodfiles_base / UASSET_DIR,
             mymodfiles_base / FINALMOD_DIR,
         ]
-        
+
         for dir_path in dirs_to_clean:
             if dir_path.exists():
                 try:
@@ -133,25 +133,25 @@ class BuildManager:
 
     def _process_definitions(self, mod_name: str, def_files: list[Path]) -> tuple[int, int]:
         """Process all definition files and modify JSON.
-        
+
         Args:
             mod_name: Name of the mod.
             def_files: List of definition file paths.
-            
+
         Returns:
             Tuple of (success_count, error_count).
         """
         success_count = 0
         error_count = 0
-        
+
         jsondata_dir = get_output_dir() / JSONDATA_DIR
         mymodfiles_dir = get_default_mymodfiles_dir() / mod_name / JSONFILES_DIR
-        
+
         for i, def_file in enumerate(def_files):
             # Update progress within this step
             step_progress = 0.0 + (0.4 * (i / len(def_files)))
             self._report_progress(f"Processing {def_file.name}...", step_progress)
-            
+
             try:
                 if self._process_single_definition(def_file, jsondata_dir, mymodfiles_dir):
                     success_count += 1
@@ -160,77 +160,77 @@ class BuildManager:
             except (OSError, ET.ParseError, json.JSONDecodeError) as e:
                 logger.error("Error processing %s: %s", def_file.name, e)
                 error_count += 1
-        
+
         return success_count, error_count
 
     def _process_single_definition(
-        self, 
-        def_file: Path, 
-        jsondata_dir: Path, 
+        self,
+        def_file: Path,
+        jsondata_dir: Path,
         mymodfiles_dir: Path
     ) -> bool:
         """Process a single definition file.
-        
+
         Args:
             def_file: Path to the .def file.
             jsondata_dir: Source JSON data directory.
             mymodfiles_dir: Destination directory for modified files.
-            
+
         Returns:
             True if successful, False otherwise.
         """
         try:
             tree = ET.parse(def_file)
             root = tree.getroot()
-            
+
             mod_element = root.find('mod')
             if mod_element is None:
                 logger.error("No <mod> element in %s", def_file.name)
                 return False
-            
+
             mod_file_path = mod_element.get('file', '')
             if not mod_file_path:
                 logger.error("No file attribute in <mod> element of %s", def_file.name)
                 return False
-            
+
             # Normalize the path
             normalized_path = mod_file_path.lstrip('\\').lstrip('/').replace('\\', '/')
-            
+
             # Source and destination files
             source_file = jsondata_dir / normalized_path
             if not source_file.exists():
                 logger.error("Source file not found: %s", source_file)
                 return False
-            
+
             dest_file = mymodfiles_dir / normalized_path
             dest_file.parent.mkdir(parents=True, exist_ok=True)
-            
+
             # Copy the file
             shutil.copy2(source_file, dest_file)
-            
+
             # Load and modify JSON
             with open(dest_file, 'r', encoding='utf-8') as f:
                 json_data = json.load(f)
-            
+
             # Apply delete operations first
             for delete in mod_element.findall('delete'):
                 item_name = delete.get('item', '')
                 property_path = delete.get('property', '')
                 value_to_delete = delete.get('value', '')
-                
+
                 if item_name == 'NONE':
                     continue
-                
+
                 # Handle GameplayTagContainer deletions (ExcludeItems, AllowedItems)
                 if property_path in ('ExcludeItems', 'AllowedItems') and value_to_delete:
                     self._remove_gameplay_tag(json_data, item_name, property_path, value_to_delete)
-            
+
             # Apply change operations
             for change in mod_element.findall('change'):
                 item_name = change.get('item', '')
                 property_path = change.get('property', '')
                 new_value = change.get('value', '')
-                
+
                 # Special handling for GameplayTagContainer - replace tag in array
                 if property_path in ('ExcludeItems', 'AllowedItems'):
                     if item_name == 'NONE':
@@ -238,23 +238,23 @@ class BuildManager:
                     # 'original' = tag to remove, 'value' = tag to add
                     original_tag = change.get('original', '')
                     new_tag = new_value.strip()
-                    
+
                     # Remove the original tag
                     if original_tag:
                         self._remove_gameplay_tag(json_data, item_name, property_path, original_tag)
-                    
+
                     # Add the new tag
                     if new_tag:
                         self._add_gameplay_tag(json_data, item_name, property_path, new_tag)
                 else:
                     self._apply_json_change(json_data, item_name, property_path, new_value)
-            
+
             # Save modified JSON
             with open(dest_file, 'w', encoding='utf-8') as f:
                 json.dump(json_data, f, indent=2, ensure_ascii=False)
-            
+
             return True
-            
+
         except ET.ParseError as e:
             logger.error("XML parse error in %s: %s", def_file.name, e)
             return False
@@ -263,14 +263,14 @@ class BuildManager:
             return False
 
     def _apply_json_change(
-        self, 
-        json_data: dict, 
-        item_name: str, 
-        property_path: str, 
+        self,
+        json_data: dict,
+        item_name: str,
+        property_path: str,
         new_value: str
     ):
         """Apply a change to the JSON data.
-        
+
         Args:
             json_data: The JSON data to modify.
             item_name: The export name or row name to find. Use 'NONE' to apply to all.
@@ -279,7 +279,7 @@ class BuildManager:
         """
         if 'Exports' not in json_data:
             return
-        
+
         # Handle NONE - apply to first export's Data (for single asset files like curves)
         # or to all rows in DataTable format
         if item_name == 'NONE':
@@ -294,7 +294,7 @@ class BuildManager:
                 return
             except (KeyError, IndexError, TypeError):
                 pass
-            
+
             # Try single asset format - apply to first export's Data
             for export in json_data['Exports']:
                 if 'Data' in export and isinstance(export['Data'], list) and len(export['Data']) > 0:
@@ -302,7 +302,7 @@ class BuildManager:
                     logger.debug("Applied NONE change to single asset: %s = %s", property_path, new_value)
                     return
             return
-        
+
         # First, try ObjectName matching for class-based exports (GameplayEffects, etc.)
         name_variations = [
             f"Default__{item_name}_C",
@@ -310,7 +310,7 @@ class BuildManager:
             item_name,
             f"{item_name}_C",
         ]
-        
+
         for name_variant in name_variations:
             for export in json_data['Exports']:
                 obj_name = export.get('ObjectName', '')
@@ -318,7 +318,7 @@ class BuildManager:
                     if 'Data' in export and isinstance(export['Data'], list) and len(export['Data']) > 0:
                         self._set_nested_property_value(export['Data'], property_path, new_value)
                         return
-        
+
         # If not found by ObjectName, try DataTable format (Table.Data rows)
         # This handles files like DT_Items, DT_Armor, DT_Storage, etc.
         try:
@@ -337,15 +337,15 @@ class BuildManager:
 
     def _set_nested_property_value(self, data: list | dict, property_path: str, new_value: str):
         """Set a property value using dot notation for nested traversal.
-        
+
         Supports array indexing with bracket notation, e.g.:
         - "StageDataList[1].MonumentProgressonPointsNeeded"
         - "Value[0].Count"
         - "FloatCurve.Keys[*].Time" (wildcard applies to all elements)
-        
+
         Also handles dict-style properties where the value is a direct key
         (e.g., {"Time": 0, "Value": 90} instead of [{"Name": "Time", "Value": 0}])
-        
+
         Args:
             data: The data list or dict to modify.
             property_path: Dot-separated property path with optional array indices.
@@ -353,12 +353,12 @@ class BuildManager:
         """
         if not data or not property_path:
             return
-        
+
         # Check for wildcard [*] - expand and recursively call for each index
         if '[*]' in property_path:
             self._set_wildcard_property_value(data, property_path, new_value)
             return
-        
+
         # Parse property path into parts, handling array indices
         parts = []
         for segment in property_path.split('.'):
@@ -369,22 +369,22 @@ class BuildManager:
                 parts.append((name, index))
             else:
                 parts.append((segment, None))
-        
+
         current = data
-        
+
         # Traverse to the parent of the target property
         for name, index in parts[:-1]:
             current = self._traverse_property(current, name, index)
             if current is None:
                 return
-        
+
         # Set the final property value
         target_name, target_index = parts[-1]
         self._set_final_property(current, target_name, target_index, new_value)
-    
+
     def _traverse_property(self, current, name: str, index: int | None):
         """Traverse one level of property path.
-        
+
         Returns the next level of data, or None if not found.
         """
         if isinstance(current, list):
@@ -418,7 +418,7 @@ class BuildManager:
                 # Try to traverse into Value
                 return self._traverse_property(current['Value'], name, index)
         return None
-    
+
     def _set_final_property(self, current, target_name: str, target_index: int | None, new_value: str):
         """Set the final property value."""
         if isinstance(current, list):
@@ -433,7 +433,7 @@ class BuildManager:
                                     old_value = indexed_item['Value']
                                     indexed_item['Value'] = self._convert_value(old_value, new_value)
                         return
-                    
+
                     if 'Value' in item:
                         old_value = item['Value']
                         item['Value'] = self._convert_value(old_value, new_value)
@@ -443,19 +443,19 @@ class BuildManager:
             if target_name in current:
                 old_value = current[target_name]
                 current[target_name] = self._convert_value(old_value, new_value)
-    
+
     def _set_wildcard_property_value(self, data: list | dict, property_path: str, new_value: str):
         """Handle [*] wildcard by expanding to all array indices."""
         # Find the array with wildcard and get its length
         match = re.match(r'^(.+?)\[\*\](.*)$', property_path)
         if not match:
             return
-        
+
         array_path = match.group(1)  # e.g., "FloatCurve.Keys"
         rest_of_path = match.group(2)  # e.g., ".Time" or ""
         if rest_of_path.startswith('.'):
             rest_of_path = rest_of_path[1:]
-        
+
         # Traverse to the array
         parts = []
         for segment in array_path.split('.'):
@@ -466,17 +466,17 @@ class BuildManager:
                 parts.append((name, index))
             else:
                 parts.append((segment, None))
-        
+
         current = data
         for name, index in parts:
             current = self._traverse_property(current, name, index)
             if current is None:
                 return
-        
+
         # current should now be the array
         if not isinstance(current, list):
             return
-        
+
         # Apply to each element
         for i in range(len(current)):
             if rest_of_path:
@@ -484,7 +484,7 @@ class BuildManager:
             else:
                 expanded_path = f"{array_path}[{i}]"
             self._set_nested_property_value(data, expanded_path, new_value)
-    
+
     def _convert_value(self, old_value, new_value: str):
         """Convert new_value to match the type of old_value."""
         # Check bool BEFORE int because bool is a subclass of int in Python
@@ -619,40 +619,40 @@ class BuildManager:
 
     def _convert_json_to_uasset(self, mod_name: str) -> bool:
         """Convert JSON files to uasset format using UAssetGUI.
-        
+
         Args:
             mod_name: Name of the mod.
-            
+
         Returns:
             True if successful, False otherwise.
         """
         utilities_dir = get_utilities_dir()
         uassetgui_path = utilities_dir / UASSETGUI_EXE
-        
+
         if not uassetgui_path.exists():
             logger.error("%s not found at %s", UASSETGUI_EXE, uassetgui_path)
             return False
-        
+
         mymodfiles_base = get_default_mymodfiles_dir() / mod_name
         json_dir = mymodfiles_base / JSONFILES_DIR
         uasset_dir = mymodfiles_base / UASSET_DIR
-        
+
         uasset_dir.mkdir(parents=True, exist_ok=True)
-        
+
         json_files = list(json_dir.rglob('*.json'))
         if not json_files:
             logger.error("No JSON files found to convert")
             return False
-        
+
         for i, json_file in enumerate(json_files):
             # Update progress
             step_progress = 0.4 + (0.3 * (i / len(json_files)))
             self._report_progress(f"Converting {json_file.name}...", step_progress)
-            
+
             rel_path = json_file.relative_to(json_dir)
             uasset_file = uasset_dir / rel_path.with_suffix('.uasset')
             uasset_file.parent.mkdir(parents=True, exist_ok=True)
-            
+
             cmd = [
                 str(uassetgui_path),
                 'fromjson',
@@ -660,7 +660,7 @@ class BuildManager:
                 str(uasset_file),
                 UE_VERSION
             ]
-            
+
             try:
                 result = subprocess.run(
                     cmd,
@@ -670,47 +670,47 @@ class BuildManager:
                     creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0,
                     check=False
                 )
-                
+
                 if result.returncode != 0 or not uasset_file.exists():
                     logger.error("Failed to convert %s: %s", json_file.name, result.stderr)
                     return False
-                    
+
             except subprocess.TimeoutExpired:
                 logger.error("Timeout converting %s", json_file.name)
                 return False
             except OSError as e:
                 logger.error("Error converting %s: %s", json_file.name, e)
                 return False
-        
+
         return True
 
     def _run_retoc(self, mod_name: str) -> bool:
         """Run retoc to package uasset files into zen format.
-        
+
         Args:
             mod_name: Name of the mod.
-            
+
         Returns:
             True if successful, False otherwise.
         """
         utilities_dir = get_utilities_dir()
         retoc_path = utilities_dir / RETOC_EXE
-        
+
         if not retoc_path.exists():
             logger.error("%s not found at %s", RETOC_EXE, retoc_path)
             return False
-        
+
         mymodfiles_base = get_default_mymodfiles_dir() / mod_name
         uasset_dir = mymodfiles_base / UASSET_DIR
         final_dir = mymodfiles_base / FINALMOD_DIR
-        
+
         # Create mod_P subdirectory inside finalmod
         mod_p_name = f'{mod_name}_P'
         mod_p_dir = final_dir / mod_p_name
         mod_p_dir.mkdir(parents=True, exist_ok=True)
-        
+
         output_utoc = mod_p_dir / f'{mod_p_name}.utoc'
-        
+
         cmd = [
             str(retoc_path),
             'to-zen',
@@ -718,7 +718,7 @@ class BuildManager:
             str(uasset_dir),
             str(output_utoc)
         ]
-        
+
         try:
             result = subprocess.run(
                 cmd,
@@ -727,27 +727,27 @@ class BuildManager:
                 cwd=str(utilities_dir),
                 check=False
             )
-            
+
             if result.returncode != 0:
                 logger.error("retoc failed with code %s", result.returncode)
                 logger.error("stdout: %s", result.stdout)
                 logger.error("stderr: %s", result.stderr)
                 return False
-            
+
             return True
-            
+
         except OSError as e:
             logger.error("Error running retoc: %s", e)
             return False
 
     def _create_zip(self, mod_name: str) -> Path | None:
         """Create a zip file of the mod in Downloads folder.
-        
+
         The zip contains the {mod_name}_P directory with all mod files.
-        
+
         Args:
             mod_name: Name of the mod.
-            
+
         Returns:
             Path to the created zip file, or None if failed.
         """
@@ -755,16 +755,16 @@ class BuildManager:
         final_dir = mymodfiles_base / FINALMOD_DIR
         mod_p_name = f'{mod_name}_P'
         mod_p_dir = final_dir / mod_p_name
-        
+
         if not mod_p_dir.exists():
             logger.error("mod directory not found: %s", mod_p_dir)
             return None
-        
+
         downloads_dir = Path.home() / 'Downloads'
         downloads_dir.mkdir(parents=True, exist_ok=True)
-        
+
         zip_path = downloads_dir / f'{mod_name}.zip'
-        
+
         try:
             with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
                 # Include the mod_P directory in the zip structure
@@ -773,10 +773,10 @@ class BuildManager:
                         # Archive path includes the mod_P folder name
                         rel_path = file_path.relative_to(final_dir)
                         zipf.write(file_path, rel_path)
-            
+
             logger.info("Created mod zip: %s", zip_path)
             return zip_path
-            
+
         except OSError as e:
             logger.error("Error creating zip file: %s", e)
             return None

@@ -1,9 +1,9 @@
 """Import dialog for running retoc to import game files."""
 
-import customtkinter as ctk
 import subprocess
 import threading
-from pathlib import Path
+
+import customtkinter as ctk
 
 from src.config import get_utilities_dir, get_output_dir, get_game_install_path
 
@@ -85,7 +85,7 @@ class ImportDialog(ctk.CTkToplevel):
 
     def _on_close_attempt(self):
         """Handle close button during import - do nothing."""
-        pass
+        return  # Intentionally ignore close during import
 
     def _start_import(self):
         """Start the import process in a background thread."""

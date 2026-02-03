@@ -39,7 +39,7 @@ class ModNameDialog(ctk.CTkToplevel):
         mymodfiles_dir = get_default_mymodfiles_dir()
         if not mymodfiles_dir.exists():
             return []
-        
+
         mods = []
         for item in sorted(mymodfiles_dir.iterdir()):
             if item.is_dir():

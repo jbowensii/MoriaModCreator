@@ -1,8 +1,9 @@
 """Initial configuration dialog for Moria MOD Creator."""
 
-import customtkinter as ctk
-from tkinter import filedialog
 from pathlib import Path
+from tkinter import filedialog
+
+import customtkinter as ctk
 
 from src.config import (
     get_available_install_options,
@@ -113,15 +114,20 @@ class ConfigDialog(ctk.CTkToplevel):
         row += 1
 
         # Output Directory
-        self._create_dir_row(main_frame, row, "Output Directory:", self.output_path, self._on_output_browse)
+        self._create_dir_row(
+            main_frame, row, "Output Directory:", self.output_path, self._on_output_browse)
         row += 1
 
         # My MOD Files Directory
-        self._create_dir_row(main_frame, row, "My MOD Files Directory:", self.mymodfiles_path, self._on_mymodfiles_browse)
+        self._create_dir_row(
+            main_frame, row, "My MOD Files Directory:",
+            self.mymodfiles_path, self._on_mymodfiles_browse)
         row += 1
 
         # MOD Definitions Directory
-        self._create_dir_row(main_frame, row, "MOD Definitions Directory:", self.definitions_path, self._on_definitions_browse)
+        self._create_dir_row(
+            main_frame, row, "MOD Definitions Directory:",
+            self.definitions_path, self._on_definitions_browse)
         row += 1
 
         # Color Scheme

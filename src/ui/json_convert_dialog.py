@@ -45,40 +45,41 @@ def get_buildings_cache_path() -> Path:
 
 def update_buildings_ini_from_json() -> tuple[bool, str]:
     """Scan DT_ConstructionRecipes.json and update the buildings INI cache.
-    
+
     This reads the game's JSON file and adds values to the buildings INI file,
     ensuring no duplicates per section.
-    
+
     Returns:
         Tuple of (success, message)
     """
     # Path to the DT_ConstructionRecipes.json
-    recipes_path = get_jsondata_dir() / 'Moria' / 'Content' / 'Tech' / 'Data' / 'Building' / 'DT_ConstructionRecipes.json'
-    
+    recipes_path = (get_jsondata_dir() / 'Moria' / 'Content' / 'Tech' / 'Data'
+                    / 'Building' / 'DT_ConstructionRecipes.json')
+
     if not recipes_path.exists():
         return (False, f"DT_ConstructionRecipes.json not found at {recipes_path}")
-    
+
     try:
         # Load the JSON file
         with open(recipes_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
-        
+
         # Collect values from NameMap
         collected = defaultdict(set)
         name_map = data.get('NameMap', [])
-        
+
         for name in name_map:
             # Skip system names
             if name.startswith('/') or name.startswith('$'):
                 continue
-            if name in ('ArrayProperty', 'BoolProperty', 'IntProperty', 'FloatProperty', 
+            if name in ('ArrayProperty', 'BoolProperty', 'IntProperty', 'FloatProperty',
                         'StructProperty', 'ObjectProperty', 'EnumProperty', 'NameProperty',
                         'TextProperty', 'SoftObjectProperty', 'ByteProperty', 'StrProperty',
                         'None', 'Object', 'Class', 'Package', 'Default__DataTable',
-                        'DataTable', 'ScriptStruct', 'BlueprintGeneratedClass', 'RowStruct', 
+                        'DataTable', 'ScriptStruct', 'BlueprintGeneratedClass', 'RowStruct',
                         'RowName', 'ArrayIndex', 'IsZero', 'PropertyTagFlags', 'Value'):
                 continue
-            
+
             # Categorize by pattern
             if name.startswith('E') and '::' in name:
                 # Enum value
@@ -119,15 +120,15 @@ def update_buildings_ini_from_json() -> tuple[bool, str]:
             elif name and name[0].isupper() and not name.startswith('Default'):
                 # Could be a construction name
                 collected['Constructions'].add(name)
-        
+
         # Load existing INI file if it exists
         cache_path = get_buildings_cache_path()
         cache_path.parent.mkdir(parents=True, exist_ok=True)
-        
+
         config = configparser.ConfigParser()
         if cache_path.exists():
             config.read(cache_path, encoding='utf-8')
-        
+
         # Merge new values with existing, ensuring no duplicates
         total_added = 0
         for section, new_values in collected.items():
@@ -138,21 +139,21 @@ def update_buildings_ini_from_json() -> tuple[bool, str]:
                 existing_values = {v.strip() for v in existing_str.split('|') if v.strip()}
             else:
                 config.add_section(section)
-            
+
             # Merge and deduplicate
             merged = existing_values | new_values
             total_added += len(new_values - existing_values)
-            
+
             # Save back as sorted, pipe-separated values
             config.set(section, 'values', '|'.join(sorted(merged)))
-        
+
         # Write the updated INI file
         with open(cache_path, 'w', encoding='utf-8') as f:
             config.write(f)
-        
+
         logger.info(f"Updated buildings cache: added {total_added} new values to {len(collected)} sections")
         return (True, f"Updated buildings cache with {total_added} new values")
-        
+
     except json.JSONDecodeError as e:
         logger.error(f"Failed to parse DT_ConstructionRecipes.json: {e}")
         return (False, f"JSON parse error: {e}")
@@ -186,7 +187,12 @@ def get_files_to_convert() -> list[Path]:
     return files
 
 
-def convert_file_to_json(uassetgui_path: Path, source_file: Path, retoc_dir: Path, jsondata_dir: Path) -> tuple[bool, str]:
+def convert_file_to_json(
+    uassetgui_path: Path,
+    source_file: Path,
+    retoc_dir: Path,
+    jsondata_dir: Path,
+) -> tuple[bool, str]:
     """Convert a single uasset file to JSON.
 
     Args:
@@ -377,7 +383,9 @@ class JsonConvertDialog(ctk.CTkToplevel):
                 return
 
             total_files = len(files)
-            self.update_queue.put(("status", f"Converting {total_files} files using {MAX_WORKERS} parallel processes..."))
+            self.update_queue.put(
+                ("status", f"Converting {total_files} files using {MAX_WORKERS} parallel processes...")
+            )
             self.update_queue.put(("progress", (0, total_files)))
 
             retoc_dir = get_retoc_dir()
@@ -416,7 +424,9 @@ class JsonConvertDialog(ctk.CTkToplevel):
 
                     # Update status periodically
                     if completed % 10 == 0 or completed == total_files:
-                        self.update_queue.put(("status", f"Converted {completed}/{total_files} files ({failed} failed)"))
+                        self.update_queue.put(
+                            ("status", f"Converted {completed}/{total_files} files ({failed} failed)")
+                        )
 
             # Done with file conversion
             if failed > 0:

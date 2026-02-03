@@ -1,7 +1,8 @@
 """Utility check dialog for verifying required executables."""
 
-import customtkinter as ctk
 from pathlib import Path
+
+import customtkinter as ctk
 
 from src.config import get_utilities_dir
 
