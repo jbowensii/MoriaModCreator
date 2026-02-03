@@ -44,9 +44,18 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 ; Main executable
 Source: "..\release\MoriaMODCreator.exe"; DestDir: "{app}"; Flags: ignoreversion
 
-; Optional: Include definitions and mod files if they should be bundled
-; Source: "..\release\Definitions.zip"; DestDir: "{app}"; Flags: ignoreversion
-; Source: "..\release\mymodfiles.zip"; DestDir: "{app}"; Flags: ignoreversion
+; Data files - extracted to %APPDATA%\MoriaMODCreator
+Source: "..\release\Definitions.zip"; DestDir: "{tmp}"; Flags: ignoreversion deleteafterinstall
+Source: "..\release\mymodfiles.zip"; DestDir: "{tmp}"; Flags: ignoreversion deleteafterinstall
+
+[Dirs]
+; Create AppData directory structure
+Name: "{userappdata}\MoriaMODCreator"
+Name: "{userappdata}\MoriaMODCreator\Definitions"
+Name: "{userappdata}\MoriaMODCreator\mymodfiles"
+Name: "{userappdata}\MoriaMODCreator\output"
+Name: "{userappdata}\MoriaMODCreator\utilities"
+Name: "{userappdata}\MoriaMODCreator\New Objects"
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
@@ -54,6 +63,10 @@ Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Run]
+; Extract zip files to AppData (runs before launching app)
+Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Command ""Expand-Archive -Path '{tmp}\Definitions.zip' -DestinationPath '{userappdata}\MoriaMODCreator\Definitions' -Force"""; Flags: runhidden waituntilterminated; StatusMsg: "Extracting definitions..."
+Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Command ""Expand-Archive -Path '{tmp}\mymodfiles.zip' -DestinationPath '{userappdata}\MoriaMODCreator\mymodfiles' -Force"""; Flags: runhidden waituntilterminated; StatusMsg: "Extracting mod templates..."
+; Launch application
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
 
 [Code]
