@@ -18,8 +18,7 @@ from src.ui.utility_check_dialog import find_utility
 
 logger = logging.getLogger(__name__)
 
-# Number of parallel conversion processes
-MAX_WORKERS = 5
+from src.config import get_max_workers
 
 # File extensions to convert
 UASSET_EXTENSIONS = {".uasset", ".umap"}
@@ -230,6 +229,7 @@ def convert_file_to_json(
             capture_output=True,
             text=True,
             timeout=60,
+            check=False,
             creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0
         )
 
@@ -383,8 +383,9 @@ class JsonConvertDialog(ctk.CTkToplevel):
                 return
 
             total_files = len(files)
+            max_workers = get_max_workers()
             self.update_queue.put(
-                ("status", f"Converting {total_files} files using {MAX_WORKERS} parallel processes...")
+                ("status", f"Converting {total_files} files using {max_workers} parallel processes...")
             )
             self.update_queue.put(("progress", (0, total_files)))
 
@@ -396,7 +397,7 @@ class JsonConvertDialog(ctk.CTkToplevel):
             failed = 0
 
             # Use ThreadPoolExecutor for parallel processing
-            with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
                 # Submit all conversion tasks
                 future_to_file = {
                     executor.submit(
@@ -415,7 +416,7 @@ class JsonConvertDialog(ctk.CTkToplevel):
                         self.update_queue.put(("done", False))
                         return
 
-                    success, message = future.result()
+                    success, _ = future.result()
                     completed += 1
                     if not success:
                         failed += 1

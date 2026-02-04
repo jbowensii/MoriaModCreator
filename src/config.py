@@ -56,6 +56,13 @@ def get_buildings_dir() -> Path:
     return buildings_dir
 
 
+def get_constructions_dir() -> Path:
+    """Get the Constructions directory for user construction packs."""
+    constructions_dir = get_appdata_dir() / 'Constructions'
+    constructions_dir.mkdir(parents=True, exist_ok=True)
+    return constructions_dir
+
+
 def get_config_path() -> Path:
     """Get the path to the config.ini file."""
     return get_appdata_dir() / 'config.ini'
@@ -81,7 +88,7 @@ def load_config() -> configparser.ConfigParser:
 
         # Load and cache
         config = configparser.ConfigParser()
-        config.read(config_path)
+        config.read(config_path, encoding='utf-8')
         _cache.config = config
         _cache.mtime = current_mtime
         return config
@@ -99,7 +106,8 @@ def save_config(
     output_dir: str,
     mymodfiles_dir: str,
     definitions_dir: str,
-    color_scheme: str
+    color_scheme: str,
+    max_workers: int = 1
 ) -> None:
     """Save the configuration to config.ini.
 
@@ -111,6 +119,7 @@ def save_config(
         mymodfiles_dir: The path to the My MOD Files directory.
         definitions_dir: The path to the MOD Definitions directory.
         color_scheme: The color scheme setting.
+        max_workers: Number of parallel processes for JSON conversion.
     """
     # Invalidate cache before saving
     _cache.config = None
@@ -130,12 +139,17 @@ def save_config(
     config['Appearance'] = {
         'color_scheme': color_scheme
     }
+    config['Performance'] = {
+        'max_workers': str(max_workers)
+    }
 
     # Create directories if they don't exist
     Path(utilities_dir).mkdir(parents=True, exist_ok=True)
     Path(output_dir).mkdir(parents=True, exist_ok=True)
     Path(mymodfiles_dir).mkdir(parents=True, exist_ok=True)
     Path(definitions_dir).mkdir(parents=True, exist_ok=True)
+    # Also ensure Constructions directory exists
+    get_constructions_dir()
 
     config_path = get_config_path()
     with open(config_path, 'w', encoding='utf-8') as f:
@@ -188,6 +202,56 @@ def get_color_scheme() -> str:
     if config.has_option('Appearance', 'color_scheme'):
         return config.get('Appearance', 'color_scheme')
     return DEFAULT_COLOR_SCHEME
+
+
+def get_max_workers() -> int:
+    """Get the max workers setting from config, or default of 1."""
+    config = load_config()
+    if config.has_option('Performance', 'max_workers'):
+        try:
+            return int(config.get('Performance', 'max_workers'))
+        except ValueError:
+            return 1
+    return 1
+
+
+def get_constructions_json_dir() -> Path | None:
+    """Get the directory containing construction JSON files from config.
+
+    Returns:
+        Path to the directory, or None if not configured.
+    """
+    config = load_config()
+    if config.has_option('Directories', 'constructions_json'):
+        path_str = config.get('Directories', 'constructions_json')
+        if path_str:
+            return Path(path_str)
+    return None
+
+
+def set_constructions_json_dir(path: str | Path) -> None:
+    """Save the constructions JSON directory to config.
+
+    Args:
+        path: The directory path containing DT_Constructions.json
+              and DT_ConstructionRecipes.json files.
+    """
+    config = load_config()
+
+    # Ensure the Directories section exists
+    if not config.has_section('Directories'):
+        config.add_section('Directories')
+
+    config.set('Directories', 'constructions_json', str(path))
+
+    # Write updated config
+    config_path = get_config_path()
+    with open(config_path, 'w', encoding='utf-8') as f:
+        config.write(f)
+
+    # Invalidate cache
+    _cache.config = None
+    _cache.mtime = None
 
 
 def apply_color_scheme(scheme: str) -> None:

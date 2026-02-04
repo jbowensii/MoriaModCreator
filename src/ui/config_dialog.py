@@ -12,6 +12,7 @@ from src.config import (
     get_default_output_dir,
     get_default_mymodfiles_dir,
     get_default_definitions_dir,
+    get_max_workers,
     COLOR_SCHEMES,
     DEFAULT_COLOR_SCHEME,
 )
@@ -24,7 +25,7 @@ class ConfigDialog(ctk.CTkToplevel):
         super().__init__(parent)
 
         self.title("Moria MOD Creator - Configuration")
-        self.geometry("600x420")
+        self.geometry("600x470")
         self.resizable(False, False)
 
         # Make this dialog modal
@@ -34,8 +35,8 @@ class ConfigDialog(ctk.CTkToplevel):
         # Center the dialog on screen
         self.update_idletasks()
         x = (self.winfo_screenwidth() - 600) // 2
-        y = (self.winfo_screenheight() - 420) // 2
-        self.geometry(f"600x420+{x}+{y}")
+        y = (self.winfo_screenheight() - 470) // 2
+        self.geometry(f"600x470+{x}+{y}")
 
         # Result tracking
         self.result = False
@@ -53,6 +54,7 @@ class ConfigDialog(ctk.CTkToplevel):
         self.mymodfiles_path = ctk.StringVar(value=str(get_default_mymodfiles_dir()))
         self.definitions_path = ctk.StringVar(value=str(get_default_definitions_dir()))
         self.color_scheme = ctk.StringVar(value=DEFAULT_COLOR_SCHEME)
+        self.max_workers = ctk.StringVar(value=str(get_max_workers()))
 
         self._create_widgets()
 
@@ -142,6 +144,27 @@ class ConfigDialog(ctk.CTkToplevel):
             state="readonly"
         )
         self.color_dropdown.grid(row=row, column=1, sticky="w", pady=(15, 5))
+
+        row += 1
+
+        # Max Workers for parallel processing
+        label = ctk.CTkLabel(main_frame, text="Parallel Processes:", font=ctk.CTkFont(size=13))
+        label.grid(row=row, column=0, sticky="w", padx=(0, 10), pady=5)
+
+        self.workers_dropdown = ctk.CTkComboBox(
+            main_frame,
+            values=[str(i) for i in range(1, 11)],
+            variable=self.max_workers,
+            width=80,
+            state="readonly"
+        )
+        self.workers_dropdown.grid(row=row, column=1, sticky="w", pady=5)
+
+        workers_hint = ctk.CTkLabel(
+            main_frame, text="(Number of parallel processes for JSON conversion)",
+            font=ctk.CTkFont(size=10), text_color="gray"
+        )
+        workers_hint.grid(row=row, column=2, sticky="w", padx=(10, 0), pady=5)
 
         row += 1
 
@@ -273,7 +296,8 @@ class ConfigDialog(ctk.CTkToplevel):
             output_dir=self.output_path.get(),
             mymodfiles_dir=self.mymodfiles_path.get(),
             definitions_dir=self.definitions_path.get(),
-            color_scheme=self.color_scheme.get()
+            color_scheme=self.color_scheme.get(),
+            max_workers=int(self.max_workers.get())
         )
 
         self.result = True

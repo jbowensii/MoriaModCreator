@@ -1,7 +1,8 @@
 """Help About dialog for Moria MOD Creator."""
 
-import customtkinter as ctk
 from pathlib import Path
+
+import customtkinter as ctk
 from PIL import Image
 
 # Application info
@@ -57,7 +58,7 @@ class AboutDialog(ctk.CTkToplevel):
         if overlay_path.exists():
             img = Image.open(overlay_path).convert("RGBA")
             # Flip horizontally so character faces toward the text (right)
-            self._overlay_image_pil = img.transpose(Image.FLIP_LEFT_RIGHT)
+            self._overlay_image_pil = img.transpose(Image.Transpose.FLIP_LEFT_RIGHT)
         else:
             self._overlay_image_pil = None
 
@@ -202,7 +203,7 @@ class AboutDialog(ctk.CTkToplevel):
             "Software is provided \"as is,\" without warranties of any kind, "
             "express or implied. Users accept all risks associated with using "
             "the software, including its quality, performance, and accuracy.\n\n"
-            "⚠️  Mods can be dangerous!\n\n"
+            "âš ï¸  Mods can be dangerous!\n\n"
             "Please backup your game and character files often.\n\n"
             "If you use mods, do not report game or system crashes to the "
             "game developers.\n\n"
@@ -231,7 +232,7 @@ class AboutDialog(ctk.CTkToplevel):
         # Version and date
         version_label = ctk.CTkLabel(
             self._text_frame,
-            text=f"Version {APP_VERSION}  •  {APP_DATE}",
+            text=f"Version {APP_VERSION}  â€¢  {APP_DATE}",
             font=ctk.CTkFont(size=14)
         )
         version_label.pack(pady=5)
@@ -254,7 +255,7 @@ class AboutDialog(ctk.CTkToplevel):
 
         github_icon = ctk.CTkLabel(
             github_frame,
-            text="📦 GitHub Repository:",
+            text="ðŸ“¦ GitHub Repository:",
             font=ctk.CTkFont(size=12)
         )
         github_icon.pack(side="left")
@@ -275,7 +276,7 @@ class AboutDialog(ctk.CTkToplevel):
 
         license_icon = ctk.CTkLabel(
             license_frame,
-            text="📄 MIT License:",
+            text="ðŸ“„ MIT License:",
             font=ctk.CTkFont(size=12)
         )
         license_icon.pack(side="left")
@@ -335,7 +336,7 @@ class AboutDialog(ctk.CTkToplevel):
             contrib_frame = ctk.CTkFrame(self._text_frame, fg_color="transparent")
             contrib_frame.pack(anchor="w", padx=20, pady=1)
 
-            bullet = ctk.CTkLabel(contrib_frame, text="•", font=ctk.CTkFont(size=12))
+            bullet = ctk.CTkLabel(contrib_frame, text="â€¢", font=ctk.CTkFont(size=12))
             bullet.pack(side="left")
 
             contrib_link = ctk.CTkLabel(
@@ -372,7 +373,7 @@ class AboutDialog(ctk.CTkToplevel):
             tool_frame = ctk.CTkFrame(self._text_frame, fg_color="transparent")
             tool_frame.pack(anchor="w", padx=20, pady=2)
 
-            bullet = ctk.CTkLabel(tool_frame, text="•", font=ctk.CTkFont(size=12))
+            bullet = ctk.CTkLabel(tool_frame, text="â€¢", font=ctk.CTkFont(size=12))
             bullet.pack(side="left")
 
             tool_link = ctk.CTkLabel(
@@ -405,9 +406,9 @@ class AboutDialog(ctk.CTkToplevel):
         libs_header.pack(anchor="w", padx=10, pady=(10, 5))
 
         libraries_text = (
-            "• CustomTkinter - Modern UI toolkit\n"
-            "• Pillow - Image processing\n"
-            "• Python - Programming language"
+            "â€¢ CustomTkinter - Modern UI toolkit\n"
+            "â€¢ Pillow - Image processing\n"
+            "â€¢ Python - Programming language"
         )
 
         libs_label = ctk.CTkLabel(
@@ -433,11 +434,11 @@ class AboutDialog(ctk.CTkToplevel):
         try:
             # Force geometry update
             self.update_idletasks()
-            
+
             # Update overlay image at 50% of original size
             if self._overlay_image_pil:
                 orig_w, orig_h = self._overlay_image_pil.size
-                
+
                 # Use 50% of original size
                 new_w = orig_w // 2
                 new_h = orig_h // 2

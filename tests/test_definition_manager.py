@@ -1,11 +1,13 @@
 """Unit tests for the definition manager."""
 
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 import tempfile
 import shutil
+import configparser
 
 from src.definition_manager import DefinitionManager
+from src.constants import CHECKBOX_STATES_FILE, CHECKBOX_STATES_SECTION
 
 
 class TestDefinitionManager:
@@ -249,3 +251,210 @@ class TestGetAllSelectedDefinitions:
         
         result = manager.get_all_selected_definitions()
         assert result == []
+
+
+class TestCheckboxStatePersistence:
+    """Tests for loading and saving checkbox states to INI."""
+
+    def setup_method(self):
+        """Set up test fixtures."""
+        self.temp_dir = tempfile.mkdtemp()
+
+    def teardown_method(self):
+        """Clean up test fixtures."""
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+
+    @patch('src.definition_manager.get_default_mymodfiles_dir')
+    def test_get_checkbox_ini_path_with_mod(self, mock_mymodfiles):
+        """Test getting checkbox INI path with mod name."""
+        mock_mymodfiles.return_value = Path(self.temp_dir)
+        manager = DefinitionManager(mod_name="TestMod")
+        
+        ini_path = manager.get_checkbox_ini_path()
+        assert ini_path.parent.name == "TestMod"
+        assert ini_path.name == CHECKBOX_STATES_FILE
+
+    def test_get_checkbox_ini_path_without_mod(self):
+        """Test getting checkbox INI path without mod name."""
+        manager = DefinitionManager()
+        
+        ini_path = manager.get_checkbox_ini_path()
+        assert ini_path == Path()
+
+    @patch('src.definition_manager.get_default_mymodfiles_dir')
+    def test_load_checkbox_states_from_file(self, mock_mymodfiles):
+        """Test loading checkbox states from existing file."""
+        mock_mymodfiles.return_value = Path(self.temp_dir)
+        
+        # Create mod directory and INI file
+        mod_dir = Path(self.temp_dir) / "TestMod"
+        mod_dir.mkdir(parents=True)
+        ini_file = mod_dir / CHECKBOX_STATES_FILE
+        ini_file.write_text(f'''[{CHECKBOX_STATES_SECTION}]
+C~|Test|Path|file.def = true
+''')
+        
+        manager = DefinitionManager(mod_name="TestMod")
+        
+        # Path should be reconstructed with : and \
+        assert manager.get_saved_state(Path("C:\\Test\\Path\\file.def")) is True
+
+    @patch('src.definition_manager.get_default_mymodfiles_dir')
+    def test_save_checkbox_states_to_file(self, mock_mymodfiles):
+        """Test saving checkbox states to file."""
+        mock_mymodfiles.return_value = Path(self.temp_dir)
+        
+        # Create mod directory
+        mod_dir = Path(self.temp_dir) / "TestMod"
+        mod_dir.mkdir(parents=True)
+        
+        manager = DefinitionManager(mod_name="TestMod")
+        manager.set_state(Path("C:\\Test\\Path\\file.def"), True)
+        manager.save_checkbox_states()
+        
+        ini_file = mod_dir / CHECKBOX_STATES_FILE
+        assert ini_file.exists()
+        
+        config = configparser.ConfigParser()
+        config.optionxform = str
+        config.read(ini_file)
+        assert CHECKBOX_STATES_SECTION in config
+
+    @patch('src.definition_manager.get_default_mymodfiles_dir')
+    def test_save_checkbox_states_with_ui_states(self, mock_mymodfiles):
+        """Test saving checkbox states with UI states merged."""
+        mock_mymodfiles.return_value = Path(self.temp_dir)
+        
+        # Create mod directory
+        mod_dir = Path(self.temp_dir) / "TestMod"
+        mod_dir.mkdir(parents=True)
+        
+        manager = DefinitionManager(mod_name="TestMod")
+        
+        ui_states = {
+            Path("C:\\Test\\file1.def"): True,
+            Path("C:\\Test\\file2.def"): False
+        }
+        manager.save_checkbox_states(ui_states)
+        
+        assert manager.get_saved_state(Path("C:\\Test\\file1.def")) is True
+        assert manager.get_saved_state(Path("C:\\Test\\file2.def")) is False
+
+    def test_load_checkbox_states_no_mod_name(self):
+        """Test loading states without mod name does nothing."""
+        manager = DefinitionManager()
+        manager.load_checkbox_states()
+        assert manager._checkbox_states == {}
+
+    def test_save_checkbox_states_no_mod_name(self):
+        """Test saving states without mod name does nothing."""
+        manager = DefinitionManager()
+        manager._checkbox_states["test"] = True
+        manager.save_checkbox_states()  # Should not raise
+
+
+class TestModNameProperty:
+    """Tests for mod_name property setter."""
+
+    def setup_method(self):
+        """Set up test fixtures."""
+        self.temp_dir = tempfile.mkdtemp()
+
+    def teardown_method(self):
+        """Clean up test fixtures."""
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+
+    @patch('src.definition_manager.get_default_mymodfiles_dir')
+    def test_set_mod_name_loads_states(self, mock_mymodfiles):
+        """Test setting mod_name loads checkbox states."""
+        mock_mymodfiles.return_value = Path(self.temp_dir)
+        
+        # Create mod directory with states file
+        mod_dir = Path(self.temp_dir) / "NewMod"
+        mod_dir.mkdir(parents=True)
+        ini_file = mod_dir / CHECKBOX_STATES_FILE
+        ini_file.write_text(f'''[{CHECKBOX_STATES_SECTION}]
+C~|Path|file.def = true
+''')
+        
+        manager = DefinitionManager()
+        assert manager.mod_name is None
+        
+        manager.mod_name = "NewMod"
+        assert manager.mod_name == "NewMod"
+        # States should be loaded
+        assert manager.get_saved_state(Path("C:\\Path\\file.def")) is True
+
+    def test_set_mod_name_none_clears_states(self):
+        """Test setting mod_name to None clears states."""
+        manager = DefinitionManager()
+        manager._checkbox_states["test"] = True
+        
+        manager.mod_name = None
+        assert manager._checkbox_states == {}
+
+
+class TestParseDefinitionExtended:
+    """Extended tests for parse_definition."""
+
+    def setup_method(self):
+        """Set up test fixtures."""
+        self.temp_dir = tempfile.mkdtemp()
+
+    def teardown_method(self):
+        """Clean up test fixtures."""
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+
+    def test_parse_definition_with_multiple_changes(self):
+        """Test parsing definition with multiple changes."""
+        def_file = Path(self.temp_dir) / "multi.def"
+        def_file.write_text('''<?xml version="1.0" encoding="utf-8"?>
+<definition>
+    <description>Multi-change mod</description>
+    <author>Tester</author>
+    <mod file="\\Moria\\Content\\Test.json">
+        <change item="Item1" property="Prop1" value="100" />
+        <change item="Item2" property="Prop2" value="200" />
+        <change item="Item3" property="Prop3" value="300" />
+    </mod>
+</definition>''')
+        
+        result = DefinitionManager.parse_definition(def_file)
+        
+        assert result is not None
+        assert len(result['changes']) == 3
+        assert result['changes'][0]['item'] == 'Item1'
+        assert result['changes'][1]['item'] == 'Item2'
+        assert result['changes'][2]['item'] == 'Item3'
+
+    def test_parse_definition_missing_change_attributes(self):
+        """Test parsing definition with missing change attributes."""
+        def_file = Path(self.temp_dir) / "partial.def"
+        def_file.write_text('''<?xml version="1.0" encoding="utf-8"?>
+<definition>
+    <mod file="\\Test.json">
+        <change item="OnlyItem" />
+    </mod>
+</definition>''')
+        
+        result = DefinitionManager.parse_definition(def_file)
+        
+        assert result is not None
+        assert len(result['changes']) == 1
+        assert result['changes'][0]['item'] == 'OnlyItem'
+        assert result['changes'][0]['property'] == ''
+        assert result['changes'][0]['value'] == ''
+
+    def test_parse_definition_no_mod_element(self):
+        """Test parsing definition without mod element."""
+        def_file = Path(self.temp_dir) / "nomod.def"
+        def_file.write_text('''<?xml version="1.0" encoding="utf-8"?>
+<definition>
+    <description>No mod element</description>
+</definition>''')
+        
+        result = DefinitionManager.parse_definition(def_file)
+        
+        assert result is not None
+        assert result['mod_file'] == ''
+        assert result['changes'] == []

@@ -31,7 +31,7 @@ from typing import Callable, Optional
 
 import customtkinter as ctk
 
-from src.config import get_appdata_dir, get_buildings_dir
+from src.config import get_appdata_dir, get_buildings_dir, get_constructions_dir
 
 logger = logging.getLogger(__name__)
 
@@ -934,7 +934,7 @@ class AutocompleteEntry(ctk.CTkFrame):
         self.item_buttons = []
 
         # Create new buttons
-        for i, match in enumerate(self.current_matches):
+        for match in self.current_matches:
             btn = ctk.CTkButton(
                 self.listbox_frame,
                 text=match,
@@ -1033,7 +1033,7 @@ class AutocompleteEntry(ctk.CTkFrame):
     def _select_item(self, item: str):
         """Select an item from the dropdown."""
         text = self.textvariable.get()
-        current_word, start, end = self._get_current_word()
+        _, start, end = self._get_current_word()
 
         # Rebuild the text with the selected item
         prefix = text[:start].rstrip()
@@ -1131,6 +1131,12 @@ class BuildingsView(ctk.CTkFrame):
         self.construction_check_vars: dict[Path, ctk.BooleanVar] = {}
         self.select_all_var = None
         self.select_all_checkbox = None
+
+        # Search filter for construction definitions
+        self.def_search_var = None
+
+        # Current construction pack name and tracking
+        self.current_construction_pack = None
 
         # Construction name entry for bulk build operations
         self.construction_name_var = None
@@ -1263,7 +1269,7 @@ class BuildingsView(ctk.CTkFrame):
         # Refresh button
         refresh_btn = ctk.CTkButton(
             header_frame,
-            text="↻",
+            text="â†»",
             width=28,
             height=28,
             font=ctk.CTkFont(size=16),
@@ -1303,18 +1309,51 @@ class BuildingsView(ctk.CTkFrame):
         )
         import_btn.grid(row=0, column=1, sticky="ew", padx=(2, 0))
 
-        # Count label
+        # === SEARCH BAR ===
+        search_frame = ctk.CTkFrame(list_frame, fg_color="transparent")
+        search_frame.pack(fill="x", padx=10, pady=(5, 5))
+
+        ctk.CTkLabel(
+            search_frame,
+            text="ðŸ”",
+            font=ctk.CTkFont(size=14)
+        ).pack(side="left", padx=(0, 5))
+
+        self.def_search_var = ctk.StringVar()
+        self.def_search_var.trace_add("write", lambda *args: self._filter_definitions_list())
+        self.def_search_entry = ctk.CTkEntry(
+            search_frame,
+            textvariable=self.def_search_var,
+            height=28,
+            placeholder_text="Search definitions...",
+            font=ctk.CTkFont(size=12)
+        )
+        self.def_search_entry.pack(side="left", fill="x", expand=True)
+
+        # Clear search button
+        clear_btn = ctk.CTkButton(
+            search_frame,
+            text="âœ•",
+            width=28,
+            height=28,
+            fg_color="#757575",
+            hover_color="#616161",
+            command=lambda: self.def_search_var.set("")
+        )
+        clear_btn.pack(side="left", padx=(5, 0))
+
+        # Scrollable file list
+        self.building_list = ctk.CTkScrollableFrame(list_frame, fg_color="transparent")
+        self.building_list.pack(fill="both", expand=True, padx=10, pady=(0, 5))
+
+        # Count label (at bottom of list)
         self.count_label = ctk.CTkLabel(
             list_frame,
             text="",
             font=ctk.CTkFont(size=11),
             text_color="gray"
         )
-        self.count_label.pack(padx=10, anchor="w")
-
-        # Scrollable file list
-        self.building_list = ctk.CTkScrollableFrame(list_frame, fg_color="transparent")
-        self.building_list.pack(fill="both", expand=True, padx=10, pady=(0, 5))
+        self.count_label.pack(padx=10, anchor="w", pady=(0, 5))
 
         # Bottom section with construction name and build button
         bottom_frame = ctk.CTkFrame(list_frame, fg_color="transparent")
@@ -1426,7 +1465,7 @@ class BuildingsView(ctk.CTkFrame):
         # Footer buttons
         self.footer_save_btn = ctk.CTkButton(
             self.form_footer,
-            text="💾 Save Changes",
+            text="ðŸ’¾ Save Changes",
             width=150,
             height=36,
             fg_color="#4CAF50",
@@ -1438,7 +1477,7 @@ class BuildingsView(ctk.CTkFrame):
 
         self.footer_revert_btn = ctk.CTkButton(
             self.form_footer,
-            text="↩ Revert",
+            text="â†© Revert",
             width=100,
             height=36,
             fg_color="gray50",
@@ -1449,7 +1488,7 @@ class BuildingsView(ctk.CTkFrame):
 
         self.footer_delete_btn = ctk.CTkButton(
             self.form_footer,
-            text="🗑 Delete",
+            text="ðŸ—‘ Delete",
             width=100,
             height=36,
             fg_color="#f44336",
@@ -1538,6 +1577,31 @@ class BuildingsView(ctk.CTkFrame):
             file_label.bind("<Enter>", lambda e, p=file_path, lbl=file_label: self._on_item_hover(p, lbl, True))
             file_label.bind("<Leave>", lambda e, p=file_path, lbl=file_label: self._on_item_hover(p, lbl, False))
 
+        # Apply any active filter
+        self._filter_definitions_list()
+
+    def _filter_definitions_list(self):
+        """Filter the definitions list based on search text."""
+        if not self.def_search_var:
+            return
+
+        filter_text = self.def_search_var.get().lower().strip()
+
+        visible_count = 0
+        for file_path, (row_frame, _) in self.building_list_items.items():
+            if not filter_text or filter_text in file_path.stem.lower():
+                row_frame.pack(fill="x", pady=1)
+                visible_count += 1
+            else:
+                row_frame.pack_forget()
+
+        # Update count label with filter info
+        total = len(self.def_files)
+        if filter_text:
+            self.count_label.configure(text=f"{visible_count} of {total} definitions")
+        else:
+            self.count_label.configure(text=f"{total} definitions")
+
     def _load_def_file(self, file_path: Path):
         """Load a .def file and display it in the form."""
         try:
@@ -1579,11 +1643,15 @@ class BuildingsView(ctk.CTkFrame):
             return
 
         select_all = self.select_all_var.get()
-        for file_path, check_var in self.construction_check_vars.items():
+        for _, check_var in self.construction_check_vars.items():
             check_var.set(select_all)
 
+        # Save to INI file immediately if we have a construction pack selected
+        if self.current_construction_pack:
+            self._save_construction_pack_to_ini()
+
     def _on_construction_checkbox_toggle(self, file_path: Path):
-        """Handle individual construction checkbox toggle."""
+        """Handle individual construction checkbox toggle - saves to INI in real-time."""
         # Update select-all checkbox state based on individual checkboxes
         if self.select_all_var is None:
             return
@@ -1591,14 +1659,71 @@ class BuildingsView(ctk.CTkFrame):
         all_checked = all(var.get() for var in self.construction_check_vars.values())
         self.select_all_var.set(all_checked)
 
+        # Save to INI file immediately if we have a construction pack selected
+        if self.current_construction_pack:
+            self._save_construction_pack_to_ini()
+
+    def _save_construction_pack_to_ini(self):
+        """Save current checkbox states to the construction pack INI file."""
+        if not self.current_construction_pack:
+            return
+
+        pack_name = self.current_construction_pack
+        pack_dir = get_constructions_dir() / pack_name
+        pack_dir.mkdir(parents=True, exist_ok=True)
+        ini_path = pack_dir / f"{pack_name}.ini"
+
+        # Get selected construction names
+        selected_names = [
+            fp.stem for fp, check_var in self.construction_check_vars.items()
+            if check_var.get()
+        ]
+
+        # Write to INI
+        config = configparser.ConfigParser()
+        config['Constructions'] = {name: '1' for name in selected_names}
+
+        with open(ini_path, 'w', encoding='utf-8') as f:
+            config.write(f)
+
     def _on_construction_name_click(self):
-        """Handle click on 'My Construction' button - focus the name entry."""
-        if hasattr(self, 'construction_name_entry') and self.construction_name_entry:
-            self.construction_name_entry.focus_set()
-            self.construction_name_entry.select_range(0, 'end')
+        """Handle click on 'My Construction' button - open dialog to select/create pack."""
+        from src.ui.construction_name_dialog import show_construction_name_dialog
+
+        # Get current pack name
+        current_name = self.construction_name_var.get().strip() if self.construction_name_var else ""
+
+        # Show dialog
+        result = show_construction_name_dialog(self.winfo_toplevel(), current_name)
+
+        if result:
+            pack_name, constructions = result
+            self.current_construction_pack = pack_name
+
+            # Update the name entry
+            if self.construction_name_var:
+                self.construction_name_var.set(pack_name)
+
+            # Clear all checkboxes first
+            for check_var in self.construction_check_vars.values():
+                check_var.set(False)
+
+            # Check the boxes for constructions in the pack
+            # Note: ConfigParser lowercases all keys, so we need case-insensitive comparison
+            constructions_lower = {c.lower() for c in constructions}
+            checked_count = 0
+            for file_path, check_var in self.construction_check_vars.items():
+                if file_path.stem.lower() in constructions_lower:
+                    check_var.set(True)
+                    checked_count += 1
+
+            self._set_status(f"Loaded pack '{pack_name}' with {checked_count} construction(s) selected")
 
     def _on_construction_build_click(self):
-        """Build selected constructions into a construction pack."""
+        """Build selected constructions by merging .def files into a single combined .def file."""
+        from tkinter import messagebox
+        import re
+
         # Get selected constructions
         selected_files = [
             file_path for file_path, check_var in self.construction_check_vars.items()
@@ -1606,42 +1731,194 @@ class BuildingsView(ctk.CTkFrame):
         ]
 
         if not selected_files:
-            from tkinter import messagebox
             messagebox.showwarning("No Selection", "Please select at least one construction to build.")
             return
 
         # Get construction pack name
         pack_name = self.construction_name_var.get().strip() if self.construction_name_var else ""
         if not pack_name:
-            from tkinter import messagebox
             messagebox.showwarning("No Name", "Please enter a name for your construction pack.")
             if hasattr(self, 'construction_name_entry') and self.construction_name_entry:
                 self.construction_name_entry.focus_set()
             return
 
-        # Sanitize pack name for use as folder name
-        import re
+        # Sanitize pack name for use as filename
         safe_name = re.sub(r'[<>:"/\\|?*]', '_', pack_name)
 
-        # Create constructions output directory (separate from mods)
-        constructions_dir = get_appdata_dir() / "Constructions" / safe_name
-        constructions_dir.mkdir(parents=True, exist_ok=True)
+        # Update the current pack name
+        self.current_construction_pack = safe_name
 
-        # Copy selected .def files to the construction pack
-        import shutil
-        copied_count = 0
-        for file_path in selected_files:
-            if file_path.exists():
-                dest_path = constructions_dir / file_path.name
-                shutil.copy2(file_path, dest_path)
-                copied_count += 1
+        # Save the selection to the INI file
+        self._save_construction_pack_to_ini()
 
-        from tkinter import messagebox
-        messagebox.showinfo(
-            "Construction Pack Created",
-            f"Created construction pack '{pack_name}' with {copied_count} construction(s).\n\n"
-            f"Location: {constructions_dir}"
+        # Define output directory and file
+        output_dir = get_appdata_dir() / "Definitions" / "Constructions"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        output_file = output_dir / f"{safe_name}.def"
+
+        # Collect all recipe and construction data from selected .def files
+        self._set_status("Merging construction definitions...")
+
+        recipe_rows = []      # List of (name, add_row_text)
+        construction_rows = []  # List of (name, add_row_text, imports_text or None)
+        all_imports = []      # List of import JSON texts
+
+        success_count = 0
+        error_count = 0
+
+        for def_file_path in selected_files:
+            try:
+                self._set_status(f"Reading: {def_file_path.stem}...")
+
+                # Parse the .def file
+                tree = ET.parse(def_file_path)
+                root = tree.getroot()
+
+                # Process all <mod> elements
+                for mod_element in root.findall('mod'):
+                    mod_file_attr = mod_element.get('file', '')
+                    if not mod_file_attr:
+                        continue
+
+                    # Check which JSON file this mod targets
+                    if "DT_ConstructionRecipes" in mod_file_attr:
+                        # Extract recipe add_row elements
+                        for add_row_elem in mod_element.findall('add_row'):
+                            row_name = add_row_elem.get('name', '')
+                            row_text = add_row_elem.text
+                            if row_name and row_text:
+                                recipe_rows.append((row_name, row_text.strip()))
+
+                    elif "DT_Constructions" in mod_file_attr:
+                        # Extract imports if present
+                        for add_imports_elem in mod_element.findall('add_imports'):
+                            if add_imports_elem.text:
+                                all_imports.append(add_imports_elem.text.strip())
+
+                        # Extract construction add_row elements
+                        for add_row_elem in mod_element.findall('add_row'):
+                            row_name = add_row_elem.get('name', '')
+                            row_text = add_row_elem.text
+                            if row_name and row_text:
+                                construction_rows.append((row_name, row_text.strip()))
+
+                success_count += 1
+
+            except ET.ParseError as e:
+                logger.error("XML parse error in %s: %s", def_file_path.name, e)
+                error_count += 1
+            except Exception as e:
+                logger.error("Error reading %s: %s", def_file_path.name, e)
+                error_count += 1
+
+        if not recipe_rows and not construction_rows:
+            self._set_status("Build failed: No construction data found in selected .def files")
+            return
+
+        # Build the combined .def file
+        self._set_status("Writing combined definition file...")
+
+        try:
+            self._write_combined_def_file(
+                output_file, safe_name, recipe_rows, construction_rows, all_imports
+            )
+        except Exception as e:
+            logger.error("Error writing combined .def file: %s", e)
+            self._set_status(f"Build failed: Could not write .def file - {e}")
+            return
+
+        self._set_status(
+            f"Build complete: '{pack_name}' - {len(recipe_rows)} recipes, "
+            f"{len(construction_rows)} constructions merged"
         )
+
+    def _write_combined_def_file(
+        self,
+        output_file: Path,
+        pack_name: str,
+        recipe_rows: list,
+        construction_rows: list,
+        all_imports: list
+    ):
+        """Write the combined .def file with all recipes and constructions.
+
+        Args:
+            output_file: Path to write the .def file
+            pack_name: Name of the construction pack
+            recipe_rows: List of (name, json_text) tuples for recipes
+            construction_rows: List of (name, json_text) tuples for constructions
+            all_imports: List of imports JSON texts
+        """
+        # Merge all imports into one array (deduplicated)
+        merged_imports = []
+        seen_imports = set()
+        for imports_text in all_imports:
+            try:
+                imports_list = json.loads(imports_text)
+                for imp in imports_list:
+                    obj_name = imp.get('ObjectName', '')
+                    if obj_name and obj_name not in seen_imports:
+                        seen_imports.add(obj_name)
+                        merged_imports.append(imp)
+            except json.JSONDecodeError:
+                pass
+
+        # Build the XML structure
+        lines = [
+            '<?xml version="1.0" encoding="UTF-8"?>',
+            '<definition>',
+            f'  <title>{self._escape_xml(pack_name)}</title>',
+            f'  <author>Moria MOD Creator</author>',
+            f'  <description>Combined construction pack with {len(recipe_rows)} recipes and {len(construction_rows)} constructions</description>',
+            '',  # Empty line after header
+        ]
+
+        # DT_ConstructionRecipes mod section
+        if recipe_rows:
+            lines.append('  <mod file="Moria\\Content\\Tech\\Data\\Building\\DT_ConstructionRecipes.json">')
+            lines.append('')  # Empty line after opening tag
+            for row_name, row_json in recipe_rows:
+                lines.append(f'    <add_row name="{self._escape_xml(row_name)}">')
+                lines.append(f'      <![CDATA[{row_json}]]>')
+                lines.append('    </add_row>')
+                lines.append('')  # Empty line between rows
+            lines.append('  </mod>')
+            lines.append('')  # Empty line after section
+
+        # DT_Constructions mod section
+        if construction_rows or merged_imports:
+            lines.append('  <mod file="Moria\\Content\\Tech\\Data\\Building\\DT_Constructions.json">')
+            lines.append('')  # Empty line after opening tag
+
+            # Add merged imports if any
+            if merged_imports:
+                imports_json = json.dumps(merged_imports, separators=(',', ':'))
+                lines.append(f'    <add_imports><![CDATA[{imports_json}]]></add_imports>')
+                lines.append('')  # Empty line after imports
+
+            for row_name, row_json in construction_rows:
+                lines.append(f'    <add_row name="{self._escape_xml(row_name)}">')
+                lines.append(f'      <![CDATA[{row_json}]]>')
+                lines.append('    </add_row>')
+                lines.append('')  # Empty line between rows
+            lines.append('  </mod>')
+
+        lines.append('</definition>')
+
+        # Write the file
+        with open(output_file, 'w', encoding='utf-8') as f:
+            f.write('\n'.join(lines))
+
+        logger.info("Wrote combined .def file: %s", output_file)
+
+    def _escape_xml(self, text: str) -> str:
+        """Escape special XML characters in text."""
+        return (text
+                .replace('&', '&amp;')
+                .replace('<', '&lt;')
+                .replace('>', '&gt;')
+                .replace('"', '&quot;')
+                .replace("'", '&apos;'))
 
     # -------------------------------------------------------------------------
     # FORM DISPLAY AND LAYOUT
@@ -1981,7 +2258,7 @@ class BuildingsView(ctk.CTkFrame):
         # Save button
         save_btn = ctk.CTkButton(
             btn_frame,
-            text="💾 Save Changes",
+            text="ðŸ’¾ Save Changes",
             width=150,
             height=36,
             fg_color="#4CAF50",
@@ -1994,7 +2271,7 @@ class BuildingsView(ctk.CTkFrame):
         # Revert button
         revert_btn = ctk.CTkButton(
             btn_frame,
-            text="↩ Revert",
+            text="â†© Revert",
             width=100,
             height=36,
             fg_color="gray50",
@@ -2006,7 +2283,7 @@ class BuildingsView(ctk.CTkFrame):
         # Delete button
         delete_btn = ctk.CTkButton(
             btn_frame,
-            text="🗑 Delete",
+            text="ðŸ—‘ Delete",
             width=100,
             height=36,
             fg_color="#f44336",
@@ -2202,7 +2479,7 @@ class BuildingsView(ctk.CTkFrame):
         # Remove button
         remove_btn = ctk.CTkButton(
             row_frame,
-            text="✕",
+            text="âœ•",
             width=28,
             height=28,
             fg_color="#f44336",
@@ -2513,54 +2790,20 @@ class BuildingsView(ctk.CTkFrame):
             self.on_back()
 
     def _import_construction(self):
-        """Import a construction .def file from an external location."""
-        from tkinter import filedialog, messagebox
-        import shutil
+        """Import constructions from game JSON files.
 
-        # Open file dialog to select .def file(s)
-        file_paths = filedialog.askopenfilenames(
-            title="Import Construction Files",
-            filetypes=[("Definition files", "*.def"), ("All files", "*.*")],
-            initialdir=str(Path.home())
+        Opens a dialog that allows users to:
+        1. Select a directory containing DT_Constructions.json and DT_ConstructionRecipes.json
+        2. Browse and select constructions to import
+        3. Generate .def files for the selected constructions
+        """
+        from src.ui.import_construction_dialog import show_import_construction_dialog
+
+        # Show the import dialog, passing a callback to refresh the list when done
+        show_import_construction_dialog(
+            self.winfo_toplevel(),
+            on_complete=self._refresh_building_list
         )
-
-        if not file_paths:
-            return
-
-        # Get destination directory
-        buildings_dir = get_buildings_dir()
-
-        imported_count = 0
-        skipped_count = 0
-
-        for file_path in file_paths:
-            src_path = Path(file_path)
-            dest_path = buildings_dir / src_path.name
-
-            # Check if file already exists
-            if dest_path.exists():
-                result = messagebox.askyesno(
-                    "File Exists",
-                    f"'{src_path.name}' already exists.\n\nOverwrite?"
-                )
-                if not result:
-                    skipped_count += 1
-                    continue
-
-            try:
-                shutil.copy2(src_path, dest_path)
-                imported_count += 1
-            except Exception as e:
-                messagebox.showerror("Import Error", f"Failed to import '{src_path.name}':\n{e}")
-
-        # Refresh the list
-        if imported_count > 0:
-            self._refresh_building_list()
-            messagebox.showinfo(
-                "Import Complete",
-                f"Imported {imported_count} construction(s)." +
-                (f"\nSkipped {skipped_count} file(s)." if skipped_count > 0 else "")
-            )
 
     def _show_new_building_form(self):
         """Show form for creating a new building definition."""
@@ -2587,7 +2830,7 @@ class BuildingsView(ctk.CTkFrame):
 
         ctk.CTkLabel(
             header_frame,
-            text="✨ Create New Building",
+            text="âœ¨ Create New Building",
             font=ctk.CTkFont(size=18, weight="bold"),
             text_color="white"
         ).pack(anchor="w", padx=10, pady=10)
@@ -2668,7 +2911,7 @@ class BuildingsView(ctk.CTkFrame):
 
         create_btn = ctk.CTkButton(
             btn_frame,
-            text="✨ Create Building",
+            text="âœ¨ Create Building",
             width=180,
             height=40,
             fg_color="#2196F3",

@@ -2328,8 +2328,7 @@ class MainWindow(ctk.CTk):
                 self.tree.focus(item_id)
                 self.search_last_index = i
 
-                # Show match count info
-                match_num = offset + 1 if offset < total_items else 1
+                # Show match info
                 self.set_status_message(f"Found: {self.virtual_display_data[i]['name']}")
                 return
 
