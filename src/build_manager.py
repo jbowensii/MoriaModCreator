@@ -34,7 +34,7 @@ from src.constants import (
 logger = logging.getLogger(__name__)
 
 
-class BuildManager:
+class BuildManager:  # pylint: disable=too-few-public-methods
     """Manages the mod build process."""
 
     def __init__(self, progress_callback: Callable[[str, float], None] | None = None):
@@ -102,8 +102,7 @@ class BuildManager:
             if zip_path:
                 self._report_progress("Build complete!", 1.0)
                 return True, f"Mod saved to: {zip_path}"
-            else:
-                return False, "Could not create zip file"
+            return False, "Could not create zip file"
 
         except (OSError, ValueError, KeyError) as e:
             logger.exception("Build failed with exception")
@@ -402,7 +401,7 @@ class BuildManager:
                             return None  # Index out of bounds
                         return result
             return None
-        elif isinstance(current, dict):
+        if isinstance(current, dict):
             # Handle dict-style access (e.g., for RichCurveKey)
             if name in current:
                 result = current[name]
@@ -414,7 +413,7 @@ class BuildManager:
                         return indexed_item
                     return None
                 return result
-            elif 'Value' in current:
+            if 'Value' in current:
                 # Try to traverse into Value
                 return self._traverse_property(current['Value'], name, index)
         return None
@@ -438,7 +437,7 @@ class BuildManager:
                         old_value = item['Value']
                         item['Value'] = self._convert_value(old_value, new_value)
                     return
-        elif isinstance(current, dict):
+        if isinstance(current, dict):
             # Handle dict-style property (e.g., {"Time": 0, "Value": 90})
             if target_name in current:
                 old_value = current[target_name]
@@ -490,18 +489,17 @@ class BuildManager:
         # Check bool BEFORE int because bool is a subclass of int in Python
         if isinstance(old_value, bool):
             return new_value.lower() in ('true', '1', 'yes')
-        elif isinstance(old_value, float):
+        if isinstance(old_value, float):
             try:
                 return float(new_value)
             except ValueError:
                 return new_value
-        elif isinstance(old_value, int):
+        if isinstance(old_value, int):
             try:
                 return int(float(new_value))
             except ValueError:
                 return new_value
-        else:
-            return new_value
+        return new_value
 
     def _remove_gameplay_tag(
         self,

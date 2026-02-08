@@ -49,10 +49,12 @@ Source: "..\release\Definitions.zip"; DestDir: "{tmp}"; Flags: ignoreversion del
 Source: "..\release\mymodfiles.zip"; DestDir: "{tmp}"; Flags: ignoreversion deleteafterinstall
 Source: "..\release\NewObjects.zip"; DestDir: "{tmp}"; Flags: ignoreversion deleteafterinstall
 Source: "..\release\utilities.zip"; DestDir: "{tmp}"; Flags: ignoreversion deleteafterinstall
+Source: "..\release\Constructions.zip"; DestDir: "{tmp}"; Flags: ignoreversion deleteafterinstall skipifsourcedoesntexist
 
 [Dirs]
 ; Create AppData directory structure
 Name: "{userappdata}\MoriaMODCreator"
+Name: "{userappdata}\MoriaMODCreator\Constructions"
 Name: "{userappdata}\MoriaMODCreator\Definitions"
 Name: "{userappdata}\MoriaMODCreator\mymodfiles"
 Name: "{userappdata}\MoriaMODCreator\output"
@@ -72,6 +74,7 @@ Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Com
 Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Command ""Expand-Archive -Path '{tmp}\mymodfiles.zip' -DestinationPath '{userappdata}\MoriaMODCreator\mymodfiles' -Force"""; Flags: runhidden waituntilterminated; StatusMsg: "Extracting mod templates..."
 Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Command ""Expand-Archive -Path '{tmp}\NewObjects.zip' -DestinationPath '{userappdata}\MoriaMODCreator\New Objects' -Force"""; Flags: runhidden waituntilterminated; StatusMsg: "Extracting new objects..."
 Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Command ""Expand-Archive -Path '{tmp}\utilities.zip' -DestinationPath '{userappdata}\MoriaMODCreator\utilities' -Force"""; Flags: runhidden waituntilterminated; StatusMsg: "Extracting utilities..."
+Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Command ""if (Test-Path '{tmp}\Constructions.zip') {{ Expand-Archive -Path '{tmp}\Constructions.zip' -DestinationPath '{userappdata}\MoriaMODCreator\Constructions' -Force }}"""; Flags: runhidden waituntilterminated; StatusMsg: "Extracting constructions..."
 ; Launch application
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
 

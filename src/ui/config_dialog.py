@@ -25,7 +25,7 @@ class ConfigDialog(ctk.CTkToplevel):
         super().__init__(parent)
 
         self.title("Moria MOD Creator - Configuration")
-        self.geometry("600x470")
+        self.geometry("750x470")
         self.resizable(False, False)
 
         # Make this dialog modal
@@ -34,9 +34,9 @@ class ConfigDialog(ctk.CTkToplevel):
 
         # Center the dialog on screen
         self.update_idletasks()
-        x = (self.winfo_screenwidth() - 600) // 2
+        x = (self.winfo_screenwidth() - 750) // 2
         y = (self.winfo_screenheight() - 470) // 2
-        self.geometry(f"600x470+{x}+{y}")
+        self.geometry(f"750x470+{x}+{y}")
 
         # Result tracking
         self.result = False
@@ -100,7 +100,7 @@ class ConfigDialog(ctk.CTkToplevel):
         # Game path display
         self.game_path_label = ctk.CTkLabel(
             main_frame, text="", font=ctk.CTkFont(size=10),
-            text_color="gray", wraplength=550, justify="left"
+            text_color="gray", wraplength=700, justify="left"
         )
         self.game_path_label.grid(row=row, column=0, columnspan=3, sticky="w", pady=(0, 15))
 
@@ -140,7 +140,7 @@ class ConfigDialog(ctk.CTkToplevel):
             main_frame,
             values=COLOR_SCHEMES,
             variable=self.color_scheme,
-            width=200,
+            width=400,
             state="readonly"
         )
         self.color_dropdown.grid(row=row, column=1, sticky="w", pady=(15, 5))
@@ -211,7 +211,7 @@ class ConfigDialog(ctk.CTkToplevel):
         label = ctk.CTkLabel(parent, text=label_text, font=ctk.CTkFont(size=13))
         label.grid(row=row, column=0, sticky="w", padx=(0, 10), pady=5)
 
-        entry = ctk.CTkEntry(parent, textvariable=path_var, width=350)
+        entry = ctk.CTkEntry(parent, textvariable=path_var, width=550)
         entry.grid(row=row, column=1, sticky="ew", pady=5)
 
         browse_btn = ctk.CTkButton(parent, text="Browse...", command=browse_command, width=80)

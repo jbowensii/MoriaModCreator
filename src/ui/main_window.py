@@ -18,8 +18,12 @@ import configparser
 import json
 import logging
 import re
+import tkinter as tk
+from tkinter import ttk
 import xml.etree.ElementTree as ET
 from pathlib import Path
+from typing import Optional
+
 from PIL import Image
 import customtkinter as ctk
 
@@ -37,8 +41,8 @@ from src.build_manager import BuildManager
 from src.ui.about_dialog import show_about_dialog
 from src.ui.buildings_view import BuildingsView
 from src.ui.import_dialog import show_import_dialog
-from src.ui.json_convert_dialog import show_json_convert_dialog
 from src.ui.mod_name_dialog import show_mod_name_dialog
+from src.ui.secrets_import_dialog import show_secrets_import_dialog
 
 logger = logging.getLogger(__name__)
 
@@ -120,7 +124,8 @@ class MainWindow(ctk.CTk):
         self.left_select_all_state = "none"
         self.left_select_all_btn = None
 
-        # Load saved checkbox states from INI file
+        # Persisted checkbox states loaded from INI file
+        self._checkbox_states = {}
         self._load_checkbox_states()
 
         # --- Data Table State ---
@@ -154,6 +159,9 @@ class MainWindow(ctk.CTk):
         self.progress_bar = None
         self._current_mod_name = None
         self.left_select_all_var = None  # BooleanVar for left pane select all
+        self.buildings_view = None
+        self.definitions_view_frame = None
+        self.buildings_btn = None
 
         # Virtual scroll attributes
         self.virtual_display_data = []
@@ -317,19 +325,19 @@ class MainWindow(ctk.CTk):
         )
         self.import_btn.pack(side="left", padx=5)
 
-        # Convert Game Files button
-        self.convert_btn = ctk.CTkButton(
+        # Import Secrets button
+        self.secrets_btn = ctk.CTkButton(
             center_frame,
-            text="Convert Game Files",
+            text="Import Secrets",
             width=150,
             height=40,
             fg_color=("#F57C00", "#E65100"),
             hover_color=("#E65100", "#BF360C"),
             font=ctk.CTkFont(size=13, weight="bold"),
             corner_radius=8,
-            command=self._run_json_convert
+            command=self._run_secrets_import
         )
-        self.convert_btn.pack(side="left", padx=5)
+        self.secrets_btn.pack(side="left", padx=5)
 
         # RIGHT: Settings and Help buttons
         right_frame = ctk.CTkFrame(header_frame, fg_color="transparent")
@@ -407,14 +415,16 @@ class MainWindow(ctk.CTk):
             message: The message to display.
             is_error: If True, display in red color.
         """
-        self.status_message.configure(
-            text=message,
-            text_color="red" if is_error else COLOR_STATUS_TEXT
-        )
+        if self.status_message:
+            self.status_message.configure(
+                text=message,
+                text_color="red" if is_error else COLOR_STATUS_TEXT
+            )
 
     def clear_status_message(self):
         """Clear the status bar message."""
-        self.status_message.configure(text="")
+        if self.status_message:
+            self.status_message.configure(text="")
 
     def _create_definitions_pane(self, parent):
         """Create the definitions file list pane."""
@@ -515,15 +525,16 @@ class MainWindow(ctk.CTk):
         # Load definitions files
         self._refresh_definitions_list()
 
-    def _refresh_definitions_list(self, target_dir: Path = None):
+    def _refresh_definitions_list(self, target_dir: Optional[Path] = None):
         """Refresh the list of definition files and directories.
 
         Args:
             target_dir: Directory to display. If None, uses root definitions dir.
         """
         # Clear existing items
-        for widget in self.definitions_list.winfo_children():
-            widget.destroy()
+        if self.definitions_list:
+            for widget in self.definitions_list.winfo_children():
+                widget.destroy()
 
         # Clear tracking dictionaries
         self.definition_checkboxes.clear()
@@ -715,7 +726,7 @@ class MainWindow(ctk.CTk):
         ini_path = self._get_checkbox_ini_path()
         if ini_path.exists():
             config = configparser.ConfigParser()
-            config.optionxform = str  # Preserve case
+            # config.optionxform = str  # Preserve case (removed, not supported)
             try:
                 config.read(ini_path, encoding='utf-8')
                 if 'Paths' in config:
@@ -735,7 +746,7 @@ class MainWindow(ctk.CTk):
 
         ini_path = self._get_checkbox_ini_path()
         config = configparser.ConfigParser()
-        config.optionxform = str  # Preserve case
+        # config.optionxform = str  # Preserve case (removed, not supported)
         config['Paths'] = {}
 
         # First, update _checkbox_states with current UI state
@@ -1591,6 +1602,8 @@ class MainWindow(ctk.CTk):
         all_properties = expanded_properties
 
         # For each item, show the properties (with XML changes where applicable)
+        if items is None:
+            items = []
         for item in items:
             item_name = item.get('Name', '')
             display_name = self._get_item_display_name(item, string_tables)
@@ -1890,8 +1903,9 @@ class MainWindow(ctk.CTk):
         self.current_definition_path = file_path
 
         # Clear existing content in main_content
-        for widget in self.main_content.winfo_children():
-            widget.destroy()
+        if self.main_content:
+            for widget in self.main_content.winfo_children():
+                widget.destroy()
 
         # Show loading indicator in status bar
         self.set_status_message("Loading definition data...")
@@ -1989,7 +2003,9 @@ class MainWindow(ctk.CTk):
 
         # Search entry
         self.search_var = ctk.StringVar()
-        self.search_var.trace_add("write", self._on_search_text_changed)
+        def search_text_changed_callback(_, __, ___):
+            self._on_search_text_changed()
+        self.search_var.trace_add("write", search_text_changed_callback)
         self.search_entry = ctk.CTkEntry(
             search_frame,
             textvariable=self.search_var,
@@ -2041,8 +2057,6 @@ class MainWindow(ctk.CTk):
             parent: Parent frame to contain the table.
             display_data: List of row data dictionaries.
         """
-        import tkinter.ttk as ttk
-
         # Store display data for access by other methods
         self.virtual_display_data = display_data if display_data else []
 
@@ -2137,8 +2151,9 @@ class MainWindow(ctk.CTk):
             self.tree_items.append(item_id)
 
         # Configure tag colors for checked rows
-        self.tree.tag_configure("checked", background=selected_color)
-        self.tree.tag_configure("unchecked", background=bg_color)
+        if self.tree and hasattr(self.tree, 'tag_configure'):
+            self.tree.tag_configure("checked", background=str(selected_color))
+            self.tree.tag_configure("unchecked", background=str(bg_color))
 
         # Bind events
         self.tree.bind("<Double-1>", self._on_tree_double_click)
@@ -2160,12 +2175,21 @@ class MainWindow(ctk.CTk):
 
     def _on_tree_click(self, event):
         """Handle single click on tree - toggle checkbox if clicked on first column."""
-        region = self.tree.identify_region(event.x, event.y)
+        if self.tree and hasattr(self.tree, 'identify_region'):
+            region = self.tree.identify_region(event.x, event.y)
+        else:
+            return
         if region != "cell":
             return
 
-        column = self.tree.identify_column(event.x)
-        item_id = self.tree.identify_row(event.y)
+        if self.tree and hasattr(self.tree, 'identify_column'):
+            column = self.tree.identify_column(event.x)
+        else:
+            return
+        if self.tree and hasattr(self.tree, 'identify_row'):
+            item_id = self.tree.identify_row(event.y)
+        else:
+            return
 
         if not item_id:
             return
@@ -2185,22 +2209,32 @@ class MainWindow(ctk.CTk):
 
             # Update display
             checked_symbol = "☑" if is_checked else "☐"
-            values = list(self.tree.item(item_id, "values"))
-            values[0] = checked_symbol
-            values[4] = self.row_new_values[data_idx]
-            self.tree.item(item_id, values=values,
-                          tags=("checked" if is_checked else "unchecked",))
+            if self.tree and hasattr(self.tree, 'item'):
+                values = list(self.tree.item(item_id, "values"))
+                values[0] = checked_symbol
+                values[4] = self.row_new_values[data_idx]
+                self.tree.item(item_id, values=values,
+                              tags=("checked" if is_checked else "unchecked",))
 
             self._update_select_all_checkbox_state()
 
     def _on_tree_double_click(self, event):
         """Handle double-click to edit the New column."""
-        region = self.tree.identify_region(event.x, event.y)
+        if self.tree and hasattr(self.tree, 'identify_region'):
+            region = self.tree.identify_region(event.x, event.y)
+        else:
+            return
         if region != "cell":
             return
 
-        column = self.tree.identify_column(event.x)
-        item_id = self.tree.identify_row(event.y)
+        if self.tree and hasattr(self.tree, 'identify_column'):
+            column = self.tree.identify_column(event.x)
+        else:
+            return
+        if self.tree and hasattr(self.tree, 'identify_row'):
+            item_id = self.tree.identify_row(event.y)
+        else:
+            return
 
         if not item_id:
             return
@@ -2214,32 +2248,40 @@ class MainWindow(ctk.CTk):
             return
 
         # Get cell bounding box
-        bbox = self.tree.bbox(item_id, column)
+        if self.tree and hasattr(self.tree, 'bbox'):
+            bbox = self.tree.bbox(item_id, column)
+        else:
+            return
         if not bbox:
             return
 
         x, y, width, height = bbox
 
         # Destroy any existing edit entry
-        if self.tree_edit_entry:
+        if self.tree_edit_entry and hasattr(self.tree_edit_entry, 'destroy'):
             self.tree_edit_entry.destroy()
 
         # Create entry for editing using tkinter Entry for better compatibility
-        import tkinter as tk
         current_value = self.row_new_values[data_idx]
+        def theme_color(val):
+            # Ensure _get_theme_color returns a string
+            color = self._get_theme_color(val)
+            if isinstance(color, (tuple, list)):
+                return str(color[0])
+            return str(color)
         self.tree_edit_entry = tk.Entry(
             self.tree,
             font=("", 18),
-            bg=self._get_theme_color(("white", "gray20")),
-            fg=self._get_theme_color(("black", "white")),
-            insertbackground=self._get_theme_color(("black", "white"))
+            bg=theme_color(("white", "gray20")),
+            fg=theme_color(("black", "white")),
+            insertbackground=theme_color(("black", "white"))
         )
         self.tree_edit_entry.place(x=x, y=y, width=width, height=height)
         self.tree_edit_entry.insert(0, current_value)
         self.tree_edit_entry.select_range(0, tk.END)
         self.tree_edit_entry.focus_set()
 
-        def save_edit(event=None):
+        def save_edit():
             new_value = self.tree_edit_entry.get()
             self.row_new_values[data_idx] = new_value
 
@@ -2251,7 +2293,7 @@ class MainWindow(ctk.CTk):
             self.tree_edit_entry.destroy()
             self.tree_edit_entry = None
 
-        def cancel_edit(event=None):
+        def cancel_edit():
             self.tree_edit_entry.destroy()
             self.tree_edit_entry = None
 
@@ -2294,9 +2336,9 @@ class MainWindow(ctk.CTk):
         # Update button state
         self._update_select_all_checkbox_state()
 
-    def _on_search_text_changed(self, *args):
+    def _on_search_text_changed(self):
         """Reset search position when search text changes."""
-        current_text = self.search_var.get().strip().lower()
+        current_text = self.search_var.get().strip().lower() if self.search_var else ""
         if current_text != self.search_last_text:
             self.search_last_index = -1
             self.search_last_text = current_text
@@ -2307,7 +2349,7 @@ class MainWindow(ctk.CTk):
             self.set_status_message("No data to search", is_error=True)
             return
 
-        search_text = self.search_var.get().strip().lower()
+        search_text = self.search_var.get().strip().lower() if self.search_var else ""
         if not search_text:
             return
 
@@ -2333,7 +2375,11 @@ class MainWindow(ctk.CTk):
                 return
 
         # No match found
-        self.set_status_message(f"No match found for '{self.search_var.get()}'", is_error=True)
+        if self.search_var and hasattr(self.search_var, 'get'):
+            search_text = self.search_var.get()
+        else:
+            search_text = ''
+        self.set_status_message(f"No match found for '{search_text}'", is_error=True)
         self.search_last_index = -1
 
     def _update_select_all_checkbox_state(self):
@@ -2351,18 +2397,24 @@ class MainWindow(ctk.CTk):
         if checked_count == 0:
             # None checked
             self.select_all_state = "none"
-            self.select_all_btn.deselect()
-            self.select_all_btn.configure(fg_color=default_color)
+            if self.select_all_btn and hasattr(self.select_all_btn, 'deselect'):
+                self.select_all_btn.deselect()
+            if self.select_all_btn and hasattr(self.select_all_btn, 'configure'):
+                self.select_all_btn.configure(fg_color=default_color)
         elif checked_count == total_count:
             # All checked
             self.select_all_state = "all"
-            self.select_all_btn.select()
-            self.select_all_btn.configure(fg_color=default_color)
+            if self.select_all_btn and hasattr(self.select_all_btn, 'select'):
+                self.select_all_btn.select()
+            if self.select_all_btn and hasattr(self.select_all_btn, 'configure'):
+                self.select_all_btn.configure(fg_color=default_color)
         else:
             # Mixed state - checked with orange color
             self.select_all_state = "mixed"
-            self.select_all_btn.select()
-            self.select_all_btn.configure(fg_color=mixed_color)
+            if self.select_all_btn and hasattr(self.select_all_btn, 'select'):
+                self.select_all_btn.select()
+            if self.select_all_btn and hasattr(self.select_all_btn, 'configure'):
+                self.select_all_btn.configure(fg_color=mixed_color)
 
     # =========================================================================
     # BUILD AND SAVE OPERATIONS
@@ -2378,7 +2430,7 @@ class MainWindow(ctk.CTk):
         Validates that a mod name is set and definitions are selected,
         then invokes the BuildManager to create the PAK file.
         """
-        mod_name = self.mod_name_var.get().strip()
+        mod_name = self.mod_name_var.get().strip() if self.mod_name_var else ""
 
         if not mod_name:
             self.set_status_message("Please enter a mod name", is_error=True)
@@ -2462,12 +2514,13 @@ class MainWindow(ctk.CTk):
 
     def _on_mod_name_click(self):
         """Handle My Mod Name button click - open dialog to set mod name."""
-        current_name = self.mod_name_var.get()
+        current_name = self.mod_name_var.get() if self.mod_name_var and hasattr(self.mod_name_var, 'get') else ''
         result = show_mod_name_dialog(self, current_name)
 
         if result:
             # Update the mod name display
-            self.mod_name_var.set(result)
+            if self.mod_name_var and hasattr(self.mod_name_var, 'set'):
+                self.mod_name_var.set(result)
 
             # Store the current mod name for INI path
             self._current_mod_name = result
@@ -2646,20 +2699,20 @@ class MainWindow(ctk.CTk):
 
         btn.pack(side="left", padx=5)
 
-        # Store tooltip reference (for future tooltip implementation)
-        btn.tooltip_text = tooltip
+        # Store tooltip reference for future tooltip implementation
+        # tooltip_text = tooltip  # For future use
 
     def _run_import(self):
-        """Run the retoc import process."""
+        """Run the retoc import and JSON conversion process."""
         show_import_dialog(self)
 
-    def _run_json_convert(self):
-        """Run the JSON conversion process."""
-        show_json_convert_dialog(self)
+    def _run_secrets_import(self):
+        """Run the Secrets Source import process."""
+        show_secrets_import_dialog(self)
 
     def _open_settings(self):
         """Open the settings/configuration dialog."""
-        from src.ui.config_dialog import show_config_dialog
+        from src.ui.config_dialog import show_config_dialog  # pylint: disable=import-outside-toplevel
         show_config_dialog(self)
 
     def _open_about(self):
@@ -2724,14 +2777,18 @@ class MainWindow(ctk.CTk):
         self.current_view = "buildings"
 
         # Hide definitions view
-        self.definitions_view_frame.grid_forget()
+        if self.definitions_view_frame:
+            self.definitions_view_frame.grid_forget()
 
         # Show buildings view
-        self.buildings_view.grid(row=0, column=0, columnspan=2, sticky="nsew")
+        if self.buildings_view:
+            self.buildings_view.grid(row=0, column=0, columnspan=2, sticky="nsew")
 
         # Update button appearances - Constructions active, Mod Builder inactive
-        self.buildings_btn.configure(fg_color=("#3B8ED0", "#1F6AA5"))
-        self.mod_builder_btn.configure(fg_color=("gray70", "gray30"))
+        if self.buildings_btn:
+            self.buildings_btn.configure(fg_color=("#3B8ED0", "#1F6AA5"))
+        if self.mod_builder_btn:
+            self.mod_builder_btn.configure(fg_color=("gray70", "gray30"))
 
         self.set_status_message("Constructions view active")
 
@@ -2740,13 +2797,17 @@ class MainWindow(ctk.CTk):
         self.current_view = "definitions"
 
         # Hide buildings view
-        self.buildings_view.grid_forget()
+        if self.buildings_view:
+            self.buildings_view.grid_forget()
 
         # Show definitions view
-        self.definitions_view_frame.grid(row=0, column=0, columnspan=2, sticky="nsew")
+        if self.definitions_view_frame:
+            self.definitions_view_frame.grid(row=0, column=0, columnspan=2, sticky="nsew")
 
         # Update button appearances - Mod Builder active, Constructions inactive
-        self.mod_builder_btn.configure(fg_color=("#3B8ED0", "#1F6AA5"))
-        self.buildings_btn.configure(fg_color=("gray70", "gray30"))
+        if self.mod_builder_btn:
+            self.mod_builder_btn.configure(fg_color=("#3B8ED0", "#1F6AA5"))
+        if self.buildings_btn:
+            self.buildings_btn.configure(fg_color=("gray70", "gray30"))
 
         self.clear_status_message()

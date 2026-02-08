@@ -28,7 +28,7 @@ def main():
 
     # Apply color scheme from config or default to system
     config_found = config_exists()
-    logger.debug(f"Config exists: {config_found}")
+    logger.debug("Config exists: %s", config_found)
     if config_found:
         apply_color_scheme(get_color_scheme())
     else:

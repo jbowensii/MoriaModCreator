@@ -10,7 +10,7 @@ COLOR_SCHEMES = ["Match Windows Theme", "Light Mode", "Dark Mode"]
 DEFAULT_COLOR_SCHEME = "Match Windows Theme"
 
 
-class _ConfigCache:
+class _ConfigCache:  # pylint: disable=too-few-public-methods
     """Internal class to hold config cache state without using globals."""
     config: configparser.ConfigParser | None = None
     mtime: float | None = None
@@ -92,14 +92,14 @@ def load_config() -> configparser.ConfigParser:
         _cache.config = config
         _cache.mtime = current_mtime
         return config
-    else:
-        # No config file, return empty config
-        _cache.config = None
-        _cache.mtime = None
-        return configparser.ConfigParser()
+
+    # No config file, return empty config
+    _cache.config = None
+    _cache.mtime = None
+    return configparser.ConfigParser()
 
 
-def save_config(
+def save_config(  # pylint: disable=too-many-arguments
     game_install_path: str,
     install_type: str,
     utilities_dir: str,

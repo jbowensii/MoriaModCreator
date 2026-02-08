@@ -11,9 +11,9 @@ Uses tkinter Treeview for efficient virtual scrolling with large datasets.
 import html
 import json
 import logging
-import tkinter.ttk as ttk
+import xml.etree.ElementTree as ET
 from pathlib import Path
-from tkinter import filedialog, messagebox
+from tkinter import filedialog, messagebox, ttk
 from typing import Optional
 
 import customtkinter as ctk
@@ -589,7 +589,7 @@ class ImportConstructionDialog(ctk.CTkToplevel):
                 text_color="#F44336"
             )
             logger.error("Invalid JSON structure: %s", e)
-        except Exception as e:
+        except OSError as e:
             self.status_label.configure(
                 text=f"Error loading files: {e}",
                 text_color="#F44336"
@@ -731,7 +731,7 @@ class ImportConstructionDialog(ctk.CTkToplevel):
                 generate_def_file(name, recipe, construction, icon_imports, output_dir)
                 imported += 1
 
-            except Exception as e:
+            except (OSError, KeyError, ValueError, ET.ParseError) as e:
                 errors.append(f"{name}: {e}")
                 logger.error("Failed to import %s: %s", name, e)
 

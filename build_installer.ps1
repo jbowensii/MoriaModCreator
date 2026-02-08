@@ -101,7 +101,7 @@ if (Test-Path $newObjectsDir) {
 }
 
 # Step 5: Create utilities.zip
-Write-Host "[5/7] Creating utilities.zip..." -ForegroundColor Yellow
+Write-Host "[5/8] Creating utilities.zip..." -ForegroundColor Yellow
 $utilitiesDir = "$AppDataDir\utilities"
 $utilitiesZip = "$ReleaseDir\utilities.zip"
 
@@ -115,9 +115,30 @@ if (Test-Path $utilitiesDir) {
     exit 1
 }
 
-# Step 6: Build installer with Inno Setup
+# Step 6: Create Constructions.zip (optional - only if directory exists and has content)
+Write-Host "[6/8] Creating Constructions.zip..." -ForegroundColor Yellow
+$constructionsDir = "$AppDataDir\Constructions"
+$constructionsZip = "$ReleaseDir\Constructions.zip"
+
+if (Test-Path $constructionsDir) {
+    $constructionsContent = Get-ChildItem $constructionsDir -Recurse -File
+    if ($constructionsContent) {
+        if (Test-Path $constructionsZip) { Remove-Item $constructionsZip -Force }
+        Compress-Archive -Path "$constructionsDir\*" -DestinationPath $constructionsZip -CompressionLevel Optimal
+        $zipSize = [math]::Round((Get-Item $constructionsZip).Length / 1KB)
+        Write-Host "   Created Constructions.zip ($zipSize KB)" -ForegroundColor Green
+    } else {
+        Write-Host "   Constructions directory is empty, skipping zip creation" -ForegroundColor DarkYellow
+        if (Test-Path $constructionsZip) { Remove-Item $constructionsZip -Force }
+    }
+} else {
+    Write-Host "   Constructions directory not found, skipping" -ForegroundColor DarkYellow
+    if (Test-Path $constructionsZip) { Remove-Item $constructionsZip -Force }
+}
+
+# Step 7: Build installer with Inno Setup
 if (-not $SkipBuild) {
-    Write-Host "[6/7] Building installer with Inno Setup..." -ForegroundColor Yellow
+    Write-Host "[7/8] Building installer with Inno Setup..." -ForegroundColor Yellow
     
     if (-not (Test-Path $InnoSetup)) {
         Write-Host "   Inno Setup not found at: $InnoSetup" -ForegroundColor Red
@@ -135,13 +156,13 @@ if (-not $SkipBuild) {
     $installer = Get-ChildItem $ReleaseDir -Filter "MoriaMODCreator_Setup_*.exe" | Sort-Object LastWriteTime -Descending | Select-Object -First 1
     Write-Host "   Built: $($installer.Name)" -ForegroundColor Green
 } else {
-    Write-Host "[6/7] Skipping installer build (--SkipBuild)" -ForegroundColor DarkYellow
+    Write-Host "[7/8] Skipping installer build (--SkipBuild)" -ForegroundColor DarkYellow
     $installer = Get-ChildItem $ReleaseDir -Filter "MoriaMODCreator_Setup_*.exe" | Sort-Object LastWriteTime -Descending | Select-Object -First 1
 }
 
-# Step 7: Sign the installer
+# Step 8: Sign the installer
 if (-not $SkipSign -and $installer) {
-    Write-Host "[7/7] Signing installer..." -ForegroundColor Yellow
+    Write-Host "[8/8] Signing installer..." -ForegroundColor Yellow
     
     if (-not (Test-Path $SignTool)) {
         Write-Host "   Sign tool not found at: $SignTool" -ForegroundColor Red
@@ -161,7 +182,7 @@ if (-not $SkipSign -and $installer) {
         }
     }
 } else {
-    Write-Host "[7/7] Skipping signing (--SkipSign or no installer)" -ForegroundColor DarkYellow
+    Write-Host "[8/8] Skipping signing (--SkipSign or no installer)" -ForegroundColor DarkYellow
 }
 
 # Summary

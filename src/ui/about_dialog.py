@@ -19,11 +19,11 @@ class AboutDialog(ctk.CTkToplevel):
 
     def __init__(self, parent: ctk.CTk):
         super().__init__(parent)
-
-        self.title("Help - Moria MOD Creator")
-        self.geometry("900x550")
-        self.resizable(True, True)
-        self.minsize(800, 450)
+        self._about_btn = None
+        self._disclaimer_btn = None
+        self._credits_btn = None
+        self._text_frame = None
+        self._overlay_image = None
 
         # Make this dialog modal
         self.transient(parent)
@@ -61,9 +61,6 @@ class AboutDialog(ctk.CTkToplevel):
             self._overlay_image_pil = img.transpose(Image.Transpose.FLIP_LEFT_RIGHT)
         else:
             self._overlay_image_pil = None
-
-        # CTkImage reference (will be created on resize)
-        self._overlay_image = None
 
     def _create_widgets(self):
         """Create the dialog widgets."""
@@ -110,33 +107,24 @@ class AboutDialog(ctk.CTkToplevel):
         self._about_btn = ctk.CTkButton(
             btn_frame,
             text="About",
-            command=lambda: self._show_tab("about"),
-            width=90,
-            fg_color="#1a5fb4",
-            hover_color="#1c4a8a"
+            width=80,
+            fg_color="#c01c28",
+            hover_color="#a01020"
         )
-        self._about_btn.pack(side="left", padx=(0, 5))
-
-        # Disclaimer button (renamed from Main)
         self._disclaimer_btn = ctk.CTkButton(
             btn_frame,
             text="Disclaimer",
-            command=lambda: self._show_tab("disclaimer"),
-            width=90,
-            fg_color="gray50",
-            hover_color="gray40"
+            width=80,
+            fg_color="#c01c28",
+            hover_color="#a01020"
         )
-        self._disclaimer_btn.pack(side="left", padx=5)
-
         self._credits_btn = ctk.CTkButton(
             btn_frame,
             text="Credits",
-            command=lambda: self._show_tab("credits"),
-            width=90,
-            fg_color="gray50",
-            hover_color="gray40"
+            width=80,
+            fg_color="#c01c28",
+            hover_color="#a01020"
         )
-        self._credits_btn.pack(side="left", padx=5)
 
         # Close button on the right
         close_btn = ctk.CTkButton(
@@ -150,11 +138,13 @@ class AboutDialog(ctk.CTkToplevel):
         close_btn.pack(side="right")
 
         # Content area (scrollable)
-        self._text_frame = ctk.CTkScrollableFrame(
+        self._text_frame = ctk.CTkFrame(
             self._content_frame,
+            width=450,
+            height=350,
             fg_color="transparent"
         )
-        self._text_frame.pack(fill="both", expand=True)
+        self._text_frame.pack(fill="y", padx=10, pady=10)
 
         # Show about tab by default
         self._show_tab("about")
@@ -167,19 +157,23 @@ class AboutDialog(ctk.CTkToplevel):
         active_color = "#1a5fb4"
         inactive_color = "gray50"
 
-        self._about_btn.configure(
-            fg_color=active_color if tab_name == "about" else inactive_color
-        )
-        self._disclaimer_btn.configure(
-            fg_color=active_color if tab_name == "disclaimer" else inactive_color
-        )
-        self._credits_btn.configure(
-            fg_color=active_color if tab_name == "credits" else inactive_color
-        )
+        if self._about_btn:
+            self._about_btn.configure(
+                fg_color=active_color if tab_name == "about" else inactive_color
+            )
+        if self._disclaimer_btn:
+            self._disclaimer_btn.configure(
+                fg_color=active_color if tab_name == "disclaimer" else inactive_color
+            )
+        if self._credits_btn:
+            self._credits_btn.configure(
+                fg_color=active_color if tab_name == "credits" else inactive_color
+            )
 
         # Clear current content
-        for widget in self._text_frame.winfo_children():
-            widget.destroy()
+        if self._text_frame:
+            for widget in self._text_frame.winfo_children():
+                widget.destroy()
 
         # Show appropriate content
         if tab_name == "disclaimer":
@@ -203,7 +197,7 @@ class AboutDialog(ctk.CTkToplevel):
             "Software is provided \"as is,\" without warranties of any kind, "
             "express or implied. Users accept all risks associated with using "
             "the software, including its quality, performance, and accuracy.\n\n"
-            "âš ï¸  Mods can be dangerous!\n\n"
+            "⚠️  Mods can be dangerous!\n\n"
             "Please backup your game and character files often.\n\n"
             "If you use mods, do not report game or system crashes to the "
             "game developers.\n\n"
@@ -232,7 +226,7 @@ class AboutDialog(ctk.CTkToplevel):
         # Version and date
         version_label = ctk.CTkLabel(
             self._text_frame,
-            text=f"Version {APP_VERSION}  â€¢  {APP_DATE}",
+            text=f"Version {APP_VERSION}  •  {APP_DATE}",
             font=ctk.CTkFont(size=14)
         )
         version_label.pack(pady=5)
@@ -255,7 +249,7 @@ class AboutDialog(ctk.CTkToplevel):
 
         github_icon = ctk.CTkLabel(
             github_frame,
-            text="ðŸ“¦ GitHub Repository:",
+            text="📦 GitHub Repository:",
             font=ctk.CTkFont(size=12)
         )
         github_icon.pack(side="left")
@@ -276,7 +270,7 @@ class AboutDialog(ctk.CTkToplevel):
 
         license_icon = ctk.CTkLabel(
             license_frame,
-            text="ðŸ“„ MIT License:",
+            text="📄 MIT License:",
             font=ctk.CTkFont(size=12)
         )
         license_icon.pack(side="left")
@@ -336,7 +330,7 @@ class AboutDialog(ctk.CTkToplevel):
             contrib_frame = ctk.CTkFrame(self._text_frame, fg_color="transparent")
             contrib_frame.pack(anchor="w", padx=20, pady=1)
 
-            bullet = ctk.CTkLabel(contrib_frame, text="â€¢", font=ctk.CTkFont(size=12))
+            bullet = ctk.CTkLabel(contrib_frame, text="•", font=ctk.CTkFont(size=12))
             bullet.pack(side="left")
 
             contrib_link = ctk.CTkLabel(
@@ -373,7 +367,7 @@ class AboutDialog(ctk.CTkToplevel):
             tool_frame = ctk.CTkFrame(self._text_frame, fg_color="transparent")
             tool_frame.pack(anchor="w", padx=20, pady=2)
 
-            bullet = ctk.CTkLabel(tool_frame, text="â€¢", font=ctk.CTkFont(size=12))
+            bullet = ctk.CTkLabel(tool_frame, text="•", font=ctk.CTkFont(size=12))
             bullet.pack(side="left")
 
             tool_link = ctk.CTkLabel(
@@ -406,9 +400,9 @@ class AboutDialog(ctk.CTkToplevel):
         libs_header.pack(anchor="w", padx=10, pady=(10, 5))
 
         libraries_text = (
-            "â€¢ CustomTkinter - Modern UI toolkit\n"
-            "â€¢ Pillow - Image processing\n"
-            "â€¢ Python - Programming language"
+            "• CustomTkinter - Modern UI toolkit\n"
+            "• Pillow - Image processing\n"
+            "• Python - Programming language"
         )
 
         libs_label = ctk.CTkLabel(
@@ -427,9 +421,9 @@ class AboutDialog(ctk.CTkToplevel):
     def _on_resize(self, event=None):
         """Handle window resize to update images."""
         if event and event.widget == self:
-            self._update_images()
+            self.update_images()
 
-    def _update_images(self):
+    def update_images(self):
         """Update overlay image - use 50% of original size."""
         try:
             # Force geometry update
@@ -450,7 +444,7 @@ class AboutDialog(ctk.CTkToplevel):
                 )
                 self._overlay_label.configure(image=self._overlay_image)
 
-        except Exception:
+        except OSError:
             pass  # Ignore errors during resize
 
     def _on_close(self):
@@ -466,5 +460,5 @@ def show_about_dialog(parent: ctk.CTk) -> None:
     """
     dialog = AboutDialog(parent)
     # Trigger initial image update after window is displayed
-    dialog.after(100, dialog._update_images)
+    dialog.after(100, dialog.update_images)
     parent.wait_window(dialog)
