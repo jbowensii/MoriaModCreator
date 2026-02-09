@@ -24,7 +24,6 @@ Key Functions:
 import configparser
 import json
 import logging
-import re
 import shutil
 import xml.etree.ElementTree as ET
 from collections import defaultdict
@@ -164,10 +163,10 @@ class FieldTooltip:
         widget.bind("<Enter>", self._on_enter)
         widget.bind("<Leave>", self._on_leave)
 
-    def _on_enter(self, event):
+    def _on_enter(self, _event):
         self.scheduled_id = self.widget.after(self.delay, self._show_tooltip)
 
-    def _on_leave(self, event):
+    def _on_leave(self, _event):
         if self.scheduled_id:
             self.widget.after_cancel(self.scheduled_id)
             self.scheduled_id = None
@@ -1445,7 +1444,7 @@ class AutocompleteEntry(ctk.CTkFrame):
             else:
                 btn.configure(fg_color="transparent")
 
-    def _on_down_arrow(self, event):
+    def _on_down_arrow(self, _event):
         """Move selection down in dropdown."""
         if not self.dropdown_visible or not self.current_matches:
             return "break"
@@ -1454,22 +1453,23 @@ class AutocompleteEntry(ctk.CTkFrame):
         self._highlight_selection()
         return "break"
 
-    def _on_up_arrow(self, event):
+    def _on_up_arrow(self, _event):
         """Move selection up in dropdown."""
         if not self.dropdown_visible or not self.current_matches:
-            return
+            return None
 
         self.selected_index = max(self.selected_index - 1, 0)
         self._highlight_selection()
         return "break"
 
-    def _on_enter(self, event):
+    def _on_enter(self, _event):
         """Select the highlighted item on Enter."""
         if self.dropdown_visible and 0 <= self.selected_index < len(self.current_matches):
             self._select_item(self.current_matches[self.selected_index])
             return "break"
+        return None
 
-    def _hide_dropdown(self, event=None):
+    def _hide_dropdown(self, _event=None):
         """Hide the autocomplete dropdown."""
         if self.dropdown_window:
             self.dropdown_window.destroy()
@@ -1479,7 +1479,7 @@ class AutocompleteEntry(ctk.CTkFrame):
         self.dropdown_visible = False
         self.selected_index = -1
 
-    def _on_focus_out(self, event):
+    def _on_focus_out(self, _event):
         """Handle focus out - delay hide to allow click on dropdown."""
         self.after(250, self._check_focus_and_hide)
 
@@ -1855,6 +1855,16 @@ class BuildingsView(ctk.CTkFrame):
 
         # String table for game name lookups {internal_name: display_name}
         self.string_table = {}
+
+        # Button and widget refs created in _create_left_pane_buttons
+        self.include_secrets_var = None
+        self.include_secrets_cb = None
+        self.tools_btn = None
+        self.flora_btn = None
+        self.loot_btn = None
+        self.items_btn = None
+        self.secrets_prefix_var = None
+        self.secrets_prefix_entry = None
 
         # Widget references created in _create_widgets helper methods
         self.buildings_btn = None
@@ -2487,11 +2497,11 @@ class BuildingsView(ctk.CTkFrame):
         if loader:
             loader()
 
-    def _on_secrets_checkbox_toggle(self, recipe_name: str):
+    def _on_secrets_checkbox_toggle(self, _recipe_name: str):
         """Handle secrets item checkbox toggle - saves to INI in real-time."""
         self._save_checked_states_to_ini()
 
-    def _on_construction_checkbox_toggle(self, file_path: Path):
+    def _on_construction_checkbox_toggle(self, _file_path: Path):
         """Handle individual construction checkbox toggle - saves to INI in real-time."""
         # Save to INI file immediately if we have a construction pack selected
         if self.current_construction_pack:
@@ -4170,7 +4180,7 @@ class BuildingsView(ctk.CTkFrame):
         """Add a new empty material row."""
         self._add_material_row("Item.Wood", 1)
 
-    def _remove_material_row(self, row_frame, row_id):  # noqa: ARG002
+    def _remove_material_row(self, row_frame, _row_id):
         """Remove a material row."""
         row_frame.destroy()
         # Mark as removed (don't reindex to avoid issues)
@@ -4220,7 +4230,7 @@ class BuildingsView(ctk.CTkFrame):
             self.sandbox_materials_frame.pack(fill="x", pady=(0, 5))
         self._add_sandbox_material_row("Item.Wood", 1)
 
-    def _remove_sandbox_material_row(self, row_frame, row_id):  # noqa: ARG002
+    def _remove_sandbox_material_row(self, row_frame, _row_id):
         """Remove a sandbox material row."""
         row_frame.destroy()
         for row in self.sandbox_material_rows:
@@ -5937,17 +5947,17 @@ class BuildingsView(ctk.CTkFrame):
 
         if 'BoolPropertyData' in prop_type:
             return prop.get('Value', False)
-        elif 'IntPropertyData' in prop_type:
+        if 'IntPropertyData' in prop_type:
             return prop.get('Value', 0)
-        elif 'FloatPropertyData' in prop_type:
+        if 'FloatPropertyData' in prop_type:
             return prop.get('Value', 0.0)
-        elif 'EnumPropertyData' in prop_type:
+        if 'EnumPropertyData' in prop_type:
             return prop.get('Value', '')
-        elif 'TextPropertyData' in prop_type:
+        if 'TextPropertyData' in prop_type:
             return prop.get('CultureInvariantString', '') or prop.get('Value', '')
-        elif 'NamePropertyData' in prop_type:
+        if 'NamePropertyData' in prop_type:
             return prop.get('Value', '')
-        elif 'ArrayPropertyData' in prop_type:
+        if 'ArrayPropertyData' in prop_type:
             arr = prop.get('Value', [])
             # Deep extraction for arrays of structs
             result = []
@@ -5965,7 +5975,7 @@ class BuildingsView(ctk.CTkFrame):
                 else:
                     result.append(self._extract_property_value(item))
             return result
-        elif 'StructPropertyData' in prop_type:
+        if 'StructPropertyData' in prop_type:
             struct_val = prop.get('Value', [])
             struct_dict = {}
             for struct_prop in struct_val:
@@ -5973,10 +5983,9 @@ class BuildingsView(ctk.CTkFrame):
                 if struct_prop_name:
                     struct_dict[struct_prop_name] = self._extract_property_value(struct_prop)
             return struct_dict
-        elif 'SoftObjectPropertyData' in prop_type:
+        if 'SoftObjectPropertyData' in prop_type:
             return prop.get('Value', {}).get('AssetPath', {}).get('AssetName', '')
-        else:
-            return prop.get('Value', '')
+        return prop.get('Value', '')
 
     def _show_new_building_form(self):
         """Show form for creating a new building definition."""
@@ -6319,5 +6328,3 @@ class BuildingsView(ctk.CTkFrame):
                  "Value": "ERowEnabledState::Live"},
             ]
         }
-
-

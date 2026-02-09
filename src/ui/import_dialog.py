@@ -206,9 +206,8 @@ def convert_file_to_json(
 
         if result.returncode == 0 and dest_file.exists():
             return (True, f"Converted: {rel_path}")
-        else:
-            error_msg = result.stderr.strip() if result.stderr else "Unknown error"
-            return (False, f"Failed: {rel_path} - {error_msg}")
+        error_msg = result.stderr.strip() if result.stderr else "Unknown error"
+        return (False, f"Failed: {rel_path} - {error_msg}")
 
     except subprocess.TimeoutExpired:
         return (False, f"Timeout: {source_file.name}")

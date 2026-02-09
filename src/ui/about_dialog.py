@@ -7,7 +7,7 @@ from PIL import Image
 
 # Application info
 APP_NAME = "Moria MOD Creator"
-APP_VERSION = "0.6"
+APP_VERSION = "0.7 Beta"
 APP_DATE = "February 2026"
 APP_AUTHOR = "John B Owens II"
 GITHUB_URL = "https://github.com/jbowensii/MoriaModCreator"

@@ -230,6 +230,7 @@ class MainWindow(ctk.CTk):
         self.buildings_view = None
         self.definitions_view_frame = None
         self.buildings_btn = None
+        self.secrets_btn = None
 
         # Virtual scroll attributes
         self.virtual_display_data = []
@@ -994,12 +995,11 @@ class MainWindow(ctk.CTk):
 
         if total_count == 0:
             return "none"
-        elif checked_count == 0:
+        if checked_count == 0:
             return "none"
-        elif checked_count == total_count:
+        if checked_count == total_count:
             return "all"
-        else:
-            return "mixed"
+        return "mixed"
 
     def _update_directory_checkbox_display(self, dir_path: Path):
         """Update a directory checkbox button to show tri-state based on children.
@@ -1522,7 +1522,7 @@ class MainWindow(ctk.CTk):
         # Extract final value
         if isinstance(current, (str, int, float, bool)):
             return str(current)
-        elif isinstance(current, dict) and 'Value' in current:
+        if isinstance(current, dict) and 'Value' in current:
             val = current['Value']
             if isinstance(val, (str, int, float, bool)):
                 return str(val)
@@ -2691,7 +2691,7 @@ class MainWindow(ctk.CTk):
             properties_used = {}  # Track property -> value for NONE fallback
 
             # Use the virtual scroll data model
-            for i in range(len(self.row_checked)):
+            for i, _ in enumerate(self.row_checked):
                 prop_name = self.row_properties[i]
                 new_value = self.row_new_values[i].strip() if self.row_new_values[i] else ""
 

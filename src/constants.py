@@ -2,7 +2,7 @@
 
 # Application info
 APP_NAME = "Moria MOD Creator"
-APP_VERSION = "0.3"
+APP_VERSION = "0.7 Beta"
 
 # Unreal Engine versions
 UE_VERSION = "VER_UE4_27"  # For UAssetGUI

@@ -543,7 +543,7 @@ class SecretsImportDialog(ctk.CTkToplevel):
                 return
 
             self.update_queue.put(("status", "Generating secrets manifest..."))
-            manifest_count, manifest_path = generate_secrets_manifest(secrets_dir)
+            manifest_count, _manifest_path = generate_secrets_manifest(secrets_dir)
             self.update_queue.put(("detail", f"Manifest: {manifest_count} entries written"))
 
             self.update_queue.put(("progress", 1.0))
