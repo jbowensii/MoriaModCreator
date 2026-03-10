@@ -47,6 +47,7 @@ from src.build_manager import BuildManager
 from src.ui.about_dialog import show_about_dialog
 from src.ui.buildings_view import BuildingsView
 from src.ui.constructions_view import ConstructionsView
+from src.ui.def_creator_view import DefCreatorView
 from src.ui.import_dialog import show_import_dialog
 from src.ui.mod_name_dialog import show_mod_name_dialog
 from src.ui.secrets_import_dialog import (
@@ -292,7 +293,7 @@ class MainWindow(ctk.CTk, TkinterDnD.DnDWrapper if HAS_TKDND else object):
         self.search_last_text = ""
 
         # View switching
-        self.current_view = "definitions"  # "definitions", "buildings", or "constructions"
+        self.current_view = "definitions"  # "definitions", "buildings", "constructions", or "def_creator"
         self.definitions_view_frame = None
         self.buildings_view = None
         self.constructions_view = None
@@ -428,6 +429,20 @@ class MainWindow(ctk.CTk, TkinterDnD.DnDWrapper if HAS_TKDND else object):
         )
         self.constructions_btn.pack(side="left", padx=5)
 
+        # Create DEF button
+        self.def_creator_btn = ctk.CTkButton(
+            center_frame,
+            text="Create DEF",
+            width=120,
+            height=40,
+            fg_color=("gray70", "gray30"),
+            hover_color=("gray60", "gray40"),
+            font=ctk.CTkFont(size=13, weight="bold"),
+            corner_radius=8,
+            command=self._show_def_creator_view
+        )
+        self.def_creator_btn.pack(side="left", padx=5)
+
         # Separator (Advanced mode only)
         self.toolbar_sep = ctk.CTkLabel(
             center_frame, text="|", text_color="gray50", font=ctk.CTkFont(size=20)
@@ -555,6 +570,14 @@ class MainWindow(ctk.CTk, TkinterDnD.DnDWrapper if HAS_TKDND else object):
             on_back=self._show_definitions_view
         )
         # Don't grid it yet - will be shown when Constructions button is clicked
+
+        # === DEF CREATOR VIEW (hidden initially) ===
+        self.def_creator_view = DefCreatorView(
+            self.main_area,
+            on_status_message=self.set_status_message,
+            on_back=self._show_definitions_view
+        )
+        # Don't grid it yet - will be shown when Create DEF button is clicked
 
         # Apply initial view based on default mode
         self._apply_view_mode(self.ui_mode_var.get())
@@ -3886,12 +3909,8 @@ class MainWindow(ctk.CTk, TkinterDnD.DnDWrapper if HAS_TKDND else object):
             mode: "Novice" or "Advanced".
         """
         if mode == "Novice":
-            # Hide advanced definitions view
-            if self.definitions_view_frame:
-                self.definitions_view_frame.grid_forget()
-            # Hide buildings view if showing
-            if self.buildings_view:
-                self.buildings_view.grid_forget()
+            # Hide all advanced views
+            self._hide_all_views()
             # Show novice view
             if self.novice_view_frame:
                 self.novice_view_frame.grid(row=0, column=0, columnspan=2, sticky="nsew")
@@ -3899,10 +3918,16 @@ class MainWindow(ctk.CTk, TkinterDnD.DnDWrapper if HAS_TKDND else object):
             # Hide novice view
             if self.novice_view_frame:
                 self.novice_view_frame.grid_forget()
-            # Show definitions view (unless in buildings view)
+            # Restore the current advanced view
             if self.current_view == "buildings":
                 if self.buildings_view:
                     self.buildings_view.grid(row=0, column=0, columnspan=2, sticky="nsew")
+            elif self.current_view == "constructions":
+                if self.constructions_view:
+                    self.constructions_view.grid(row=0, column=0, columnspan=2, sticky="nsew")
+            elif self.current_view == "def_creator":
+                if self.def_creator_view:
+                    self.def_creator_view.grid(row=0, column=0, columnspan=2, sticky="nsew")
             else:
                 if self.definitions_view_frame:
                     self.definitions_view_frame.grid(row=0, column=0, columnspan=2, sticky="nsew")
@@ -3917,6 +3942,7 @@ class MainWindow(ctk.CTk, TkinterDnD.DnDWrapper if HAS_TKDND else object):
         self.mod_builder_btn.pack_forget()
         self.buildings_btn.pack_forget()
         self.constructions_btn.pack_forget()
+        self.def_creator_btn.pack_forget()
         self.toolbar_sep.pack_forget()
         self.import_btn.pack_forget()
         self.secrets_btn.pack_forget()
@@ -3930,6 +3956,7 @@ class MainWindow(ctk.CTk, TkinterDnD.DnDWrapper if HAS_TKDND else object):
             self.mod_builder_btn.pack(side="left", padx=5)
             self.buildings_btn.pack(side="left", padx=5)
             self.constructions_btn.pack(side="left", padx=5)
+            self.def_creator_btn.pack(side="left", padx=5)
             self.toolbar_sep.pack(side="left", padx=10)
             self.combined_import_btn.pack(side="left", padx=5)
 
@@ -4060,6 +4087,8 @@ class MainWindow(ctk.CTk, TkinterDnD.DnDWrapper if HAS_TKDND else object):
             self.buildings_view.grid_forget()
         if self.constructions_view:
             self.constructions_view.grid_forget()
+        if self.def_creator_view:
+            self.def_creator_view.grid_forget()
 
     def _reset_nav_buttons(self):
         """Reset all navigation buttons to inactive state."""
@@ -4070,6 +4099,8 @@ class MainWindow(ctk.CTk, TkinterDnD.DnDWrapper if HAS_TKDND else object):
             self.buildings_btn.configure(fg_color=inactive)
         if self.constructions_btn:
             self.constructions_btn.configure(fg_color=inactive)
+        if self.def_creator_btn:
+            self.def_creator_btn.configure(fg_color=inactive)
 
     def _show_buildings_view(self):
         """
@@ -4116,6 +4147,28 @@ class MainWindow(ctk.CTk, TkinterDnD.DnDWrapper if HAS_TKDND else object):
             self.constructions_btn.configure(fg_color=("#3B8ED0", "#1F6AA5"))
 
         self.set_status_message("Constructions view active")
+
+    def _show_def_creator_view(self):
+        """Switch to the Create DEF view.
+
+        If already in def_creator view, toggles back to definitions view.
+        """
+        if self.current_view == "def_creator":
+            self._show_definitions_view()
+            return
+
+        logger.debug("Switching to Create DEF view")
+        self.current_view = "def_creator"
+        self._hide_all_views()
+
+        if self.def_creator_view:
+            self.def_creator_view.grid(row=0, column=0, columnspan=2, sticky="nsew")
+
+        self._reset_nav_buttons()
+        if self.def_creator_btn:
+            self.def_creator_btn.configure(fg_color=("#3B8ED0", "#1F6AA5"))
+
+        self.set_status_message("Create DEF view active")
 
     def _show_definitions_view(self):
         """Switch back to the Mod Builder view."""
