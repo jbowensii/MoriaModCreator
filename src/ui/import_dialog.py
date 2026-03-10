@@ -436,6 +436,7 @@ class ImportDialog(ctk.CTkToplevel):
             # ========== PHASE 3: EXTRACT WITH RETOC ==========
             logger.info("Phase 3: Extracting %d game files with retoc", len(files_to_import))
             self.update_queue.put(("title", "Extracting Game Files"))
+            self.update_queue.put(("status", f"Extracting {len(files_to_import)} game files..."))
             total_files = len(files_to_import)
             import_success = 0
             import_errors = 0

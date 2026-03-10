@@ -1,32 +1,10 @@
 # Moria MOD Creator
 
-Hi everyone, I have just finished Beta release 0.5 of Moria Mod Creator application.  
-
-##This application:
-- Handles loading the game data
-- Using definition files applies any combination of changes to that data
-- Comes pre-configured with 16 modes from Nexus mods, which the user can modify or create as is. 
-OR
-- Create your own custom combination into one mod defined by the user
-
-It can be found here: https://github.com/jbowensii/MoriaModCreator or on my Discord channel
-There are 3 files:
-- MoriaMODCreator.exe
-- definitions.zip    (game file change definitions)
-- mymodfiles.zip  (pre-canned mods that repicate nexus mods)
-All issues shown in the video have been resolved and tested. Please enter bugs on GitHub here: https://github.com/jbowensii/MoriaModCreator/issues
-
-Utilities to download:  (all free, do not download if they ask you to pay)
-https://github.com/trumank/retoc/releases
-https://fmodel.app/
-https://github.com/atenfyr/UAssetGUI
-https://github.com/WistfulHopes/ZenTools-UE4
-
 A desktop application for creating mods for **Lord of the Rings: Return to Moria**.
 
 ![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)
 ![License](https://img.shields.io/badge/License-MIT-green.svg)
-![Version](https://img.shields.io/badge/Version-0.1-orange.svg)
+![Version](https://img.shields.io/badge/Version-1.1-orange.svg)
 
 ## Overview
 
@@ -34,26 +12,30 @@ Moria MOD Creator simplifies the process of modding Return to Moria by providing
 - Import and extract game files
 - Convert game assets to editable JSON format
 - Create mod definitions that specify what values to change
+- Edit Buildings, Constructions, and Secrets with dedicated tabs
 - Build complete mod packages ready for use
 
 ## Features
 
+- **Novice / Advanced UI Modes** - Simplified card-based mod builder for beginners, full editor for power users
+- **Buildings Tab** - Edit item properties, stack sizes, durability, loot tables, and more
+- **Constructions Tab** - Edit construction recipes, costs, building properties
+- **Secrets Tab** - Edit secrets and hidden game content
 - **File Import** - Import game files using FModel integration
 - **JSON Conversion** - Convert `.uasset` files to editable JSON format using UAssetGUI
 - **Mod Definition Editor** - Create and manage `.def` files that define mod changes
-- **Build System** - Automatically process mod definitions, modify JSON, convert back to game format, and package as a zip file
-- **My Mods Management** - Organize multiple mods with separate definition sets
-
-## Requirements
-
-- Python 3.10 or higher
-- Windows OS
-- The following utilities (placed in `%APPDATA%\MoriaMODCreator\utilities\`):
-  - `UAssetGUI.exe` - For JSON/uasset conversion
-  - `retoc.exe` - For creating zen format packages
-  - `FModel.exe` - For extracting game files (optional, for import feature)
+- **Build System** - Process definitions, modify JSON, convert back to game format, and package as a zip
+- **Prebuilt Mods** - 16 ready-made mods replicating popular Nexus mods
+- **Filterable Dropdowns** - Type-to-filter combo boxes for quick item selection
+- **Combined Import** - Import constructions and secrets from game data with one dialog
 
 ## Installation
+
+### Windows Installer (Recommended)
+
+Download the latest `MoriaMODCreator_Setup_v1.1.exe` from [GitHub Releases](https://github.com/jbowensii/MoriaModCreator/releases). The installer bundles all required utilities and definition files.
+
+### From Source
 
 1. Clone the repository:
    ```bash
@@ -79,6 +61,16 @@ Moria MOD Creator simplifies the process of modding Return to Moria by providing
    python main.py
    ```
 
+## Requirements
+
+- Python 3.10 or higher
+- Windows OS
+- The following utilities (placed in `%APPDATA%\MoriaMODCreator\utilities\`):
+  - [UAssetGUI](https://github.com/atenfyr/UAssetGUI) - For JSON/uasset conversion
+  - [retoc](https://github.com/trumank/retoc) - For creating zen format packages
+  - [FModel](https://fmodel.app/) - For extracting game files (optional, for import feature)
+  - [ZenTools](https://github.com/WistfulHopes/ZenTools-UE4) - For UE4 zen packaging
+
 ## Usage
 
 ### Getting Started
@@ -86,7 +78,7 @@ Moria MOD Creator simplifies the process of modding Return to Moria by providing
 1. **Import Game Files** - Click the Import button to extract game files using FModel
 2. **Convert to JSON** - Convert the extracted `.uasset` files to JSON format
 3. **Create a Mod** - Use "My Mods" dropdown to create a new mod project
-4. **Add Definitions** - Create `.def` files that specify what values to change
+4. **Add Definitions** - Create `.def` files or use the built-in tabs to edit values
 5. **Build** - Click Build to process your mod and create a ready-to-use zip file
 
 ### Mod Definition Files (.def)
@@ -118,22 +110,39 @@ When you click Build, the application:
 
 ```
 MoriaModCreator/
-├── main.py                 # Application entry point
-├── requirements.txt        # Python dependencies
-├── assets/                 # Icons and images
+├── main.py                          # Application entry point
+├── requirements.txt                 # Python dependencies
+├── assets/                          # Icons and images
 │   ├── icons/
 │   └── images/
 ├── src/
-│   ├── config.py          # Configuration and paths
+│   ├── build_manager.py             # Build pipeline logic
+│   ├── config.py                    # Configuration management
+│   ├── constants.py                 # Application constants
+│   ├── definition_manager.py        # .def file handling
 │   └── ui/
-│       ├── main_window.py # Main application window
-│       ├── about_dialog.py
-│       ├── config_dialog.py
-│       ├── import_dialog.py
-│       ├── json_convert_dialog.py
-│       ├── mod_name_dialog.py
-│       └── utility_check_dialog.py
-└── test/                   # Test data
+│       ├── main_window.py           # Main application window
+│       ├── buildings_view.py        # Buildings tab
+│       ├── constructions_view.py    # Constructions tab
+│       ├── about_dialog.py          # Help/About dialog
+│       ├── config_dialog.py         # Settings dialog
+│       ├── import_dialog.py         # File import dialog
+│       ├── combined_import_dialog.py # Combined import dialog
+│       ├── secrets_import_dialog.py # Secrets import dialog
+│       ├── import_construction_dialog.py # Construction import
+│       ├── json_convert_dialog.py   # JSON conversion dialog
+│       ├── mod_name_dialog.py       # Mod naming dialog
+│       ├── filterable_combobox.py   # Type-to-filter dropdown
+│       ├── shared_utils.py          # Shared UI utilities
+│       ├── html_text_renderer.py    # HTML rendering
+│       └── utility_check_dialog.py  # Utility validation
+├── tests/                           # Test suite (211 tests)
+├── scripts/                         # Build and release scripts
+├── helpers/                         # Developer utility scripts
+├── installer/                       # Inno Setup script and zip bundles
+└── docs/                            # Documentation and example mods
+    ├── definitions/                 # Reference .def files
+    └── Ready Made Mods/             # 14 pre-built example mods
 ```
 
 ## Data Directories
@@ -142,14 +151,22 @@ The application stores data in `%APPDATA%\MoriaMODCreator\`:
 
 | Directory | Purpose |
 |-----------|---------|
-| `definitions/` | Global definition files |
+| `Definitions/` | Global definition files |
 | `mymodfiles/` | Per-mod project files |
-| `output/jsondata/` | Converted JSON files |
-| `utilities/` | External tools (UAssetGUI, retoc, FModel) |
+| `cache/` | Cached game JSON (constructions, game, secrets) |
+| `changeconstructions/` | Construction change definitions and build intermediates |
+| `changesecrets/` | Secret change definitions and build intermediates |
+| `prebuilt modfiles/` | Pre-configured mod .ini files |
+| `New Objects/` | Custom object/NPC definitions |
+| `Secrets Source/` | Secrets .def source files |
+| `utilities/` | External tools (UAssetGUI, retoc, FModel, ZenTools) |
+| `output/` | Build output files |
 
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
+
+Bug reports: https://github.com/jbowensii/MoriaModCreator/issues
 
 ## License
 
@@ -160,6 +177,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [UAssetGUI](https://github.com/atenfyr/UAssetGUI) - For uasset/JSON conversion
 - [retoc](https://github.com/trumank/retoc) - For zen format packaging
 - [FModel](https://fmodel.app/) - For game file extraction
+- [ZenTools](https://github.com/WistfulHopes/ZenTools-UE4) - For UE4 zen packaging
 - [CustomTkinter](https://github.com/TomSchimansky/CustomTkinter) - Modern UI framework
 
 ## Disclaimer

@@ -1,0 +1,15 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<definition>
+  <title>My Mod Progression - DT_SettlementLevelData (MaxNpcsAllowed)</title>
+  <author>Nexus Mods Member</author>
+  <description>janvsjdncjksdncjknsdcnhsnckhfnvhjfnvhdnfvhjndhghdgnbhgjnbdjlgbvnfkvnkgv</description>
+  <mod file="Moria\Content\Tech\Data\Settlements\DT_SettlementLevelData.json">
+    <change item="1" property="LevelData.MaxNpcsAllowed" value="99" />
+    <change item="2" property="LevelData.MaxNpcsAllowed" value="99" />
+    <change item="3" property="LevelData.MaxNpcsAllowed" value="99" />
+    <change item="4" property="LevelData.MaxNpcsAllowed" value="99" />
+    <change item="5" property="LevelData.MaxNpcsAllowed" value="99" />
+    <change item="6" property="LevelData.MaxNpcsAllowed" value="99" />
+    <change item="7" property="LevelData.MaxNpcsAllowed" value="99" />
+  </mod>
+</definition>

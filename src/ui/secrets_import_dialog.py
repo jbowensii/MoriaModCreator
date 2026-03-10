@@ -342,7 +342,7 @@ def clear_all_directories_in_secrets_source() -> int:
             try:
                 item.unlink()
                 cleaned_count += 1
-                logger.info("Removed stale root file: %s", item.name)
+                logger.info("Removed file: %s", item.name)
             except OSError as e:
                 logger.error("Failed to remove %s: %s", item.name, e)
 

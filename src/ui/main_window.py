@@ -3846,15 +3846,28 @@ class MainWindow(ctk.CTk, TkinterDnD.DnDWrapper if HAS_TKDND else object):
             )
 
     def _run_secrets_import(self):
-        """Run the Secrets Source import process or show download prompt."""
+        """Run the Secrets Source import process, always prompting for fresh download."""
         logger.info("Running secrets import")
+        # Always remove old non-GitHub ZIPs so user provides fresh file each time
+        self._clear_secrets_zips()
+        show_secrets_download_dialog(self, on_file_added=self._update_secrets_btn_state)
+        # After download dialog closes, auto-proceed if ZIP now exists
         if not self._has_secrets_zip():
-            show_secrets_download_dialog(self, on_file_added=self._update_secrets_btn_state)
-            # After download dialog closes, auto-proceed if ZIP now exists
-            if not self._has_secrets_zip():
-                return
+            return
         show_secrets_import_dialog(self)
         self._update_secrets_btn_state()
+
+    def _clear_secrets_zips(self):
+        """Remove ALL ZIP files from Secrets Source so user must provide fresh copy."""
+        secrets_dir = get_secrets_source_dir()
+        if not secrets_dir.exists():
+            return
+        for z in secrets_dir.glob("*.zip"):
+            try:
+                z.unlink()
+                logger.info("Removed ZIP: %s", z.name)
+            except OSError as e:
+                logger.warning("Could not remove %s: %s", z.name, e)
 
     def _on_ui_mode_changed(self, mode: str):
         """Handle UI mode toggle between Novice and Advanced.

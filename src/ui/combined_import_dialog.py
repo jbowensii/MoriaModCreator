@@ -21,6 +21,7 @@ except ImportError:
 import customtkinter as ctk
 
 from src.config import (
+    get_appdata_dir,
     get_utilities_dir,
     get_output_dir,
     get_game_install_path,
@@ -185,6 +186,9 @@ class CombinedImportDialog(ctk.CTkToplevel):
     def _run_combined(self):
         """Run game import then secrets import sequentially."""
         try:
+            # ---------- Upfront cleanup of ALL directories ----------
+            self._cleanup_all_directories()
+
             # ---------- PART 1: Import game files ----------
             logger.info("Combined import: starting Part 1 - game file import")
             game_ok = self._part1_import_game_files()
@@ -204,6 +208,59 @@ class CombinedImportDialog(ctk.CTkToplevel):
             logger.exception("Combined import error")
             self.update_queue.put(("error", f"Error: {e}"))
             self.update_queue.put(("done", False))
+
+    # ------------------------------------------------------------------
+    # Upfront cleanup — clear ALL directories before import begins
+    # ------------------------------------------------------------------
+
+    def _cleanup_all_directories(self):
+        """Clear all output, cache, and secrets directories at the start of import."""
+        q = self.update_queue
+        q.put(("title", "Preparing Import"))
+        q.put(("status", "Clearing all directories..."))
+        q.put(("progress", 0))
+
+        appdata = get_appdata_dir()
+
+        # 1. Output directories (retoc + jsondata)
+        retoc_output = get_retoc_dir()
+        jsondata_output = get_jsondata_dir()
+        for d in (retoc_output, jsondata_output):
+            if d.exists():
+                shutil.rmtree(d, ignore_errors=True)
+            d.mkdir(parents=True, exist_ok=True)
+        logger.info("Cleared output directories: retoc, jsondata")
+
+        # 2. Cache directories (constructions, game, secrets)
+        cache_dir = appdata / 'cache'
+        for sub in ('constructions', 'game', 'secrets'):
+            sub_dir = cache_dir / sub
+            if sub_dir.exists():
+                # Remove JSON files but preserve .ini files (checked_items)
+                for item in sub_dir.rglob('*.json'):
+                    try:
+                        item.unlink()
+                    except OSError:
+                        pass
+                logger.info("Cleared cache: %s", sub)
+
+        # 3. Secrets Source (dirs + stale files, keep .zip/.def/.ini)
+        secrets_dir = get_secrets_source_dir()
+        if secrets_dir.exists():
+            # Remove ALL ZIPs (GitHub ZIP gets re-downloaded fresh)
+            for z in secrets_dir.glob("*.zip"):
+                try:
+                    z.unlink()
+                    logger.info("Removed ZIP: %s", z.name)
+                except OSError:
+                    pass
+            # Clear subdirectories
+            cleaned = clear_all_directories_in_secrets_source()
+            logger.info("Cleared Secrets Source: %d items", cleaned)
+
+        q.put(("status", "All directories cleared"))
+        q.put(("progress", 0.05))
+        logger.info("Upfront cleanup complete")
 
     # ------------------------------------------------------------------
     # Part 1 — game files (mirrors ImportDialog._run_import_and_convert)
@@ -260,21 +317,12 @@ class CombinedImportDialog(ctk.CTkToplevel):
         if self.cancelled:
             return False
 
-        # --- Phase 2: clear ---
-        logger.info("Part 1 Phase 2: Clearing output directories")
-        q.put(("status", "Clearing output directories..."))
-        if retoc_output.exists():
-            shutil.rmtree(retoc_output, ignore_errors=True)
-        retoc_output.mkdir(parents=True, exist_ok=True)
-        if jsondata_output.exists():
-            shutil.rmtree(jsondata_output, ignore_errors=True)
-        jsondata_output.mkdir(parents=True, exist_ok=True)
-        if self.cancelled:
-            return False
+        # --- Phase 2: (directories already cleared in upfront cleanup) ---
 
         # --- Phase 3: extract ---
         logger.info("Part 1 Phase 3: Extracting %d game files with retoc", len(files_to_import))
         q.put(("title", "Extracting Game Files"))
+        q.put(("status", f"Extracting {len(files_to_import)} game files..."))
         total = len(files_to_import)
         ok_count = 0
 
@@ -382,36 +430,29 @@ class CombinedImportDialog(ctk.CTkToplevel):
         q = self.update_queue
         secrets_dir = get_secrets_source_dir()
 
-        # Check if the user has a Secrets ZIP
-        has_zip = any(
-            z.name != GITHUB_ZIP_FILENAME
-            for z in secrets_dir.glob("*.zip")
-        ) if secrets_dir.exists() else False
+        # Always remove old non-GitHub ZIPs so user provides a fresh copy each time
+        if secrets_dir.exists():
+            for z in secrets_dir.glob("*.zip"):
+                if z.name != GITHUB_ZIP_FILENAME:
+                    try:
+                        z.unlink()
+                        logger.info("Removed old secrets ZIP: %s", z.name)
+                    except OSError as e:
+                        logger.warning("Could not remove %s: %s", z.name, e)
 
-        if not has_zip:
-            logger.info("No secrets ZIP found, prompting user")
-            # Ask the main thread to prompt the user
-            q.put(("need_secrets_zip", None))
-            return
-
-        logger.info("Secrets ZIP found, running secrets pipeline")
-        self._run_secrets_pipeline(secrets_dir)
+        # Always prompt user to download/provide the latest Secrets ZIP
+        logger.info("Prompting user for Secrets ZIP")
+        q.put(("need_secrets_zip", None))
 
     def _run_secrets_pipeline(self, secrets_dir: Path):
         """Execute the secrets pipeline (runs in background thread)."""
         q = self.update_queue
 
-        # Step 1: cleanup
-        logger.info("Secrets pipeline step 1: Clearing existing directories")
+        # Step 1: (directories already cleared in upfront cleanup)
         q.put(("title", "Importing Secrets"))
-        q.put(("status", "Clearing existing directories..."))
         q.put(("progress", 0))
         q.put(("file", ""))
         q.put(("count", ""))
-        dirs_removed = clear_all_directories_in_secrets_source()
-        logger.info("Removed %d items from secrets source", dirs_removed)
-        q.put(("status", f"Removed {dirs_removed} items"))
-        q.put(("progress", 0.2))
         if self.cancelled:
             q.put(("done", False))
             return

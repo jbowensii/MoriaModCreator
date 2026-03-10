@@ -171,18 +171,21 @@ def copy_to_release(project_root):
 
 
 def create_installer_zips(project_root):
-    """Create zip bundles for the installer."""
-    appdata = Path(os.environ['APPDATA']) / 'MoriaMODCreator'
+    """Create zip bundles for the installer.
+
+    All installer content is sourced from docs/ in the repo (the source of truth).
+    """
+    docs_dir = project_root / 'docs'
     installer_dir = project_root / 'installer'
 
     print("\nCreating installer zip bundles...")
 
     skipped_files = []
 
-    # Definitions.zip
+    # Definitions.zip — from docs/definitions/
     print("  - Definitions.zip...")
     with zipfile.ZipFile(installer_dir / 'Definitions.zip', 'w', zipfile.ZIP_DEFLATED) as zf:
-        defs_dir = appdata / 'Definitions'
+        defs_dir = docs_dir / 'definitions'
         if defs_dir.exists():
             for root, _, files in os.walk(defs_dir):
                 for file in files:
@@ -194,10 +197,10 @@ def create_installer_zips(project_root):
                     zf.write(file_path, arcname)
             print(f"    Added {len(zf.namelist())} files")
 
-    # changeconstructions.zip (prefix dirs with .ini and .def files)
+    # changeconstructions.zip — from docs/changeconstructions/
     print("  - changeconstructions.zip...")
     with zipfile.ZipFile(installer_dir / 'changeconstructions.zip', 'w', zipfile.ZIP_DEFLATED) as zf:
-        cc_dir = appdata / 'changeconstructions'
+        cc_dir = docs_dir / 'changeconstructions'
         if cc_dir.exists():
             for root, _, files in os.walk(cc_dir):
                 for file in files:
@@ -209,10 +212,10 @@ def create_installer_zips(project_root):
                     zf.write(file_path, arcname)
             print(f"    Added {len(zf.namelist())} files")
 
-    # changesecrets.zip (prefix dirs with .ini and .def files)
+    # changesecrets.zip — from docs/changesecrets/
     print("  - changesecrets.zip...")
     with zipfile.ZipFile(installer_dir / 'changesecrets.zip', 'w', zipfile.ZIP_DEFLATED) as zf:
-        cs_dir = appdata / 'changesecrets'
+        cs_dir = docs_dir / 'changesecrets'
         if cs_dir.exists():
             for root, _, files in os.walk(cs_dir):
                 for file in files:
@@ -224,10 +227,10 @@ def create_installer_zips(project_root):
                     zf.write(file_path, arcname)
             print(f"    Added {len(zf.namelist())} files")
 
-    # prebuilt_modfiles.zip (novice mode INI files)
+    # prebuilt_modfiles.zip — from docs/prebuilt modfiles/
     print("  - prebuilt_modfiles.zip...")
     with zipfile.ZipFile(installer_dir / 'prebuilt_modfiles.zip', 'w', zipfile.ZIP_DEFLATED) as zf:
-        prebuilt_dir = appdata / 'prebuilt modfiles'
+        prebuilt_dir = docs_dir / 'prebuilt modfiles'
         if prebuilt_dir.exists():
             for root, _, files in os.walk(prebuilt_dir):
                 for file in files:
@@ -239,10 +242,10 @@ def create_installer_zips(project_root):
                     zf.write(file_path, arcname)
             print(f"    Added {len(zf.namelist())} files")
 
-    # SecretsSource.zip (.def files only)
+    # SecretsSource.zip — from docs/Secrets Source/ (.def files only)
     print("  - SecretsSource.zip...")
     with zipfile.ZipFile(installer_dir / 'SecretsSource.zip', 'w', zipfile.ZIP_DEFLATED) as zf:
-        secrets_dir = appdata / 'Secrets Source'
+        secrets_dir = docs_dir / 'Secrets Source'
         if secrets_dir.exists():
             for file_path in secrets_dir.rglob('*.def'):
                 if is_excluded_file(file_path.name):
@@ -252,10 +255,10 @@ def create_installer_zips(project_root):
                 zf.write(file_path, arcname)
             print(f"    Added {len(zf.namelist())} files")
 
-    # NewObjects.zip
+    # NewObjects.zip — from docs/New Objects/
     print("  - NewObjects.zip...")
     with zipfile.ZipFile(installer_dir / 'NewObjects.zip', 'w', zipfile.ZIP_DEFLATED) as zf:
-        new_obj_dir = appdata / 'New Objects'
+        new_obj_dir = docs_dir / 'New Objects'
         if new_obj_dir.exists():
             for root, _, files in os.walk(new_obj_dir):
                 for file in files:
@@ -267,10 +270,10 @@ def create_installer_zips(project_root):
                     zf.write(file_path, arcname)
             print(f"    Added {len(zf.namelist())} files")
 
-    # utilities.zip
+    # utilities.zip — from docs/utilities/
     print("  - utilities.zip...")
     with zipfile.ZipFile(installer_dir / 'utilities.zip', 'w', zipfile.ZIP_DEFLATED) as zf:
-        utils_dir = appdata / 'utilities'
+        utils_dir = docs_dir / 'utilities'
         if utils_dir.exists():
             for root, _, files in os.walk(utils_dir):
                 for file in files:

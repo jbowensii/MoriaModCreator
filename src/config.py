@@ -145,7 +145,12 @@ def save_config(  # pylint: disable=too-many-arguments
     _cache.config = None
     _cache.mtime = None
 
+    # Read existing config to preserve manually-set sections
     config = configparser.ConfigParser()
+    config_path = get_config_path()
+    if config_path.exists():
+        config.read(config_path, encoding='utf-8')
+
     config['Game'] = {
         'install_path': game_install_path,
         'install_type': install_type
@@ -174,7 +179,6 @@ def save_config(  # pylint: disable=too-many-arguments
     # Also ensure Constructions directory exists
     get_constructions_dir()
 
-    config_path = get_config_path()
     with open(config_path, 'w', encoding='utf-8') as f:
         config.write(f)
 
@@ -246,6 +250,19 @@ def get_debug_mode() -> bool:
     config = load_config()
     if config.has_option('Debug', 'debug'):
         return config.get('Debug', 'debug').lower() in ('true', '1', 'yes')
+    return False
+
+
+def get_generate_builders_pack() -> bool:
+    """Get the GenerateBuildersPack flag from config, or default False.
+
+    This is a manually-set flag in [Advanced Builders Pack] section.
+    No UI interface — edit config.ini directly to enable.
+    """
+    config = load_config()
+    if config.has_option('Advanced Builders Pack', 'generatebuilderspack'):
+        return config.get('Advanced Builders Pack',
+                          'generatebuilderspack').lower() in ('true', '1', 'yes')
     return False
 
 

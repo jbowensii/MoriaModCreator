@@ -35,9 +35,10 @@ from PIL import Image, ImageDraw
 
 from src.config import (
     get_appdata_dir, get_buildings_dir, get_constructions_dir,
-    get_default_changesecrets_dir, get_output_dir,
+    get_default_changesecrets_dir, get_generate_builders_pack, get_output_dir,
 )
 from src.ui.filterable_combobox import FilterableComboBox
+from src.ui.virtual_scroll_list import VirtualScrollList
 
 logger = logging.getLogger(__name__)
 
@@ -1868,6 +1869,10 @@ class BuildingsView(ctk.CTkFrame):
         self.game_recipe_names = set()  # Recipe names from game files (to filter out)
         self.current_secrets_recipe_name = None  # Currently selected secrets recipe
 
+        # JSON row cache: {file_path_str: {row_name: row_dict}}
+        # Avoids re-parsing large JSON files on every item click
+        self._json_row_cache = {}
+
         # String table for game name lookups {internal_name: display_name}
         self.string_table = {}
 
@@ -1898,8 +1903,6 @@ class BuildingsView(ctk.CTkFrame):
 
         logger.debug("BuildingsView initialized")
         self._create_widgets()
-        # Load persisted secrets prefix
-        self._load_secrets_prefix()
         # Defer scan until after main window is fully initialized
         self.after(100, self._scan_and_refresh)
 
@@ -1973,6 +1976,8 @@ class BuildingsView(ctk.CTkFrame):
         # Uncheck all checkboxes
         for check_var in self.construction_check_vars.values():
             check_var.set(False)
+        if self.building_list:
+            self.building_list.redraw()
 
         # Reset right pane to placeholder
         for widget in self.form_content.winfo_children():
@@ -2157,8 +2162,14 @@ class BuildingsView(ctk.CTkFrame):
         self.bulk_eye_btn.bind("<Button-1>", lambda e: self._on_bulk_eye_toggle())
         self._bulk_eye_visible = True
 
-        # Scrollable file list
-        self.building_list = ctk.CTkScrollableFrame(list_frame, fg_color="transparent")
+        # Virtual scrollable file list
+        self.building_list = VirtualScrollList(
+            list_frame,
+            on_item_click=self._on_virtual_list_click,
+            on_checkbox_toggle=self._on_virtual_list_checkbox,
+            check_vars=self.construction_check_vars,
+            fg_color="transparent",
+        )
         self.building_list.pack(fill="both", expand=True, padx=10, pady=(0, 5))
 
         # === SEARCH BAR (below scrollable list) ===
@@ -2389,82 +2400,41 @@ class BuildingsView(ctk.CTkFrame):
             self._set_status(f"Reverted {recipe_name} to original")
 
     def _refresh_building_list(self):
-        """
-        Refresh the list of .def files from the Buildings directory.
-
-        Clears and rebuilds the file list, creating a row for each .def file
-        with a checkbox and clickable label.
-        """
+        """Refresh the list of .def files from the Buildings directory."""
         logger.debug("Refreshing building list from definitions directory")
-        # Clear existing items
-        for widget in self.building_list.winfo_children():
-            widget.destroy()
 
-        # Get buildings directory (where .def files are stored)
         buildings_dir = self._get_buildings_subdir()
-
-        # Find all .def files
         self.def_files = sorted(buildings_dir.glob("*.def"))
 
-        # Update count
         self.count_label.configure(text=f"{len(self.def_files)} definitions")
 
         if not self.def_files:
-            no_files_label = ctk.CTkLabel(
-                self.building_list,
-                text="No .def files found\n\nRun helpers/generate_building_defs.py\nto generate from source JSON",
-                text_color="gray"
-            )
-            no_files_label.pack(pady=20)
+            self.building_list.clear()
+            self.building_list_items.clear()
+            self.construction_checkboxes.clear()
+            self.construction_check_vars.clear()
             return
 
-        # Clear previous item references and checkbox tracking
+        # Clear previous tracking
         self.building_list_items.clear()
         self.construction_checkboxes.clear()
         self.construction_check_vars.clear()
 
-        # Create entry for each file with checkbox
+        # Build item data for virtual list
+        items = []
         for file_path in self.def_files:
-            row_frame = ctk.CTkFrame(self.building_list, fg_color="transparent")
-            row_frame.pack(fill="x", pady=1)
-
-            # Checkbox for selection
-            check_var = ctk.BooleanVar(value=False)
-            checkbox = ctk.CTkCheckBox(
-                row_frame,
-                text="",
-                variable=check_var,
-                width=20,
-                command=lambda p=file_path: self._on_construction_checkbox_toggle(p)
-            )
-            checkbox.pack(side="left")
-
-            # Store checkbox references
-            self.construction_checkboxes[file_path] = checkbox
-            self.construction_check_vars[file_path] = check_var
-
             internal_name = file_path.stem
             display_name = self._lookup_game_name(internal_name)
             label_text = (f"{display_name} ({internal_name})"
                           if display_name != internal_name else internal_name)
 
-            file_label = ctk.CTkLabel(
-                row_frame,
-                text=label_text,
-                anchor="w",
-                cursor="hand2",
-                text_color=("gray10", "#E8E8E8")
-            )
-            file_label.pack(side="left", fill="x", expand=True, padx=5)
-            file_label.bind("<Button-1>", lambda e, p=file_path: self._load_def_file(p))
-            row_frame.bind("<Button-1>", lambda e, p=file_path: self._load_def_file(p))
+            check_var = ctk.BooleanVar(value=False)
+            self.construction_check_vars[file_path] = check_var
+            self.building_list_items[file_path] = label_text
 
-            # Store reference for highlighting (3-tuple with label text for filtering)
-            self.building_list_items[file_path] = (row_frame, file_label, label_text)
+            items.append({'key': file_path, 'label_text': label_text})
 
-            # Hover effect (only if not selected)
-            file_label.bind("<Enter>", lambda e, p=file_path, lbl=file_label: self._on_item_hover(p, lbl, True))
-            file_label.bind("<Leave>", lambda e, p=file_path, lbl=file_label: self._on_item_hover(p, lbl, False))
+        self.building_list.set_items(items, check_vars=self.construction_check_vars)
 
         # Apply any active filter
         self._filter_definitions_list()
@@ -2479,42 +2449,25 @@ class BuildingsView(ctk.CTkFrame):
             self._filter_secrets_list()
             return
 
-        filter_text = self.def_search_var.get().lower().strip()
-
-        visible_count = 0
-        for file_path, item_data in self.building_list_items.items():
-            row_frame = item_data[0]
-            label_text = item_data[2] if len(item_data) == 3 else ""
-
-            # Handle both Path objects and string keys
-            if isinstance(file_path, Path):
-                name_str = file_path.stem.lower()
-            else:
-                name_str = str(file_path).lower()
-
-            # Search against both internal name and display text
-            search_str = f"{name_str} {label_text.lower()}"
-            if not filter_text or filter_text in search_str:
-                row_frame.pack(fill="x", pady=1)
-                visible_count += 1
-            else:
-                row_frame.pack_forget()
-
-        # Update count label with filter info
-        total = len(self.def_files)
+        filter_text = self.def_search_var.get().strip()
+        visible, total = self.building_list.apply_filter(filter_text)
         if filter_text:
-            self.count_label.configure(text=f"{visible_count} of {total} definitions")
+            self.count_label.configure(text=f"{visible} of {total} definitions")
         else:
             self.count_label.configure(text=f"{total} definitions")
 
     def _load_def_file(self, file_path: Path):
-        """Load a .def file and display it in the form."""
+        """Load a .def file and display it in the form.
+
+        Uses deferred rendering so the list highlight updates immediately.
+        """
         logger.debug("Loading def file: %s", file_path.name)
         try:
             self.current_def_data = parse_def_file(file_path)
             self.current_def_path = file_path
             self._highlight_selected_item(file_path)
-            self._show_form()
+            # Defer heavy form rendering so the UI stays responsive
+            self.after(1, self._show_form)
             self._set_status(f"Loaded: {file_path.name}")
         except (ET.ParseError, OSError, KeyError, json.JSONDecodeError) as e:
             logger.error("Error loading def file: %s", e)
@@ -2522,16 +2475,7 @@ class BuildingsView(ctk.CTkFrame):
 
     def _highlight_selected_item(self, selected_path: Path):
         """Highlight the selected building in the list."""
-        for file_path, item_data in self.building_list_items.items():
-            row_frame, file_label = item_data[0], item_data[1]
-            if file_path == selected_path:
-                # Selected state - highlight with accent color
-                row_frame.configure(fg_color=("#d0e8ff", "#1a4a6e"))
-                file_label.configure(text_color=("#0066cc", "#66b3ff"))
-            else:
-                # Unselected state - reset to default
-                row_frame.configure(fg_color="transparent")
-                file_label.configure(text_color=("gray10", "#E8E8E8"))
+        self.building_list.set_selected(selected_path)
 
     def _on_item_hover(self, file_path: Path, label: ctk.CTkLabel, entering: bool):
         """Handle hover effect on list items, respecting selection state."""
@@ -2544,6 +2488,22 @@ class BuildingsView(ctk.CTkFrame):
         else:
             label.configure(text_color=("gray10", "#E8E8E8"))
 
+    def _on_virtual_list_click(self, key):
+        """Handle click from virtual scroll list — dispatch to correct loader."""
+        if self.view_mode == 'definitions':
+            # key is a Path for .def files
+            self._load_def_file(key)
+        else:
+            # key is a recipe name string for secrets items
+            self._load_secrets_recipe(key)
+
+    def _on_virtual_list_checkbox(self, key):
+        """Handle checkbox toggle from virtual scroll list."""
+        if self.view_mode == 'definitions':
+            self._on_construction_checkbox_toggle(key)
+        else:
+            self._on_secrets_checkbox_toggle(key)
+
     def _on_select_all_toggle(self):
         """Toggle all construction checkboxes based on select-all state."""
         if self.select_all_var is None:
@@ -2552,6 +2512,9 @@ class BuildingsView(ctk.CTkFrame):
         select_all = self.select_all_var.get()
         for _, check_var in self.construction_check_vars.items():
             check_var.set(select_all)
+
+        # Redraw virtual list to reflect new states
+        self.building_list.redraw()
 
         # Save to INI file immediately if we have a construction pack selected
         if self.current_construction_pack:
@@ -2768,6 +2731,9 @@ class BuildingsView(ctk.CTkFrame):
         if not all_changes:
             logger.info("Build finished: no changes found across any checked items")
             self._set_status("No changes found across any checked items")
+            # Still generate add_row .def files even without diffs
+            if get_generate_builders_pack():
+                self._generate_builders_pack(mode_configs, saved_view_mode)
             return
 
         # Write a separate .def file for each JSON file that has changes
@@ -2830,6 +2796,135 @@ class BuildingsView(ctk.CTkFrame):
         self._set_status(
             f"Build complete: {files_created} .def file(s), {total_changes} total change(s)"
         )
+
+        # Generate add_row .def files for AdvancedBuildersPack if flag is enabled
+        if get_generate_builders_pack():
+            self._generate_builders_pack(mode_configs, saved_view_mode)
+
+    def _generate_builders_pack(self, mode_configs: list[dict], saved_view_mode: str):
+        """Generate add_row .def files containing full row data for each checked item.
+
+        These .def files use <add_row> with complete row JSON so rows can be
+        appended to in-game DataTables, rather than modifying existing rows.
+
+        Args:
+            mode_configs: The list of mode configuration dicts from the build.
+            saved_view_mode: The view mode to restore after processing.
+        """
+        pack_dir = get_appdata_dir() / 'AdvancedBuildersPack'
+        try:
+            if pack_dir.exists():
+                shutil.rmtree(pack_dir)
+            pack_dir.mkdir(parents=True, exist_ok=True)
+        except OSError as e:
+            logger.error("Failed to prepare AdvancedBuildersPack directory: %s", e)
+            return
+
+        logger.info("Generating AdvancedBuildersPack add_row .def files...")
+
+        # Collect full rows keyed by (output_subdir, filename, def_path)
+        # Each value is a list of (row_name, row_json_str) tuples
+        all_rows = {}
+
+        for cfg in mode_configs:
+            self.view_mode = cfg['mode']
+            checked_names = self._load_checked_states_from_ini()
+            if not checked_names:
+                continue
+
+            has_recipes = cfg['recipes_name'] is not None
+            try:
+                if has_recipes:
+                    cache_recipes = self._load_table_data(self._get_cache_recipes_path())
+                cache_defs = self._load_table_data(self._get_cache_constructions_path())
+            except (OSError, json.JSONDecodeError, KeyError) as e:
+                logger.error("BuildersPack: could not read %s files: %s", cfg['mode'], e)
+                continue
+
+            for name in sorted(checked_names):
+                # Recipe row (full cached version including any edits)
+                if has_recipes and name in cache_recipes:
+                    row_json = json.dumps(cache_recipes[name], indent=2)
+                    key = (cfg['output_subdir'], cfg['recipes_name'], cfg['recipes_def_path'])
+                    all_rows.setdefault(key, []).append((name, row_json))
+
+                # Definition row (full cached version including any edits)
+                if name in cache_defs:
+                    row_json = json.dumps(cache_defs[name], indent=2)
+                    key = (cfg['output_subdir'], cfg['defs_name'], cfg['defs_def_path'])
+                    all_rows.setdefault(key, []).append((name, row_json))
+
+        # Restore view mode
+        self.view_mode = saved_view_mode
+
+        if not all_rows:
+            logger.info("BuildersPack: no checked items found, directory left empty")
+            return
+
+        # Write an add_row .def file for each DataTable
+        pack_files = 0
+        pack_rows = 0
+        manifest_entries = []  # (subdir, filename) pairs for manifest
+        prefix = self.secrets_prefix_var.get() if hasattr(self, 'secrets_prefix_var') else ""
+        prefix_str = f"{prefix}_" if prefix else ""
+
+        try:
+            for (output_subdir, filename, def_path), rows in all_rows.items():
+                if not rows:
+                    continue
+
+                def_name = f"{prefix_str}ADD {filename}"
+                lines = [
+                    '<?xml version="1.0" encoding="UTF-8"?>',
+                    '<definition>',
+                    f'  <title>{self._escape_xml(def_name)}</title>',
+                    '  <author>Moria MOD Creator</author>',
+                    f'  <description>{len(rows)} add_row entries for {filename}.json</description>',
+                    '',
+                    f'  <mod file="{def_path}">',
+                    '',
+                ]
+                for row_name, row_json in rows:
+                    lines.append(f'    <add_row name="{self._escape_xml(row_name)}">')
+                    lines.append(f'      <![CDATA[{row_json}]]>')
+                    lines.append('    </add_row>')
+                    lines.append('')
+                lines.append('  </mod>')
+                lines.append('</definition>')
+
+                out_dir = pack_dir / output_subdir
+                out_dir.mkdir(parents=True, exist_ok=True)
+                out_file = out_dir / f"{def_name}.def"
+                with open(out_file, 'w', encoding='utf-8') as f:
+                    f.write('\n'.join(lines))
+                logger.info("BuildersPack: wrote %s with %d rows", out_file.name, len(rows))
+
+                manifest_entries.append((output_subdir, f"{def_name}.def"))
+                pack_files += 1
+                pack_rows += len(rows)
+
+        except OSError as e:
+            logger.error("BuildersPack: error writing .def files: %s", e)
+            return
+
+        # Write manifest INI
+        try:
+            manifest_path = pack_dir / 'Secrets of Khazad-dum.ini'
+            ini = configparser.ConfigParser()
+            ini.optionxform = str  # Preserve case
+            ini.add_section('Paths')
+            for subdir, fname in sorted(manifest_entries):
+                ini.set('Paths', f'{subdir}|{fname}', 'true')
+            ini.add_section('Settings')
+            ini.set('Settings', 'include_secrets', 'True')
+            with open(manifest_path, 'w', encoding='utf-8') as f:
+                ini.write(f)
+            logger.info("BuildersPack: wrote manifest %s", manifest_path.name)
+        except OSError as e:
+            logger.error("BuildersPack: error writing manifest: %s", e)
+
+        logger.info("BuildersPack complete: %d .def file(s), %d total row(s)",
+                     pack_files, pack_rows)
 
     def _load_table_data(self, json_path: Path) -> dict:
         """Load Table.Data rows from a JSON file, keyed by row Name.
@@ -3220,10 +3315,17 @@ class BuildingsView(ctk.CTkFrame):
     # -------------------------------------------------------------------------
 
     def _show_form(self):
-        """Render the editable form, dispatching to per-type renderer."""
+        """Render the editable form, dispatching to per-type renderer.
+
+        Hides the form during widget construction to avoid intermediate repaints,
+        which significantly reduces perceived latency when switching items.
+        """
         logger.debug("Rendering form for view_mode=%s", self.view_mode)
         # Hide placeholder and show form widgets
         self.placeholder_label.pack_forget()
+
+        # Hide form content during rebuild to prevent expensive intermediate repaints
+        self.form_content.pack_forget()
 
         # Clear existing form content
         for widget in self.form_content.winfo_children():
@@ -4411,6 +4513,7 @@ class BuildingsView(ctk.CTkFrame):
             check_var = self.construction_check_vars.get(self.current_secrets_recipe_name)
             if check_var:
                 check_var.set(True)
+                self.building_list.redraw()
                 self._save_checked_states_to_ini()
 
     def _get_current_item_visibility(self) -> bool:
@@ -4458,18 +4561,7 @@ class BuildingsView(ctk.CTkFrame):
             return
 
         is_visible = self._get_current_item_visibility()
-        visible_icon, hidden_icon, _ = self._get_eye_icons()
-        icon = visible_icon if is_visible else hidden_icon
-
-        row_frame = self.building_list_items[name][0]
-        for child in row_frame.winfo_children():
-            if isinstance(child, ctk.CTkLabel) and child.cget("text") == "":
-                # This is the eye icon label (empty text, has image)
-                try:
-                    child.configure(image=icon)
-                except (ValueError, AttributeError):
-                    pass
-                break
+        self.building_list.set_eye_visible(name, is_visible)
 
         self._update_header_eye_icon()
         self._update_bulk_eye_state()
@@ -4610,22 +4702,13 @@ class BuildingsView(ctk.CTkFrame):
             self._bulk_set_definition_visibility(item_names, make_hidden)
 
         # Update all eye icons and check all checkboxes in the list
-        target_icon = hidden_icon if make_hidden else visible_icon
+        is_visible = not make_hidden
         for name in item_names:
-            item_data = self.building_list_items.get(name)
-            if item_data:
-                row_frame = item_data[0]
-                for child in row_frame.winfo_children():
-                    if isinstance(child, ctk.CTkLabel) and child.cget("text") == "":
-                        try:
-                            child.configure(image=target_icon)
-                        except (ValueError, AttributeError):
-                            pass
-                        break
-            # Check the checkbox so the .def file picks up the changes
+            self.building_list.set_eye_visible(name, is_visible)
             check_var = self.construction_check_vars.get(name)
             if check_var:
                 check_var.set(True)
+        self.building_list.redraw()
         self._save_checked_states_to_ini()
 
         # If an item is currently loaded in the form, refresh its form_vars
@@ -5402,7 +5485,9 @@ class BuildingsView(ctk.CTkFrame):
         """Force-refresh cache by deleting old cache and re-copying from Secrets Source.
 
         Preserves .ini files (e.g. checked_items.ini) across refreshes.
+        Invalidates the JSON row cache so rows are re-read from fresh files.
         """
+        self._json_row_cache.clear()
         logger.info("Force-refreshing cache for view_mode=%s", self.view_mode)
         cache_dir = self._get_cache_dir()
 
@@ -5926,8 +6011,8 @@ class BuildingsView(ctk.CTkFrame):
         self.view_mode = 'buildings'
         self._set_status("Loading Secrets buildings...")
 
-        # Ensure cache files exist (copies from Secrets Source if needed)
-        self._ensure_cache_files()
+        # Refresh cache from Secrets Source (always re-copy in case files changed)
+        self._refresh_cache()
 
         # Get names from cache and game JSON files using Table.Data structure
         secret_recipe_names = self._get_names_from_table_data(self._get_cache_recipes_path())
@@ -5998,6 +6083,9 @@ class BuildingsView(ctk.CTkFrame):
     def _get_row_by_name(self, json_path: Path, name: str) -> dict:
         """Get a specific row from a JSON file by name.
 
+        Uses an in-memory cache so the JSON file is only parsed once per
+        cache refresh cycle, making subsequent item clicks near-instant.
+
         Args:
             json_path: Path to the JSON file
             name: Name of the row to find
@@ -6005,25 +6093,14 @@ class BuildingsView(ctk.CTkFrame):
         Returns:
             The row dict if found, empty dict otherwise
         """
-        if not json_path.exists():
+        if not json_path or not json_path.exists():
             return {}
 
-        try:
-            with open(json_path, 'r', encoding='utf-8') as f:
-                data = json.load(f)
+        cache_key = str(json_path)
+        if cache_key not in self._json_row_cache:
+            self._json_row_cache[cache_key] = self._load_all_rows(json_path)
 
-            exports = data.get('Exports', [])
-            if exports:
-                table = exports[0].get('Table', {})
-                rows = table.get('Data', [])
-                for row in rows:
-                    if row.get('Name') == name:
-                        return row
-
-        except (json.JSONDecodeError, OSError, KeyError) as e:
-            logger.error("Error reading row %s from %s: %s", name, json_path, e)
-
-        return {}
+        return self._json_row_cache.get(cache_key, {}).get(name, {})
 
     def _load_all_rows(self, json_path: Path) -> dict:
         """Load all rows from a JSON data table into a dict keyed by name.
@@ -6261,7 +6338,7 @@ class BuildingsView(ctk.CTkFrame):
         self.view_mode = 'weapons'
         self._set_status("Loading Secrets weapons...")
 
-        self._ensure_cache_files()
+        self._refresh_cache()
 
         secret_recipe_names = self._get_names_from_table_data(self._get_cache_recipes_path())
         game_recipe_names = self._get_names_from_table_data(self._get_game_recipes_path())
@@ -6300,7 +6377,7 @@ class BuildingsView(ctk.CTkFrame):
         self.view_mode = 'armor'
         self._set_status("Loading Secrets armor...")
 
-        self._ensure_cache_files()
+        self._refresh_cache()
 
         secret_recipe_names = self._get_names_from_table_data(self._get_cache_recipes_path())
         game_recipe_names = self._get_names_from_table_data(self._get_game_recipes_path())
@@ -6334,7 +6411,7 @@ class BuildingsView(ctk.CTkFrame):
         self.view_mode = 'tools'
         self._set_status("Loading Secrets tools...")
 
-        self._ensure_cache_files()
+        self._refresh_cache()
 
         secret_recipe_names = self._get_names_from_table_data(self._get_cache_recipes_path())
         game_recipe_names = self._get_names_from_table_data(self._get_game_recipes_path())
@@ -6365,7 +6442,7 @@ class BuildingsView(ctk.CTkFrame):
         self.view_mode = 'flora'
         self._set_status("Loading Secrets flora...")
 
-        self._ensure_cache_files()
+        self._refresh_cache()
 
         secret_flora_names = self._get_names_from_table_data(self._get_cache_constructions_path())
         game_flora_names = self._get_names_from_table_data(self._get_game_constructions_path())
@@ -6391,7 +6468,7 @@ class BuildingsView(ctk.CTkFrame):
         self.view_mode = 'loot'
         self._set_status("Loading Secrets loot...")
 
-        self._ensure_cache_files()
+        self._refresh_cache()
 
         secret_loot_names = self._get_names_from_table_data(self._get_cache_constructions_path())
         game_loot_names = self._get_names_from_table_data(self._get_game_constructions_path())
@@ -6417,7 +6494,7 @@ class BuildingsView(ctk.CTkFrame):
         self.view_mode = 'items'
         self._set_status("Loading Secrets items...")
 
-        self._ensure_cache_files()
+        self._refresh_cache()
 
         secret_recipe_names = self._get_names_from_table_data(self._get_cache_recipes_path())
         game_recipe_names = self._get_names_from_table_data(self._get_game_recipes_path())
@@ -6449,23 +6526,14 @@ class BuildingsView(ctk.CTkFrame):
             recipes: Dict mapping recipe names to their data
         """
         logger.debug("Populating secrets list with %d items", len(recipes))
-        # Clear existing list
-        for widget in self.building_list.winfo_children():
-            widget.destroy()
         self.building_list_items.clear()
         self.construction_checkboxes.clear()
         self.construction_check_vars.clear()
 
-        # Update count
         self.count_label.configure(text=f"{len(recipes)} Secrets items")
 
         if not recipes:
-            no_files_label = ctk.CTkLabel(
-                self.building_list,
-                text="No Secrets buildings found\n\nRun Import Secrets first\nto load mod source files",
-                text_color="gray"
-            )
-            no_files_label.pack(pady=20)
+            self.building_list.clear()
             return
 
         # Sort recipe names alphabetically by game name
@@ -6475,57 +6543,27 @@ class BuildingsView(ctk.CTkFrame):
         visibility_map = self._compute_visibility_map(sorted_names)
         visible_icon, hidden_icon, _ = self._get_eye_icons()
 
-        # Create entry for each recipe
+        # Build item data for virtual list
+        items = []
         for recipe_name in sorted_names:
-            row_frame = ctk.CTkFrame(self.building_list, fg_color="transparent")
-            row_frame.pack(fill="x", pady=1)
-
-            # Checkbox for selection
             check_var = ctk.BooleanVar(value=False)
-            checkbox = ctk.CTkCheckBox(
-                row_frame,
-                text="",
-                variable=check_var,
-                width=20,
-                command=lambda n=recipe_name: self._on_secrets_checkbox_toggle(n)
-            )
-            checkbox.pack(side="left")
-
-            # Store checkbox references using recipe name as key
-            self.construction_checkboxes[recipe_name] = checkbox
             self.construction_check_vars[recipe_name] = check_var
 
-            # Display game name with internal name in parentheses
             display_name = self._lookup_game_name(recipe_name)
             label_text = (f"{display_name} ({recipe_name})"
                           if display_name != recipe_name else recipe_name)
 
-            file_label = ctk.CTkLabel(
-                row_frame,
-                text=label_text,
-                anchor="w",
-                cursor="hand2",
-                text_color=("gray10", "#E8E8E8")
-            )
-            file_label.pack(side="left", fill="x", expand=True, padx=5)
-            file_label.bind("<Button-1>", lambda e, n=recipe_name: self._load_secrets_recipe(n))
-            row_frame.bind("<Button-1>", lambda e, n=recipe_name: self._load_secrets_recipe(n))
+            self.building_list_items[recipe_name] = label_text
 
-            # Eye visibility icon (right-justified)
             is_visible = visibility_map.get(recipe_name, True)
-            eye_icon = visible_icon if is_visible else hidden_icon
-            eye_label = ctk.CTkLabel(
-                row_frame, image=eye_icon, text="", width=20,
-            )
-            eye_label.pack(side="right", padx=(0, 5))
+            items.append({
+                'key': recipe_name,
+                'label_text': label_text,
+                'eye_visible': is_visible,
+            })
 
-            # Store reference for highlighting (using recipe_name as key)
-            # Also store label_text for filtering
-            self.building_list_items[recipe_name] = (row_frame, file_label, label_text)
-
-            # Hover effect
-            file_label.bind("<Enter>", lambda e, n=recipe_name, lbl=file_label: self._on_secrets_item_hover(n, lbl, True))
-            file_label.bind("<Leave>", lambda e, n=recipe_name, lbl=file_label: self._on_secrets_item_hover(n, lbl, False))
+        self.building_list.update_eye_icons((visible_icon, hidden_icon))
+        self.building_list.set_items(items, check_vars=self.construction_check_vars)
 
         # Restore checked states from INI
         checked_names = self._load_checked_states_from_ini()
@@ -6533,6 +6571,7 @@ class BuildingsView(ctk.CTkFrame):
             check_var = self.construction_check_vars.get(name)
             if check_var:
                 check_var.set(True)
+        self.building_list.redraw()
 
         # Apply any active filter
         self._filter_secrets_list()
@@ -6545,29 +6584,11 @@ class BuildingsView(ctk.CTkFrame):
         if not self.def_search_var:
             return
 
-        filter_text = self.def_search_var.get().lower().strip()
+        filter_text = self.def_search_var.get().strip()
+        visible, total = self.building_list.apply_filter(filter_text)
 
-        visible_count = 0
-        for name, item_data in self.building_list_items.items():
-            # Handle both old format (2-tuple) and new format (3-tuple with display name)
-            if len(item_data) == 3:
-                row_frame, _, display_name = item_data
-                # Search both internal name and display name
-                searchable = f"{str(name).lower()} {display_name.lower()}"
-            else:
-                row_frame, _ = item_data
-                searchable = str(name).lower() if not isinstance(name, Path) else name.stem.lower()
-
-            if not filter_text or filter_text in searchable:
-                row_frame.pack(fill="x", pady=1)
-                visible_count += 1
-            else:
-                row_frame.pack_forget()
-
-        # Update count label
-        total = len(self.building_list_items)
         if filter_text:
-            self.count_label.configure(text=f"{visible_count} of {total} items")
+            self.count_label.configure(text=f"{visible} of {total} items")
         else:
             mode_label = "Secrets items" if self.view_mode in ('buildings', 'weapons', 'armor') else "definitions"
             self.count_label.configure(text=f"{total} {mode_label}")
@@ -6615,24 +6636,13 @@ class BuildingsView(ctk.CTkFrame):
         }
         self.current_def_path = None  # No file path for secrets items
 
-        self._show_form()
+        # Defer heavy form rendering so the UI stays responsive
+        self.after(1, self._show_form)
         self._set_status(f"Loaded Secrets: {recipe_name}")
 
     def _highlight_secrets_item(self, selected_name: str):
         """Highlight the selected item in the secrets list."""
-        for name, item_data in self.building_list_items.items():
-            # Handle both old format (2-tuple) and new format (3-tuple)
-            if len(item_data) == 3:
-                row_frame, file_label, _ = item_data
-            else:
-                row_frame, file_label = item_data
-
-            if name == selected_name:
-                row_frame.configure(fg_color=("#d0e8ff", "#1a4a6e"))
-                file_label.configure(text_color=("#0066cc", "#66b3ff"))
-            else:
-                row_frame.configure(fg_color="transparent")
-                file_label.configure(text_color=("gray10", "#E8E8E8"))
+        self.building_list.set_selected(selected_name)
 
     def _extract_secrets_recipe_fields(self, recipe_data: dict) -> dict:
         """Extract editable fields from secrets recipe data.

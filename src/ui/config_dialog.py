@@ -10,11 +10,18 @@ logger = logging.getLogger(__name__)
 
 from src.config import (
     get_available_install_options,
+    load_config,
     save_config,
     get_default_utilities_dir,
     get_default_output_dir,
     get_default_mymodfiles_dir,
     get_default_definitions_dir,
+    get_game_install_path,
+    get_utilities_dir,
+    get_output_dir,
+    get_mymodfiles_dir,
+    get_definitions_dir,
+    get_color_scheme,
     get_max_workers,
     get_debug_mode,
     COLOR_SCHEMES,
@@ -55,14 +62,20 @@ class ConfigDialog(ctk.CTkToplevel):
         self.option_names = [opt[0] for opt in self.install_options]
         self.option_paths = {opt[0]: opt[1] for opt in self.install_options}
 
-        # Track paths
+        # Load saved install type to restore dropdown selection
+        saved_config = load_config()
+        self.saved_install_type = saved_config.get('Game', 'install_type', fallback='')
+
+        # Track paths — use saved values if they exist, else defaults
         self.game_path = ctk.StringVar()
         self.custom_game_path = ""
-        self.utilities_path = ctk.StringVar(value=str(get_default_utilities_dir()))
-        self.output_path = ctk.StringVar(value=str(get_default_output_dir()))
-        self.mymodfiles_path = ctk.StringVar(value=str(get_default_mymodfiles_dir()))
-        self.definitions_path = ctk.StringVar(value=str(get_default_definitions_dir()))
-        self.color_scheme = ctk.StringVar(value=DEFAULT_COLOR_SCHEME)
+        if self.saved_install_type == "Custom":
+            self.custom_game_path = get_game_install_path() or ""
+        self.utilities_path = ctk.StringVar(value=str(get_utilities_dir()))
+        self.output_path = ctk.StringVar(value=str(get_output_dir()))
+        self.mymodfiles_path = ctk.StringVar(value=str(get_mymodfiles_dir()))
+        self.definitions_path = ctk.StringVar(value=str(get_definitions_dir()))
+        self.color_scheme = ctk.StringVar(value=get_color_scheme())
         self.max_workers = ctk.StringVar(value=str(get_max_workers()))
         self.debug_mode = ctk.StringVar(value="1" if get_debug_mode() else "0")
 
@@ -115,8 +128,11 @@ class ConfigDialog(ctk.CTkToplevel):
         )
         self.game_path_label.grid(row=row, column=0, columnspan=3, sticky="w", pady=(0, 15))
 
-        # Set initial dropdown value after label is created
-        if self.option_names:
+        # Set initial dropdown value — restore saved install type if available
+        if self.saved_install_type and self.saved_install_type in self.option_names:
+            self.game_dropdown.set(self.saved_install_type)
+            self._on_game_dropdown_change(self.saved_install_type)
+        elif self.option_names:
             self.game_dropdown.set(self.option_names[0])
             self._update_game_path_display(self.option_names[0])
 

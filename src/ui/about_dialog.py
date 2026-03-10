@@ -11,8 +11,8 @@ from src.config import get_appdata_dir
 
 # Application info
 APP_NAME = "Moria MOD Creator"
-APP_VERSION = "1.1"
-APP_DATE = "February 2026"
+APP_VERSION = "1.2"
+APP_DATE = "March 2026"
 APP_AUTHOR = "John B Owens II"
 GITHUB_URL = "https://github.com/jbowensii/MoriaModCreator"
 LICENSE_URL = "https://github.com/jbowensii/MoriaModCreator?tab=MIT-1-ov-file#"
