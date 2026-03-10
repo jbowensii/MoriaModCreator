@@ -11,7 +11,7 @@ from src.config import get_appdata_dir
 
 # Application info
 APP_NAME = "Moria MOD Creator"
-APP_VERSION = "1.3"
+APP_VERSION = "1.5"
 APP_DATE = "March 2026"
 APP_AUTHOR = "John B Owens II"
 GITHUB_URL = "https://github.com/jbowensii/MoriaModCreator"
@@ -281,7 +281,15 @@ class AboutDialog(ctk.CTkToplevel):
             text=f"Created by {APP_AUTHOR}",
             font=ctk.CTkFont(size=13)
         )
-        author_label.pack(pady=10)
+        author_label.pack(pady=(10, 2))
+
+        # Create DEF credit
+        def_credit_label = ctk.CTkLabel(
+            self._text_frame,
+            text="Create DEF functionality by Sqitey",
+            font=ctk.CTkFont(size=13)
+        )
+        def_credit_label.pack(pady=(2, 10))
 
         # Separator
         sep = ctk.CTkFrame(self._text_frame, height=2, fg_color="gray50")

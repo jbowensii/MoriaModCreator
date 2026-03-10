@@ -392,7 +392,10 @@ def main():
         if build_installer(project_root):
             # Step 6: Sign and verify installer
             if not args.no_sign:
-                installer = project_root / "release" / "MoriaMODCreator_Setup_v1.1.exe"
+                # Dynamically find the installer version from about_dialog
+                sys.path.insert(0, str(project_root / "src" / "ui"))
+                from src.ui.about_dialog import APP_VERSION  # pylint: disable=import-outside-toplevel
+                installer = project_root / "release" / f"MoriaMODCreator_Setup_v{APP_VERSION}.exe"
                 if not installer.exists():
                     print(f"\n[ERROR] Installer not found: {installer}")
                     return 1
