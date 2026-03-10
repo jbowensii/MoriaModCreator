@@ -323,7 +323,7 @@ def apply_color_scheme(scheme: str) -> None:
 
 # Known game installation paths
 STEAM_PATH = r"C:\Program Files (x86)\Steam\steamapps\common\The Lord of the Rings Return to Moria™"
-EPIC_PATH = r"C:\Program Files\Epic Games\ReturnToMoria\Moria\Content\Paks"
+EPIC_PATH = r"C:\Program Files\Epic Games\ReturnToMoria"
 
 
 def validate_config() -> list[str]:
