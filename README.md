@@ -142,7 +142,7 @@ MoriaModCreator/
 ├── installer/                       # Inno Setup script and zip bundles
 └── docs/                            # Documentation and example mods
     ├── definitions/                 # Reference .def files
-    └── Ready Made Mods/             # 14 pre-built example mods
+    └── prebuilt modfiles/           # Pre-built mod .ini files
 ```
 
 ## Data Directories

@@ -15,15 +15,20 @@ Algorithm:
 import json
 import logging
 import os
+import shutil
 import subprocess
+import tempfile
 import threading
 from pathlib import Path
 
 import customtkinter as ctk
 
-from src.config import get_utilities_dir
-from src.constants import UE_VERSION, UASSETGUI_EXE
-from src.ui.shared_utils import get_jsondata_dir
+from src.config import (
+    get_utilities_dir, get_game_install_path, get_default_definitions_dir,
+    get_prebuilt_modfiles_dir,
+)
+from src.constants import UE_VERSION, RETOC_UE_VERSION, UASSETGUI_EXE, RETOC_EXE
+from src.ui.shared_utils import get_jsondata_dir, get_retoc_dir
 
 logger = logging.getLogger(__name__)
 
@@ -225,6 +230,53 @@ def generate_def_xml(diffs, mod_path, title, author, description,
     return "\n".join(lines)
 
 
+def _detect_category(mod_file_path: str) -> str:
+    """Determine the Definitions category folder from the mod file path.
+
+    Uses the last directory component before the filename.
+    E.g. ``Moria\\Content\\Items\\Effects\\DT_ItemTint.json`` → ``Effects``
+    """
+    normalized = mod_file_path.replace("/", "\\")
+    parts = [p for p in normalized.split("\\") if p]
+    if len(parts) >= 2:
+        return parts[-2]
+    return "Misc"
+
+
+def generate_ini_content(title, author, description, category_files):
+    """Generate .ini file content for the prebuilt modfiles directory.
+
+    Args:
+        title: Mod title
+        author: Mod author
+        description: Mod description
+        category_files: Dict of {category: [filename, ...]}
+
+    Returns:
+        String content of the .ini file
+    """
+    lines = [
+        "[ModInfo]",
+        f"Title = {title}",
+        f"Authors = {author}",
+        f"Description = {description}",
+        "",
+        "[Paths]",
+    ]
+
+    for category, filenames in sorted(category_files.items()):
+        cat_lower = category.lower()
+        for fname in sorted(filenames):
+            lines.append(f"{cat_lower}|{fname.lower()} = true")
+        lines.append(f"{cat_lower} = true")
+
+    lines.append("")
+    lines.append("[Settings]")
+    lines.append("include_secrets = False")
+
+    return "\n".join(lines)
+
+
 # ---------------------------------------------------------------------------
 # View
 # ---------------------------------------------------------------------------
@@ -241,6 +293,7 @@ class DefCreatorView(ctk.CTkFrame):
         self._mod_folder = ""
         self._orig_folder = ""
         self._generated_files: dict[str, str] = {}  # {filename: xml_content}
+        self._generated_categories: dict[str, str] = {}  # {filename: category_folder}
         self._include_comments = ctk.BooleanVar(value=False)
         self._scan_thread = None
         self._current_preview_file = None
@@ -378,7 +431,7 @@ class DefCreatorView(ctk.CTkFrame):
         # --- Section: Log ---
         row = self._create_section_header(scroll, "Log", "#2196F3", row)
 
-        self._log_box = ctk.CTkTextbox(scroll, height=160, font=ctk.CTkFont(family="Consolas", size=11))
+        self._log_box = ctk.CTkTextbox(scroll, height=160, font=ctk.CTkFont(family="Consolas", size=22))
         self._log_box.grid(row=row, column=0, columnspan=3, sticky="ew", pady=(0, 10))
         self._log_box.configure(state="disabled")
         row += 1
@@ -407,7 +460,7 @@ class DefCreatorView(ctk.CTkFrame):
 
         self._preview_box = ctk.CTkTextbox(
             preview_frame, height=350,
-            font=ctk.CTkFont(family="Consolas", size=11),
+            font=ctk.CTkFont(family="Consolas", size=22),
         )
         self._preview_box.pack(fill="both", expand=True)
 
@@ -434,6 +487,7 @@ class DefCreatorView(ctk.CTkFrame):
     def _browse_mod_folder(self):
         folder = ctk.filedialog.askdirectory(title="Select Modded Files Folder")
         if folder:
+            folder = os.path.normpath(folder)
             self._mod_folder = folder
             self._mod_entry.delete(0, "end")
             self._mod_entry.insert(0, folder)
@@ -441,6 +495,7 @@ class DefCreatorView(ctk.CTkFrame):
     def _browse_orig_folder(self):
         folder = ctk.filedialog.askdirectory(title="Select Original Game Files Folder")
         if folder:
+            folder = os.path.normpath(folder)
             self._orig_folder = folder
             self._orig_entry.delete(0, "end")
             self._orig_entry.insert(0, folder)
@@ -522,6 +577,244 @@ class DefCreatorView(ctk.CTkFrame):
         return converted
 
     # ------------------------------------------------------------------
+    # Auto-import a single missing original file from game paks
+    # ------------------------------------------------------------------
+
+    def _import_single_file(self, json_filename: str) -> Path | None:
+        """Extract a single game file via retoc and convert to JSON.
+
+        Args:
+            json_filename: The JSON filename (e.g. "DT_Items.json")
+
+        Returns:
+            Path to the converted JSON file, or None on failure.
+        """
+        game_install = get_game_install_path()
+        if not game_install:
+            self._log(f"  [ERROR] Game install path not configured — cannot import {json_filename}")
+            return None
+
+        utils_dir = get_utilities_dir()
+        retoc_exe = utils_dir / RETOC_EXE
+        uassetgui_exe = utils_dir / UASSETGUI_EXE
+
+        if not retoc_exe.exists():
+            self._log(f"  [ERROR] {RETOC_EXE} not found — cannot import {json_filename}")
+            return None
+        if not uassetgui_exe.exists():
+            self._log(f"  [ERROR] {UASSETGUI_EXE} not found — cannot import {json_filename}")
+            return None
+
+        paks_path = Path(game_install) / "Moria" / "Content" / "Paks"
+        if not paks_path.exists():
+            self._log(f"  [ERROR] Game Paks directory not found: {paks_path}")
+            return None
+
+        retoc_dir = get_retoc_dir()
+        jsondata_dir = get_jsondata_dir()
+        retoc_dir.mkdir(parents=True, exist_ok=True)
+        jsondata_dir.mkdir(parents=True, exist_ok=True)
+
+        file_stem = Path(json_filename).stem
+
+        # Step 1: Extract .uasset from game paks using retoc
+        self._log(f"  [IMPORT] Extracting {file_stem} from game files...")
+        kwargs = {}
+        if os.name == "nt":
+            kwargs["creationflags"] = (
+                subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0x08000000
+            )
+
+        cmd = f'"{retoc_exe}" to-legacy --version {RETOC_UE_VERSION} --filter "{file_stem}" "{paks_path}" "{retoc_dir}"'
+        try:
+            result = subprocess.run(
+                cmd, capture_output=True, text=True, encoding="utf-8",
+                errors="replace", timeout=120, shell=True, check=False, **kwargs,
+            )
+            if result.returncode != 0:
+                self._log(f"  [ERROR] retoc failed for {file_stem}: {result.stderr.strip()}")
+                return None
+        except subprocess.TimeoutExpired:
+            self._log(f"  [ERROR] retoc timed out for {file_stem}")
+            return None
+        except OSError as e:
+            self._log(f"  [ERROR] retoc error for {file_stem}: {e}")
+            return None
+
+        # Step 2: Find the extracted .uasset file
+        extracted = list(retoc_dir.rglob(f"{file_stem}.uasset"))
+        if not extracted:
+            self._log(f"  [ERROR] No .uasset found after retoc extraction for {file_stem}")
+            return None
+
+        source_file = extracted[0]
+
+        # Step 3: Convert .uasset to JSON using UAssetGUI
+        self._log(f"  [IMPORT] Converting {file_stem}.uasset to JSON...")
+        rel_path = source_file.relative_to(retoc_dir)
+        dest_file = jsondata_dir / rel_path.with_suffix(".json")
+        dest_file.parent.mkdir(parents=True, exist_ok=True)
+
+        try:
+            subprocess.run(
+                [str(uassetgui_exe), "tojson", str(source_file), str(dest_file), UE_VERSION],
+                capture_output=True, text=True, encoding="utf-8", errors="replace",
+                timeout=60, check=True, **kwargs,
+            )
+        except subprocess.TimeoutExpired:
+            self._log(f"  [ERROR] UAssetGUI timed out for {file_stem}")
+            return None
+        except subprocess.CalledProcessError as e:
+            self._log(f"  [ERROR] UAssetGUI failed for {file_stem}: {e}")
+            return None
+
+        if dest_file.exists():
+            self._log(f"  [IMPORT] Successfully imported {dest_file.name}")
+            return dest_file
+
+        self._log(f"  [ERROR] JSON file not created for {file_stem}")
+        return None
+
+    # ------------------------------------------------------------------
+    # IoStore pak extraction (ucas/utoc → uasset → JSON)
+    # ------------------------------------------------------------------
+
+    def _extract_iostore_mod(self, mod_folder: str) -> str | None:
+        """Extract an IoStore mod pak set to JSON files.
+
+        If the mod folder contains .ucas/.utoc files, extracts legacy .uasset
+        files into {mod_folder}/retoc/ and converts them to JSON in
+        {mod_folder}/jsondata/.  If these output dirs already exist they are
+        deleted and recreated so results are always fresh.
+
+        Args:
+            mod_folder: Path to the folder containing .pak/.ucas/.utoc files
+
+        Returns:
+            Path to {mod_folder}/jsondata/ containing the extracted .json files,
+            or None if no IoStore files found or extraction failed.
+        """
+        # Find .utoc file(s) in the mod folder
+        mod_path = Path(mod_folder)
+        utoc_files = list(mod_path.glob("*.utoc"))
+        if not utoc_files:
+            return None  # Not an IoStore mod — use normal flow
+
+        self._log("[INFO] Detected IoStore mod pak (.ucas/.utoc) — extracting...")
+
+        game_install = get_game_install_path()
+        if not game_install:
+            self._log("[ERROR] Game install path not configured — cannot extract IoStore pak.")
+            return None
+
+        paks_path = Path(game_install) / "Moria" / "Content" / "Paks"
+        global_ucas = paks_path / "global.ucas"
+        global_utoc = paks_path / "global.utoc"
+
+        if not global_ucas.exists() or not global_utoc.exists():
+            self._log("[ERROR] global.ucas/global.utoc not found in game Paks directory.")
+            return None
+
+        utils_dir = get_utilities_dir()
+        retoc_exe = utils_dir / RETOC_EXE
+        uassetgui_exe = utils_dir / UASSETGUI_EXE
+
+        if not retoc_exe.exists() or not uassetgui_exe.exists():
+            self._log("[ERROR] retoc.exe or UAssetGUI.exe not found in utilities.")
+            return None
+
+        kwargs = {}
+        if os.name == "nt":
+            kwargs["creationflags"] = (
+                subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0x08000000
+            )
+
+        # Output dirs live inside the mod folder so the user can inspect them
+        retoc_dir = mod_path / "retoc"
+        jsondata_dir = mod_path / "jsondata"
+
+        # Clean existing output dirs if present
+        for out_dir in (retoc_dir, jsondata_dir):
+            if out_dir.exists():
+                self._log(f"  Deleting existing {out_dir.name}/ directory...")
+                shutil.rmtree(out_dir)
+        retoc_dir.mkdir()
+        jsondata_dir.mkdir()
+
+        # Temp dir just for combining mod paks + global files (retoc needs them together)
+        temp_paks = tempfile.mkdtemp(prefix="defcreator_paks_")
+
+        try:
+            # Copy mod pak files (.pak, .ucas, .utoc) into temp paks dir
+            for ext in ("*.pak", "*.ucas", "*.utoc"):
+                for f in mod_path.glob(ext):
+                    shutil.copy2(str(f), temp_paks)
+                    self._log(f"  Copied {f.name} to temp working dir")
+
+            # Copy game's global files (needed by retoc for name resolution)
+            shutil.copy2(str(global_ucas), temp_paks)
+            shutil.copy2(str(global_utoc), temp_paks)
+            self._log("  Copied global.ucas/global.utoc for name resolution")
+
+            # Step 1: retoc to-legacy — extract .uasset files into mod_folder/retoc/
+            self._log("[INFO] Running retoc to-legacy...")
+            cmd = f'"{retoc_exe}" to-legacy --version {RETOC_UE_VERSION} "{temp_paks}" "{retoc_dir}"'
+            result = subprocess.run(
+                cmd, capture_output=True, text=True, encoding="utf-8",
+                errors="replace", timeout=300, shell=True, check=False, **kwargs,
+            )
+            self._log(f"  {result.stdout.strip()}")
+            if result.returncode != 0:
+                self._log(f"  [ERROR] retoc failed: {result.stderr.strip()}")
+                return None
+
+            # Step 2: Convert each .uasset to JSON in mod_folder/jsondata/
+            uasset_files = list(retoc_dir.rglob("*.uasset"))
+            if not uasset_files:
+                self._log("[ERROR] retoc produced no .uasset files.")
+                return None
+
+            self._log(f"[INFO] Converting {len(uasset_files)} .uasset file(s) to JSON...")
+            converted = 0
+            for uasset in uasset_files:
+                rel = uasset.relative_to(retoc_dir)
+                json_dest = jsondata_dir / rel.with_suffix(".json")
+                json_dest.parent.mkdir(parents=True, exist_ok=True)
+
+                try:
+                    subprocess.run(
+                        [str(uassetgui_exe), "tojson", str(uasset), str(json_dest), UE_VERSION],
+                        capture_output=True, text=True, encoding="utf-8",
+                        errors="replace", timeout=60, check=True, **kwargs,
+                    )
+                    if json_dest.exists():
+                        converted += 1
+                        self._log(f"  Converted: {rel.name} -> jsondata/{rel.with_suffix('.json')}")
+                    else:
+                        self._log(f"  [ERROR] JSON not created for {rel.name}")
+                except subprocess.TimeoutExpired:
+                    self._log(f"  [ERROR] Timeout converting {rel.name}")
+                except subprocess.CalledProcessError as e:
+                    self._log(f"  [ERROR] Failed converting {rel.name}: {e}")
+
+            self._log(f"[INFO] Converted {converted} file(s) to JSON.")
+            self._log(f"[INFO] retoc output: {retoc_dir}")
+            self._log(f"[INFO] jsondata output: {jsondata_dir}")
+
+            if converted == 0:
+                self._log("[ERROR] No files were successfully converted.")
+                return None
+
+            return str(jsondata_dir)
+
+        except OSError as e:
+            self._log(f"[ERROR] IoStore extraction failed: {e}")
+            return None
+        finally:
+            # Clean up the temp paks dir (just the copy of pak + global files)
+            shutil.rmtree(temp_paks, ignore_errors=True)
+
+    # ------------------------------------------------------------------
     # Scan & Compare
     # ------------------------------------------------------------------
 
@@ -556,7 +849,14 @@ class DefCreatorView(ctk.CTkFrame):
         self._clear_log()
         self._log("--- Starting Scan & Compare ---")
 
-        # Step 1: convert .uasset to JSON
+        # Step 0: Check for IoStore pak set (.ucas/.utoc) — extract to JSON first
+        iostore_json_dir = self._extract_iostore_mod(mod_folder)
+        if iostore_json_dir:
+            # IoStore mod detected and extracted — use the jsondata/ subdir for comparison
+            mod_folder = iostore_json_dir
+            self._log(f"[INFO] Using extracted mod JSON files from: {mod_folder}")
+
+        # Step 1: convert any remaining .uasset to JSON
         self._log("[INFO] Converting .uasset files in modded folder...")
         converted = self._convert_uassets(mod_folder)
         self._log(f"[INFO] Converted {converted} .uasset file(s).")
@@ -580,6 +880,7 @@ class DefCreatorView(ctk.CTkFrame):
         include_comments = self._include_comments.get()
 
         files_to_save = {}
+        categories = {}
         matched = 0
         total_diffs = 0
 
@@ -591,7 +892,15 @@ class DefCreatorView(ctk.CTkFrame):
                     continue
                 orig_info = orig_map.get(mod_file.lower())
                 if not orig_info:
-                    continue
+                    self._log(f"  [WARNING] No original found for {mod_file} — attempting auto-import...")
+                    imported_path = self._import_single_file(mod_file)
+                    if imported_path and imported_path.exists():
+                        rel = os.path.relpath(str(imported_path), orig_folder).replace("/", "\\")
+                        orig_info = {"full": str(imported_path), "rel": rel, "name": imported_path.name}
+                        orig_map[mod_file.lower()] = orig_info
+                    else:
+                        self._log(f"  [ERROR] Could not import original for {mod_file} — skipping.")
+                        continue
 
                 matched += 1
                 mod_path = os.path.join(root_dir, mod_file)
@@ -622,6 +931,8 @@ class DefCreatorView(ctk.CTkFrame):
                 grouped = group_diffs_by_property(differences)
                 json_base = mod_file[:-5]  # strip .json
 
+                category = _detect_category(orig_info["rel"])
+
                 for prop_key, diff_group in grouped.items():
                     safe_key = "".join(c for c in prop_key if c.isalnum() or c in ("_", "-"))
                     def_name = f"{json_base}_{safe_key}"
@@ -633,16 +944,18 @@ class DefCreatorView(ctk.CTkFrame):
                         change_note, include_comments,
                     )
                     files_to_save[f"{def_name}.def"] = xml
+                    categories[f"{def_name}.def"] = category
 
         self._log(f"\n[INFO] Matched {matched} file(s), found {total_diffs} total difference(s).")
         self._log(f"[INFO] Generated {len(files_to_save)} .def file(s).")
 
         # Update UI on main thread
-        self.after(0, lambda: self._update_preview(files_to_save))
+        self.after(0, lambda: self._update_preview(files_to_save, categories))
 
-    def _update_preview(self, files_to_save):
+    def _update_preview(self, files_to_save, categories=None):
         """Update the generated files and preview selector."""
         self._generated_files = files_to_save
+        self._generated_categories = categories or {}
         self._current_preview_file = None
 
         if files_to_save:
@@ -679,7 +992,12 @@ class DefCreatorView(ctk.CTkFrame):
     # ------------------------------------------------------------------
 
     def _save_all_files(self):
-        """Save all generated .def files to a user-selected folder."""
+        """Save .def files to Definitions category folders and generate .ini for prebuilt modfiles.
+
+        Each .def file is placed in the appropriate category subfolder under Definitions/
+        (e.g. Items/, Building/, Loot/). A .ini file is also generated and saved to the
+        prebuilt modfiles directory so the Mod Builder can use it directly.
+        """
         # Save any pending edits
         if self._current_preview_file and self._current_preview_file in self._generated_files:
             self._generated_files[self._current_preview_file] = self._preview_box.get("1.0", "end-1c")
@@ -688,25 +1006,61 @@ class DefCreatorView(ctk.CTkFrame):
             self._log("[WARNING] No .def files to save. Run Scan & Compare first.")
             return
 
-        save_dir = ctk.filedialog.askdirectory(title="Select folder to save .def files")
-        if not save_dir:
-            return
+        self._log("\n--- Saving .def Files ---")
 
+        defs_dir = get_default_definitions_dir()
+        defs_dir.mkdir(parents=True, exist_ok=True)
+        self._log(f"[INFO] Definitions directory: {defs_dir}")
+
+        title = self._title_entry.get().strip() or "My Mod"
+        author = self._author_entry.get().strip() or "Author"
+        description = self._desc_entry.get().strip()
+
+        # Step 1: Save each .def to its category subfolder
         saved = 0
+        category_files = {}  # {category: [filename, ...]} for .ini generation
+
         for filename, content in self._generated_files.items():
+            category = self._generated_categories.get(filename, "Misc")
+            cat_dir = defs_dir / category
+            cat_dir.mkdir(parents=True, exist_ok=True)
+
+            filepath = cat_dir / filename
             try:
-                filepath = os.path.join(save_dir, filename)
                 with open(filepath, "w", encoding="utf-8") as f:
                     f.write(content)
                 saved += 1
+                self._log(f"  [SAVE] {filepath}")
+                category_files.setdefault(category, []).append(filename)
             except OSError as e:
-                self._log(f"[ERROR] Could not save {filename}: {e}")
+                self._log(f"  [ERROR] Could not save {filename}: {e}")
 
-        self._log(f"[INFO] Saved {saved} .def file(s) to {save_dir}")
-        self._set_status(f"Saved {saved} .def files to {save_dir}")
+        self._log(f"[INFO] Saved {saved} .def file(s) to Definitions directory.")
 
-        # Open the folder on Windows
+        # Step 2: Generate and save .ini file for prebuilt modfiles
+        prebuilt_dir = get_prebuilt_modfiles_dir()
+        prebuilt_dir.mkdir(parents=True, exist_ok=True)
+        self._log(f"[INFO] Prebuilt modfiles directory: {prebuilt_dir}")
+
+        ini_content = generate_ini_content(title, author, description, category_files)
+        ini_filename = f"{title}.ini"
+        ini_path = prebuilt_dir / ini_filename
+
         try:
-            os.startfile(save_dir)
+            with open(ini_path, "w", encoding="utf-8") as f:
+                f.write(ini_content)
+            self._log(f"  [SAVE] {ini_path}")
+            self._log(f"[INFO] Generated .ini file with {len(category_files)} category(s):")
+            for cat, fnames in sorted(category_files.items()):
+                self._log(f"         {cat}: {', '.join(fnames)}")
+        except OSError as e:
+            self._log(f"  [ERROR] Could not save .ini file: {e}")
+
+        self._log(f"\n[INFO] Done! {saved} .def file(s) + 1 .ini saved — ready for Mod Builder.")
+        self._set_status(f"Saved {saved} .def files + .ini to Definitions (ready for Mod Builder)")
+
+        # Open the Definitions directory on Windows
+        try:
+            os.startfile(str(defs_dir))
         except (AttributeError, OSError):
             pass

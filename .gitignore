@@ -40,6 +40,8 @@ Thumbs.db
 _ul
 _ul-*
 release/
+.coverage
+pylint_scripts.json
 
 # Logs
 *.log
