@@ -279,10 +279,14 @@ class ConfigDialog(ctk.CTkToplevel):
         """Update the game path display label."""
         if selection == "Custom":
             if self.custom_game_path:
-                self.game_path_label.configure(text=self.custom_game_path, text_color="gray")
+                self.game_path_label.configure(
+                    text=f"{self.custom_game_path}  (select the game root folder, e.g. ...\\ReturnToMoria)",
+                    text_color="gray")
                 self.game_path.set(self.custom_game_path)
             else:
-                self.game_path_label.configure(text="Please select a folder...", text_color="gray")
+                self.game_path_label.configure(
+                    text="Select the game root folder (e.g. C:\\...\\ReturnToMoria — not the Paks folder)",
+                    text_color="gray")
                 self.game_path.set("")
         else:
             path = self.option_paths.get(selection, "")

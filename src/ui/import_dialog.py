@@ -133,13 +133,23 @@ def convert_json_path_to_uasset(json_path: str) -> str:
     return normalized
 
 
-# String table files that must always be imported — these contain display names
-# for weapons, armor, tools, constructions, and interactables but lack the ST_
-# prefix so they can be missed by wildcard-based approaches.
+# Files that must always be imported — string tables for display names, plus
+# core data tables needed by the Constructions view even without .def files.
 ALWAYS_IMPORT_FILES = [
+    # String tables (display names for UI)
     r"\Moria\Content\Tech\Data\StringTables\Architecture.json",
     r"\Moria\Content\Tech\Data\StringTables\Interactables.json",
     r"\Moria\Content\Tech\Data\StringTables\Items.json",
+    # Core data tables for Constructions view
+    r"\Moria\Content\Tech\Data\Building\DT_Constructions.json",
+    r"\Moria\Content\Tech\Data\Building\DT_ConstructionRecipes.json",
+    r"\Moria\Content\Tech\Data\Items\DT_Items.json",
+    r"\Moria\Content\Tech\Data\Items\DT_ItemRecipes.json",
+    r"\Moria\Content\Tech\Data\Items\DT_Weapons.json",
+    r"\Moria\Content\Tech\Data\Items\DT_Armor.json",
+    r"\Moria\Content\Tech\Data\Items\DT_Tools.json",
+    r"\Moria\Content\Tech\Data\GameWorld\DT_Moria_Flora.json",
+    r"\Moria\Content\Character\AI\DT_Loot.json",
 ]
 
 
