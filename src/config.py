@@ -57,6 +57,11 @@ def get_default_definitions_dir() -> Path:
     return get_appdata_dir() / 'definitions'
 
 
+def get_default_final_destination_dir() -> Path:
+    """Get the default Final Mod(s) Destination directory (user's Downloads)."""
+    return Path.home() / 'Downloads'
+
+
 def get_buildings_dir() -> Path:
     """Get the buildings New Objects directory."""
     buildings_dir = get_appdata_dir() / 'New Objects' / 'Build'
@@ -126,7 +131,8 @@ def save_config(  # pylint: disable=too-many-arguments
     definitions_dir: str,
     color_scheme: str,
     max_workers: int = 1,
-    debug: bool = False
+    debug: bool = False,
+    final_destination_dir: str = ""
 ) -> None:
     """Save the configuration to config.ini.
 
@@ -140,6 +146,7 @@ def save_config(  # pylint: disable=too-many-arguments
         color_scheme: The color scheme setting.
         max_workers: Number of parallel processes for JSON conversion.
         debug: Enable debug mode for verbose logging.
+        final_destination_dir: The path where final built mods are placed.
     """
     # Invalidate cache before saving
     _cache.config = None
@@ -159,7 +166,8 @@ def save_config(  # pylint: disable=too-many-arguments
         'utilities': utilities_dir,
         'output': output_dir,
         'mymodfiles': mymodfiles_dir,
-        'definitions': definitions_dir
+        'definitions': definitions_dir,
+        'final_destination': final_destination_dir or str(get_default_final_destination_dir())
     }
     config['Appearance'] = {
         'color_scheme': color_scheme
@@ -176,6 +184,8 @@ def save_config(  # pylint: disable=too-many-arguments
     Path(output_dir).mkdir(parents=True, exist_ok=True)
     Path(mymodfiles_dir).mkdir(parents=True, exist_ok=True)
     Path(definitions_dir).mkdir(parents=True, exist_ok=True)
+    dest = final_destination_dir or str(get_default_final_destination_dir())
+    Path(dest).mkdir(parents=True, exist_ok=True)
     # Also ensure Constructions directory exists
     get_constructions_dir()
 
@@ -224,6 +234,14 @@ def get_definitions_dir() -> Path:
     if config.has_option('Directories', 'definitions'):
         return Path(config.get('Directories', 'definitions'))
     return get_default_definitions_dir()
+
+
+def get_final_destination_dir() -> Path:
+    """Get the Final Mod(s) Destination directory from config, or default (Downloads)."""
+    config = load_config()
+    if config.has_option('Directories', 'final_destination'):
+        return Path(config.get('Directories', 'final_destination'))
+    return get_default_final_destination_dir()
 
 
 def get_color_scheme() -> str:

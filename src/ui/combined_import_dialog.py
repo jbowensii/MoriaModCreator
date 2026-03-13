@@ -176,8 +176,7 @@ class CombinedImportDialog(ctk.CTkToplevel):
         except queue.Empty:
             pass
 
-        if not self.cancelled:
-            self.after(100, self._check_queue)
+        self.after(100, self._check_queue)
 
     # ------------------------------------------------------------------
     # Combined pipeline (runs in background thread)
@@ -194,7 +193,10 @@ class CombinedImportDialog(ctk.CTkToplevel):
             game_ok = self._part1_import_game_files()
             if self.cancelled or not game_ok:
                 if self.cancelled:
-                    logger.info("Combined import cancelled during game file import")
+                    logger.info("Combined import cancelled — cleaning up directories")
+                    self.update_queue.put(("status", "Cleaning up..."))
+                    self._cleanup_all_directories()
+                    self.update_queue.put(("status", "Cancelled — directories reset"))
                 else:
                     logger.error("Combined import: game file import failed")
                 self.update_queue.put(("done", False))
@@ -399,7 +401,7 @@ class CombinedImportDialog(ctk.CTkToplevel):
             }
             for future in as_completed(futures):
                 if self.cancelled:
-                    executor.shutdown(wait=False, cancel_futures=True)
+                    executor.shutdown(wait=True, cancel_futures=True)
                     return False
                 success, _ = future.result()
                 if success:
@@ -448,13 +450,21 @@ class CombinedImportDialog(ctk.CTkToplevel):
         """Execute the secrets pipeline (runs in background thread)."""
         q = self.update_queue
 
+        def _cancel_cleanup():
+            """Clean up directories on cancel and signal done."""
+            logger.info("Secrets pipeline cancelled — cleaning up directories")
+            q.put(("status", "Cleaning up..."))
+            self._cleanup_all_directories()
+            q.put(("status", "Cancelled — directories reset"))
+            q.put(("done", False))
+
         # Step 1: (directories already cleared in upfront cleanup)
         q.put(("title", "Importing Secrets"))
         q.put(("progress", 0))
         q.put(("file", ""))
         q.put(("count", ""))
         if self.cancelled:
-            q.put(("done", False))
+            _cancel_cleanup()
             return
 
         # Step 2: download GitHub repo
@@ -472,7 +482,7 @@ class CombinedImportDialog(ctk.CTkToplevel):
         logger.info("GitHub download complete")
         q.put(("progress", 0.5))
         if self.cancelled:
-            q.put(("done", False))
+            _cancel_cleanup()
             return
 
         # Step 3: extract GitHub ZIP → jsondata
@@ -488,7 +498,7 @@ class CombinedImportDialog(ctk.CTkToplevel):
         q.put(("file", msg))
         q.put(("progress", 0.7))
         if self.cancelled:
-            q.put(("done", False))
+            _cancel_cleanup()
             return
 
         # Step 4: extract other ZIP files
@@ -511,7 +521,7 @@ class CombinedImportDialog(ctk.CTkToplevel):
             logger.debug("No additional ZIP files found")
         q.put(("progress", 0.9))
         if self.cancelled:
-            q.put(("done", False))
+            _cancel_cleanup()
             return
 
         # Step 5: manifest
@@ -581,10 +591,10 @@ class CombinedImportDialog(ctk.CTkToplevel):
         self.protocol("WM_DELETE_WINDOW", self.destroy)
 
     def _on_cancel(self):
-        """Handle cancel."""
+        """Handle cancel — let running work finish, then clean up."""
         logger.info("Combined import cancelled by user")
         self.cancelled = True
-        self.status_label.configure(text="Cancelling...")
+        self.status_label.configure(text="Cancelling (waiting for current work to finish)...")
 
 
 def show_combined_import_dialog(parent, on_secrets_btn_update=None) -> bool:

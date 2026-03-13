@@ -292,6 +292,27 @@ class MainWindow(ctk.CTk, TkinterDnD.DnDWrapper if HAS_TKDND else object):
         self.search_last_index = -1
         self.search_last_text = ""
 
+        # Cached fonts for card rendering (avoids creating new CTkFont per widget)
+        self._font_label_bold_12 = ctk.CTkFont(size=12, weight="bold")
+        self._font_label_12 = ctk.CTkFont(size=12)
+        self._font_label_bold_11 = ctk.CTkFont(size=11, weight="bold")
+        self._font_label_11 = ctk.CTkFont(size=11)
+        self._font_consolas_11 = ctk.CTkFont(size=11, family="Consolas")
+        self._font_label_bold_14 = ctk.CTkFont(size=14, weight="bold")
+        self._font_label_14 = ctk.CTkFont(size=14)
+
+        # Batch rendering state for card-based view
+        self._card_batch_after_id = None
+
+        # Search/replace state for card-based view
+        self._card_search_var = None
+        self._card_search_entry = None
+        self._card_replace_var = None
+        self._card_replace_entry = None
+        self._card_search_index = -1
+        self.card_changes = []
+        self.change_cards = []
+
         # View switching
         self.current_view = "definitions"  # "definitions", "buildings", "constructions", or "def_creator"
         self.definitions_view_frame = None
@@ -1174,7 +1195,7 @@ class MainWindow(ctk.CTk, TkinterDnD.DnDWrapper if HAS_TKDND else object):
                 anchor="w",
                 cursor="hand2",
                 font=ctk.CTkFont(size=18),
-                text_color="#FFD700"
+                text_color=("#D84315", "#FFD700")
             )
             back_label.pack(side="left", fill="x", expand=True, padx=(25, 0))
             back_label.bind("<Button-1>", lambda e: self._refresh_definitions_list(target_dir.parent))
@@ -1229,7 +1250,7 @@ class MainWindow(ctk.CTk, TkinterDnD.DnDWrapper if HAS_TKDND else object):
                 anchor="w",
                 cursor="hand2",
                 font=ctk.CTkFont(size=18),
-                text_color="#FFD700"
+                text_color=("#D84315", "#FFD700")
             )
             dir_label.pack(side="left", fill="x", expand=True)
             dir_label.bind("<Button-1>", lambda e, p=dir_path: self._refresh_definitions_list(p))
@@ -1934,6 +1955,99 @@ class MainWindow(ctk.CTk, TkinterDnD.DnDWrapper if HAS_TKDND else object):
         except (OSError, json.JSONDecodeError):
             pass
         return None
+
+    def _get_original_value(self, game_data: dict | None, item_name: str, property_path: str) -> str | None:
+        """Look up the original value of a property from game JSON data.
+
+        Args:
+            game_data: Parsed game JSON data (from _load_game_data).
+            item_name: The item/row name (e.g., "Item.IronOre").
+            property_path: Dot-separated property path (e.g., "MaxStackSize").
+
+        Returns:
+            String representation of the original value, or None if not found.
+        """
+        if not game_data or not item_name or not property_path:
+            return None
+        try:
+            # Find the item's data array (reuses build_manager logic)
+            item_data = None
+            name_variations = [
+                f"Default__{item_name}_C", f"Default__{item_name}",
+                item_name, f"{item_name}_C",
+            ]
+            for name_variant in name_variations:
+                for export in game_data.get('Exports', []):
+                    if export.get('ObjectName', '') == name_variant:
+                        data = export.get('Data', [])
+                        if isinstance(data, list):
+                            item_data = data
+                            break
+                if item_data:
+                    break
+
+            # Try DataTable format
+            if item_data is None:
+                try:
+                    table_data = game_data['Exports'][0]['Table']['Data']
+                    for row in table_data:
+                        if row.get('Name') == item_name:
+                            value_array = row.get('Value', [])
+                            if isinstance(value_array, list):
+                                item_data = value_array
+                            break
+                except (KeyError, IndexError, TypeError):
+                    pass
+
+            if not item_data:
+                return None
+
+            # Parse property path and traverse
+            parts = []
+            for segment in property_path.split('.'):
+                match = re.match(r'^(\w+)(?:\[(\d+)\])?$', segment)
+                if match:
+                    parts.append((match.group(1), int(match.group(2)) if match.group(2) is not None else None))
+                else:
+                    parts.append((segment, None))
+
+            current = item_data
+            for name, index in parts:
+                if isinstance(current, list):
+                    found = False
+                    for entry in current:
+                        if isinstance(entry, dict) and entry.get('Name') == name:
+                            current = entry.get('Value')
+                            if index is not None and isinstance(current, list):
+                                if 0 <= index < len(current):
+                                    indexed = current[index]
+                                    current = indexed.get('Value') if isinstance(indexed, dict) and 'Value' in indexed else indexed
+                                else:
+                                    return None
+                            found = True
+                            break
+                    if not found:
+                        return None
+                elif isinstance(current, dict):
+                    if name in current:
+                        current = current[name]
+                        if index is not None and isinstance(current, list):
+                            if 0 <= index < len(current):
+                                indexed = current[index]
+                                current = indexed.get('Value') if isinstance(indexed, dict) and 'Value' in indexed else indexed
+                            else:
+                                return None
+                    elif 'Value' in current:
+                        current = current['Value']
+                        continue
+                    else:
+                        return None
+                else:
+                    return None
+
+            return str(current) if current is not None else None
+        except (KeyError, IndexError, TypeError, AttributeError):
+            return None
 
     def _load_string_table(self, table_path: str) -> dict:
         """Load a string table and return a lookup dictionary.
@@ -2761,21 +2875,51 @@ class MainWindow(ctk.CTk, TkinterDnD.DnDWrapper if HAS_TKDND else object):
         details_frame = ctk.CTkFrame(self.main_content)
         details_frame.pack(fill="both", expand=True)
 
+        # Search & Replace bar — single line at very top
+        search_replace_frame = ctk.CTkFrame(details_frame, fg_color=("gray90", "gray17"))
+        search_replace_frame.pack(fill="x", padx=10, pady=(5, 0))
+
+        sr_row = ctk.CTkFrame(search_replace_frame, fg_color="transparent")
+        sr_row.pack(fill="x", padx=5, pady=5)
+        ctk.CTkLabel(sr_row, text="\U0001F50D", width=20).pack(side="left")
+        self._card_search_var = ctk.StringVar()
+        self._card_search_entry = ctk.CTkEntry(
+            sr_row, textvariable=self._card_search_var,
+            placeholder_text="Search property...", font=self._font_label_12, height=28
+        )
+        self._card_search_entry.pack(side="left", fill="x", expand=True, padx=(2, 3))
+        ctk.CTkButton(
+            sr_row, text="Search", width=60, height=28,
+            command=self._on_card_search
+        ).pack(side="left", padx=(0, 6))
+        self._card_replace_var = ctk.StringVar()
+        self._card_replace_entry = ctk.CTkEntry(
+            sr_row, textvariable=self._card_replace_var,
+            placeholder_text="Replace value...", font=self._font_label_12, height=28
+        )
+        self._card_replace_entry.pack(side="left", fill="x", expand=True, padx=(0, 3))
+        ctk.CTkButton(
+            sr_row, text="Replace", width=65, height=28,
+            command=self._on_card_replace
+        ).pack(side="left", padx=(0, 3))
+        ctk.CTkButton(
+            sr_row, text="Replace All", width=80, height=28,
+            command=self._on_card_replace_all
+        ).pack(side="left")
+        self._card_search_index = -1
+
         # Header section with Title, Author, Description
         header_info_frame = ctk.CTkFrame(details_frame, fg_color="transparent")
         header_info_frame.pack(fill="x", padx=10, pady=(10, 5))
-
-        label_font = ctk.CTkFont(size=14, weight="bold")
-        value_font = ctk.CTkFont(size=14)
 
         # Title row
         title_row = ctk.CTkFrame(header_info_frame, fg_color="transparent")
         title_row.pack(fill="x", anchor="w")
         ctk.CTkLabel(
-            title_row, text="TITLE:", font=label_font, width=100, anchor="w"
+            title_row, text="TITLE:", font=self._font_label_bold_14, width=100, anchor="w"
         ).pack(side="left")
         ctk.CTkLabel(
-            title_row, text=title if title else file_path.stem, font=value_font, anchor="w"
+            title_row, text=title if title else file_path.stem, font=self._font_label_14, anchor="w"
         ).pack(side="left", fill="x", expand=True)
 
         # Author row (only if author exists)
@@ -2783,10 +2927,10 @@ class MainWindow(ctk.CTk, TkinterDnD.DnDWrapper if HAS_TKDND else object):
             author_row = ctk.CTkFrame(header_info_frame, fg_color="transparent")
             author_row.pack(fill="x", anchor="w")
             ctk.CTkLabel(
-                author_row, text="AUTHOR:", font=label_font, width=100, anchor="w"
+                author_row, text="AUTHOR:", font=self._font_label_bold_14, width=100, anchor="w"
             ).pack(side="left")
             ctk.CTkLabel(
-                author_row, text=author, font=value_font, anchor="w"
+                author_row, text=author, font=self._font_label_14, anchor="w"
             ).pack(side="left", fill="x", expand=True)
 
         # Description row
@@ -2794,14 +2938,18 @@ class MainWindow(ctk.CTk, TkinterDnD.DnDWrapper if HAS_TKDND else object):
             desc_row = ctk.CTkFrame(header_info_frame, fg_color="transparent")
             desc_row.pack(fill="x", anchor="w")
             ctk.CTkLabel(
-                desc_row, text="DESCRIPTION:", font=label_font, width=100, anchor="w"
+                desc_row, text="DESCRIPTION:", font=self._font_label_bold_14, width=100, anchor="w"
             ).pack(side="left")
             ctk.CTkLabel(
-                desc_row, text=description, font=value_font, anchor="w"
+                desc_row, text=description, font=self._font_label_14, anchor="w"
             ).pack(side="left", fill="x", expand=True)
 
         # Get XML changes for card-based display
         xml_changes = self._get_definition_changes(file_path)
+
+        # Load game data once for original value lookup
+        mod_file_path = self._get_mod_file_path(file_path)
+        game_data = self._load_game_data(mod_file_path) if mod_file_path else None
 
         # Card-based view header
         header_frame = ctk.CTkFrame(details_frame, fg_color="transparent")
@@ -2810,12 +2958,12 @@ class MainWindow(ctk.CTk, TkinterDnD.DnDWrapper if HAS_TKDND else object):
         changes_label = ctk.CTkLabel(
             header_frame,
             text=f"{len(xml_changes)} Change{'s' if len(xml_changes) != 1 else ''}",
-            font=ctk.CTkFont(size=14, weight="bold")
+            font=self._font_label_bold_14
         )
         changes_label.pack(side="left")
 
         # Card-based scrolling container
-        self._setup_card_based_view(details_frame, xml_changes, file_path)
+        self._setup_card_based_view(details_frame, xml_changes, game_data)
 
         # Add Save button row at bottom
         save_button_frame = ctk.CTkFrame(details_frame, fg_color="transparent")
@@ -2834,14 +2982,23 @@ class MainWindow(ctk.CTk, TkinterDnD.DnDWrapper if HAS_TKDND else object):
         )
         self.save_btn.pack(side="right")
 
-    def _setup_card_based_view(self, parent: ctk.CTkFrame, xml_changes: list[dict], file_path: Path):
+    def _setup_card_based_view(self, parent: ctk.CTkFrame, xml_changes: list[dict],
+                               game_data: dict | None = None):
         """Set up card-based view for displaying and editing definition changes.
+
+        Uses batch rendering to keep the UI responsive — creates cards in small
+        batches via after() callbacks so the first cards appear immediately.
 
         Args:
             parent: Parent frame to contain the cards.
             xml_changes: List of change dictionaries from _get_definition_changes().
-            file_path: Path to the .def file being displayed.
+            game_data: Parsed game JSON data for original value lookup.
         """
+        # Cancel any pending batch render from a previous definition
+        if self._card_batch_after_id is not None:
+            self.after_cancel(self._card_batch_after_id)
+            self._card_batch_after_id = None
+
         # Store changes and cards for saving later
         self.card_changes = xml_changes
         self.change_cards = []
@@ -2856,23 +3013,53 @@ class MainWindow(ctk.CTk, TkinterDnD.DnDWrapper if HAS_TKDND else object):
                 cards_container,
                 text="No changes defined in this .def file",
                 text_color="gray",
-                font=ctk.CTkFont(size=14)
+                font=self._font_label_14
             )
             empty_label.pack(pady=20)
             return
 
-        # Create a card for each change
-        for i, change in enumerate(xml_changes):
-            card = self._create_change_card(cards_container, change, i)
-            self.change_cards.append(card)
+        # Pre-allocate the list so save can check length
+        self.change_cards = [None] * len(xml_changes)
 
-    def _create_change_card(self, parent: ctk.CTkFrame, change: dict, index: int) -> dict:
+        # Batch render cards — BATCH_SIZE at a time with idle callbacks between
+        BATCH_SIZE = 8
+
+        def _render_batch(start_index: int):
+            """Render a batch of cards starting at start_index."""
+            # Check if the container is still valid (user may have navigated away)
+            try:
+                cards_container.winfo_exists()
+            except (tk.TclError, RuntimeError):
+                self._card_batch_after_id = None
+                return
+
+            if not cards_container.winfo_exists():
+                self._card_batch_after_id = None
+                return
+
+            end_index = min(start_index + BATCH_SIZE, len(xml_changes))
+            for i in range(start_index, end_index):
+                card = self._create_change_card(cards_container, xml_changes[i], i, game_data)
+                self.change_cards[i] = card
+
+            # Schedule next batch if there are more
+            if end_index < len(xml_changes):
+                self._card_batch_after_id = self.after(1, _render_batch, end_index)
+            else:
+                self._card_batch_after_id = None
+
+        # Start first batch immediately
+        _render_batch(0)
+
+    def _create_change_card(self, parent: ctk.CTkFrame, change: dict, index: int,
+                            game_data: dict | None = None) -> dict:
         """Create a card UI for a single change element.
 
         Args:
             parent: Parent container for the card.
             change: Change dictionary with item, property, value, etc.
             index: Index of this change in the list.
+            game_data: Parsed game JSON data for original value lookup.
 
         Returns:
             Dictionary with card widgets and data for saving.
@@ -2894,7 +3081,7 @@ class MainWindow(ctk.CTk, TkinterDnD.DnDWrapper if HAS_TKDND else object):
         type_label = ctk.CTkLabel(
             header,
             text=change_type,
-            font=ctk.CTkFont(size=11, weight="bold"),
+            font=self._font_label_bold_11,
             text_color="#8B5CF6" if has_add_prop else "#3B82F6",
             anchor="w"
         )
@@ -2910,13 +3097,13 @@ class MainWindow(ctk.CTk, TkinterDnD.DnDWrapper if HAS_TKDND else object):
         ctk.CTkLabel(
             item_row,
             text="Item:",
-            font=ctk.CTkFont(size=12, weight="bold"),
+            font=self._font_label_bold_12,
             width=100,
             anchor="w"
         ).pack(side="left")
         item_entry = ctk.CTkEntry(
             item_row,
-            font=ctk.CTkFont(size=12),
+            font=self._font_label_12,
             height=28
         )
         item_entry.insert(0, change['item'])
@@ -2928,17 +3115,38 @@ class MainWindow(ctk.CTk, TkinterDnD.DnDWrapper if HAS_TKDND else object):
         ctk.CTkLabel(
             prop_row,
             text="Property:",
-            font=ctk.CTkFont(size=12, weight="bold"),
+            font=self._font_label_bold_12,
             width=100,
             anchor="w"
         ).pack(side="left")
         prop_entry = ctk.CTkEntry(
             prop_row,
-            font=ctk.CTkFont(size=12),
+            font=self._font_label_12,
             height=28
         )
         prop_entry.insert(0, change['property'])
         prop_entry.pack(side="left", fill="x", expand=True)
+
+        # Original Value field (non-editable)
+        original_value = self._get_original_value(game_data, change['item'], change['property'])
+        orig_row = ctk.CTkFrame(body, fg_color="transparent")
+        orig_row.pack(fill="x", pady=2)
+        ctk.CTkLabel(
+            orig_row,
+            text="Original Value:",
+            font=self._font_label_bold_12,
+            width=100,
+            anchor="w"
+        ).pack(side="left")
+        orig_entry = ctk.CTkEntry(
+            orig_row,
+            font=self._font_label_12,
+            height=28,
+            state="normal"
+        )
+        orig_entry.insert(0, original_value if original_value else "N/A")
+        orig_entry.configure(state="disabled")
+        orig_entry.pack(side="left", fill="x", expand=True)
 
         # Value field
         value_row = ctk.CTkFrame(body, fg_color="transparent")
@@ -2946,13 +3154,13 @@ class MainWindow(ctk.CTk, TkinterDnD.DnDWrapper if HAS_TKDND else object):
         ctk.CTkLabel(
             value_row,
             text="Value:",
-            font=ctk.CTkFont(size=12, weight="bold"),
+            font=self._font_label_bold_12,
             width=100,
             anchor="w"
         ).pack(side="left")
         value_entry = ctk.CTkEntry(
             value_row,
-            font=ctk.CTkFont(size=12),
+            font=self._font_label_12,
             height=28
         )
         value_entry.insert(0, change['value'])
@@ -2969,7 +3177,7 @@ class MainWindow(ctk.CTk, TkinterDnD.DnDWrapper if HAS_TKDND else object):
             add_prop_header = ctk.CTkLabel(
                 body,
                 text="⊕ Add Property Structure",
-                font=ctk.CTkFont(size=12, weight="bold"),
+                font=self._font_label_bold_12,
                 text_color="#8B5CF6",
                 anchor="w"
             )
@@ -2984,7 +3192,7 @@ class MainWindow(ctk.CTk, TkinterDnD.DnDWrapper if HAS_TKDND else object):
             details_label = ctk.CTkLabel(
                 body,
                 text=details_text,
-                font=ctk.CTkFont(size=11, family="Consolas"),
+                font=self._font_consolas_11,
                 text_color="gray70",
                 anchor="w",
                 justify="left"
@@ -2995,7 +3203,7 @@ class MainWindow(ctk.CTk, TkinterDnD.DnDWrapper if HAS_TKDND else object):
             json_label = ctk.CTkLabel(
                 body,
                 text="JSON Structure:",
-                font=ctk.CTkFont(size=11),
+                font=self._font_label_11,
                 anchor="w"
             )
             json_label.pack(fill="x")
@@ -3003,7 +3211,7 @@ class MainWindow(ctk.CTk, TkinterDnD.DnDWrapper if HAS_TKDND else object):
             add_prop_textbox = ctk.CTkTextbox(
                 body,
                 height=100,
-                font=ctk.CTkFont(size=11, family="Consolas"),
+                font=self._font_consolas_11,
                 wrap="none"
             )
             # Insert actual JSON from .def file
@@ -3036,6 +3244,17 @@ class MainWindow(ctk.CTk, TkinterDnD.DnDWrapper if HAS_TKDND else object):
             return
 
         if not hasattr(self, 'change_cards') or not self.change_cards:
+            self.set_status_message("No changes to save")
+            return
+
+        # If batch rendering is still in progress, wait for it to finish
+        if self._card_batch_after_id is not None:
+            self.set_status_message("Cards still loading, please wait...")
+            return
+
+        # Filter out any None entries (shouldn't happen but be safe)
+        active_cards = [c for c in self.change_cards if c is not None]
+        if not active_cards:
             self.set_status_message("No changes to save")
             return
 
@@ -3077,7 +3296,7 @@ class MainWindow(ctk.CTk, TkinterDnD.DnDWrapper if HAS_TKDND else object):
             new_mod = ET.SubElement(new_root, 'mod', file=mod_file)
 
             # Extract data from cards and rebuild changes
-            for card in self.change_cards:
+            for card in active_cards:
                 item_val = card['item_entry'].get().strip()
                 prop_val = card['property_entry'].get().strip()
                 value_val = card['value_entry'].get().strip()
@@ -3121,6 +3340,89 @@ class MainWindow(ctk.CTk, TkinterDnD.DnDWrapper if HAS_TKDND else object):
         except (OSError, PermissionError) as e:
             logger.error("Error saving file %s: %s", self.current_definition_path.name, e)
             self.set_status_message(f"Error saving file: {e}")
+
+    def _get_card_property_pairs(self) -> list[tuple[str, ctk.CTkEntry]]:
+        """Return (property_text, value_entry) pairs from change cards."""
+        pairs = []
+        for card in self.change_cards:
+            if card is None:
+                continue
+            prop_text = card['property_entry'].get()
+            pairs.append((prop_text, card['value_entry']))
+        return pairs
+
+    def _on_card_search(self):
+        """Find and highlight the next card whose property matches the search text."""
+        search_text = self._card_search_var.get()
+        if not search_text:
+            return
+        pairs = self._get_card_property_pairs()
+        if not pairs:
+            return
+
+        # Build list of matching indices
+        matches = [
+            i for i, (prop, _) in enumerate(pairs)
+            if search_text.lower() in prop.lower()
+        ]
+        if not matches:
+            self.set_status_message("No matches found")
+            self._card_search_index = -1
+            return
+
+        # Find next match after current index
+        start = self._card_search_index + 1
+        next_match = None
+        for idx in matches:
+            if idx >= start:
+                next_match = idx
+                break
+        if next_match is None:
+            next_match = matches[0]  # wrap around
+
+        self._card_search_index = next_match
+        _, value_entry = pairs[next_match]
+        value_entry.focus_set()
+        value_entry.select_range(0, "end")
+        pos = matches.index(next_match) + 1
+        self.set_status_message(f"Match {pos}/{len(matches)}")
+
+    def _on_card_replace(self):
+        """Replace the value of the current property match."""
+        search_text = self._card_search_var.get()
+        replace_text = self._card_replace_var.get()
+        if not search_text:
+            return
+        pairs = self._get_card_property_pairs()
+        if not pairs or self._card_search_index < 0:
+            self._on_card_search()
+            return
+
+        idx = self._card_search_index
+        if idx < len(pairs):
+            prop, value_entry = pairs[idx]
+            if search_text.lower() in prop.lower():
+                value_entry.delete(0, "end")
+                value_entry.insert(0, replace_text)
+                self.set_status_message("Replaced 1 match")
+        # Find next
+        self._on_card_search()
+
+    def _on_card_replace_all(self):
+        """Replace values of all cards whose property matches the search text."""
+        search_text = self._card_search_var.get()
+        replace_text = self._card_replace_var.get()
+        if not search_text:
+            return
+        pairs = self._get_card_property_pairs()
+        count = 0
+        for prop, value_entry in pairs:
+            if search_text.lower() in prop.lower():
+                value_entry.delete(0, "end")
+                value_entry.insert(0, replace_text)
+                count += 1
+        self.set_status_message(f"Replaced {count} match{'es' if count != 1 else ''}")
+        self._card_search_index = -1
 
     def _write_pretty_xml(self, root: ET.Element, file_path: Path):
         """Write XML to file with proper indentation and CDATA handling.
@@ -3969,7 +4271,9 @@ class MainWindow(ctk.CTk, TkinterDnD.DnDWrapper if HAS_TKDND else object):
         """Open the settings/configuration dialog."""
         logger.debug("Opening settings dialog")
         from src.ui.config_dialog import show_config_dialog  # pylint: disable=import-outside-toplevel
+        from src.config import apply_color_scheme, get_color_scheme  # pylint: disable=import-outside-toplevel
         show_config_dialog(self)
+        apply_color_scheme(get_color_scheme())
 
     def _open_about(self):
         """Open the Help About dialog."""

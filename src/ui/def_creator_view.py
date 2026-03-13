@@ -342,7 +342,7 @@ class DefCreatorView(ctk.CTkFrame):
         row += 1
 
         # --- Section: Folder Selection ---
-        row = self._create_section_header(scroll, "Folder Selection", "#FF9800", row)
+        row = self._create_section_header(scroll, "Folder Selection", ("#E65100", "#FF9800"), row)
 
         ctk.CTkLabel(scroll, text="Modded Files Folder:", anchor="w", width=160).grid(
             row=row, column=0, sticky="w", pady=3

@@ -16,11 +16,13 @@ from src.config import (
     get_default_output_dir,
     get_default_mymodfiles_dir,
     get_default_definitions_dir,
+    get_default_final_destination_dir,
     get_game_install_path,
     get_utilities_dir,
     get_output_dir,
     get_mymodfiles_dir,
     get_definitions_dir,
+    get_final_destination_dir,
     get_color_scheme,
     get_max_workers,
     get_debug_mode,
@@ -36,7 +38,7 @@ class ConfigDialog(ctk.CTkToplevel):
         super().__init__(parent)
 
         self.title("Moria MOD Creator - Configuration")
-        self.geometry("825x510")
+        self.geometry("825x550")
         self.resizable(False, False)
 
         # Make this dialog modal
@@ -75,6 +77,7 @@ class ConfigDialog(ctk.CTkToplevel):
         self.output_path = ctk.StringVar(value=str(get_output_dir()))
         self.mymodfiles_path = ctk.StringVar(value=str(get_mymodfiles_dir()))
         self.definitions_path = ctk.StringVar(value=str(get_definitions_dir()))
+        self.final_destination_path = ctk.StringVar(value=str(get_final_destination_dir()))
         self.color_scheme = ctk.StringVar(value=get_color_scheme())
         self.max_workers = ctk.StringVar(value=str(get_max_workers()))
         self.debug_mode = ctk.StringVar(value="1" if get_debug_mode() else "0")
@@ -157,6 +160,12 @@ class ConfigDialog(ctk.CTkToplevel):
         self._create_dir_row(
             main_frame, row, "MOD Definitions Directory:",
             self.definitions_path, self._on_definitions_browse)
+        row += 1
+
+        # Final Mod(s) Destination
+        self._create_dir_row(
+            main_frame, row, "Final Mod(s) Destination:",
+            self.final_destination_path, self._on_final_destination_browse)
         row += 1
 
         # Color Scheme
@@ -317,6 +326,10 @@ class ConfigDialog(ctk.CTkToplevel):
         """Handle MOD Definitions browse button click."""
         self._browse_for_dir(self.definitions_path, "Select MOD Definitions Directory")
 
+    def _on_final_destination_browse(self):
+        """Handle Final Mod(s) Destination browse button click."""
+        self._browse_for_dir(self.final_destination_path, "Select Final Mod(s) Destination")
+
     def _browse_for_dir(self, path_var: ctk.StringVar, title: str):
         """Browse for a directory and update the path variable."""
         initial_dir = path_var.get() if Path(path_var.get()).exists() else None
@@ -356,7 +369,8 @@ class ConfigDialog(ctk.CTkToplevel):
             definitions_dir=self.definitions_path.get(),
             color_scheme=self.color_scheme.get(),
             max_workers=int(self.max_workers.get()),
-            debug=self.debug_mode.get() == "1"
+            debug=self.debug_mode.get() == "1",
+            final_destination_dir=self.final_destination_path.get()
         )
 
         self.result = True

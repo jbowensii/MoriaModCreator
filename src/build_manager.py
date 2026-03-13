@@ -18,7 +18,7 @@ import zipfile
 from pathlib import Path
 from typing import Callable
 
-from src.config import get_appdata_dir, get_output_dir, get_default_mymodfiles_dir, get_utilities_dir
+from src.config import get_appdata_dir, get_output_dir, get_default_mymodfiles_dir, get_utilities_dir, get_final_destination_dir
 from src.constants import (
     UE_VERSION,
     RETOC_UE_VERSION,
@@ -1156,7 +1156,7 @@ class BuildManager:  # pylint: disable=too-few-public-methods
         logger.info("Copied %d of %d secrets pak files", found, len(target_files))
 
     def _create_zip(self, mod_name: str) -> Path | None:
-        """Create a zip file of the mod in Downloads folder.
+        """Create a zip file of the mod in the configured destination directory.
 
         The zip contains the {mod_name}_P directory with all mod files.
 
@@ -1175,10 +1175,10 @@ class BuildManager:  # pylint: disable=too-few-public-methods
             logger.error("mod directory not found: %s", mod_p_dir)
             return None
 
-        downloads_dir = Path.home() / 'Downloads'
-        downloads_dir.mkdir(parents=True, exist_ok=True)
+        dest_dir = get_final_destination_dir()
+        dest_dir.mkdir(parents=True, exist_ok=True)
 
-        zip_path = downloads_dir / f'{mod_name}.zip'
+        zip_path = dest_dir / f'{mod_name}.zip'
 
         try:
             with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:

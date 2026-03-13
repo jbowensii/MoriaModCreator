@@ -31,8 +31,8 @@ CHECKBOX_STATE_ALL = "all"
 
 # UI Colors
 COLOR_CHECKBOX_DEFAULT = "#1f6aa5"  # Blue - default checkbox color
-COLOR_CHECKBOX_MIXED = "#FFA500"    # Orange - mixed/partial state
-COLOR_STATUS_TEXT = "#FFA500"       # Orange - status bar text
+COLOR_CHECKBOX_MIXED = ("#E65100", "#FFA500")    # Orange - mixed/partial state (light, dark)
+COLOR_STATUS_TEXT = ("#E65100", "#FFA500")       # Orange - status bar text (light, dark)
 COLOR_SAVE_BUTTON = "#28a745"       # Green - save button
 COLOR_SAVE_BUTTON_HOVER = "#218838" # Dark green - save button hover
 

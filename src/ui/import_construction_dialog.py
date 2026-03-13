@@ -323,7 +323,8 @@ class ImportConstructionDialog(ctk.CTkToplevel):
 
         # Configure tag colors for different statuses
         self.tree.tag_configure("available", foreground="#4CAF50")  # Green
-        self.tree.tag_configure("missing_recipe", foreground="#FFC107")  # Yellow
+        _missing_fg = "#E65100" if ctk.get_appearance_mode() == "Light" else "#FFC107"
+        self.tree.tag_configure("missing_recipe", foreground=_missing_fg)  # Yellow/orange
         self.tree.tag_configure("imported", foreground="#9E9E9E")  # Gray
         self.tree.tag_configure("no_construction", foreground="#F44336")  # Red
 
@@ -356,7 +357,7 @@ class ImportConstructionDialog(ctk.CTkToplevel):
             legend_frame,
             text="● Missing Recipe",
             font=ctk.CTkFont(size=18),
-            text_color="#FFC107"
+            text_color=("#E65100", "#FFC107")
         ).pack(side="left", padx=(0, 15))
 
         ctk.CTkLabel(

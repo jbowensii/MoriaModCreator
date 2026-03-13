@@ -1825,6 +1825,11 @@ class BuildingsView(ctk.CTkFrame):
 
         # Cached dropdown options (populated from file scans)
         self.cached_options: dict = {}
+        self._cached_material_display: list[str] = []  # Pre-formatted material options
+        self._cached_material_raw: list[str] = []      # Raw material keys (parallel to display)
+
+        # Debounce tracking for form rendering
+        self._pending_show_form_id = None
 
         # Form field tkinter variables for data binding
         self.form_vars = {}
@@ -1901,6 +1906,17 @@ class BuildingsView(ctk.CTkFrame):
         self.footer_save_btn = None
         self.footer_revert_btn = None
 
+        # Search/replace bar state
+        self._form_search_var = None
+        self._form_search_entry = None
+        self._form_replace_var = None
+        self._form_replace_entry = None
+        self._form_search_index = -1
+        self._form_search_matches: list = []
+        self._search_bar = None
+        self.header_eye_btn = None
+        self._header_eye_visible = True
+
         logger.debug("BuildingsView initialized")
         self._create_widgets()
         # Defer scan until after main window is fully initialized
@@ -1957,6 +1973,12 @@ class BuildingsView(ctk.CTkFrame):
 
         # Load string tables for display name resolution
         self.string_table = self._load_string_table()
+
+        # Pre-format material display options (avoids recomputing per row)
+        self._cached_material_raw = self._get_options("Materials", ["Item.Wood"])
+        self._cached_material_display = [
+            self._format_material_display(m) for m in self._cached_material_raw
+        ]
 
         # Refresh the building list to show scanned files
         self._refresh_building_list()
@@ -2085,7 +2107,7 @@ class BuildingsView(ctk.CTkFrame):
 
         self.armor_btn = ctk.CTkButton(
             btn_row1, text="Armor", height=28,
-            fg_color="#FF9800", hover_color="#F57C00",
+            fg_color=("#E65100", "#FF9800"), hover_color=("#BF360C", "#F57C00"),
             font=ctk.CTkFont(weight="bold"),
             command=self._load_secrets_armor
         )
@@ -2262,15 +2284,51 @@ class BuildingsView(ctk.CTkFrame):
         self.form_container = ctk.CTkFrame(self)
         self.form_container.grid(row=0, column=1, sticky="nsew")
 
-        # Configure grid for header (row 0), content (row 1), footer (row 2)
-        self.form_container.grid_rowconfigure(0, weight=0)  # Header - fixed
-        self.form_container.grid_rowconfigure(1, weight=1)  # Content - expandable
-        self.form_container.grid_rowconfigure(2, weight=0)  # Footer - fixed
+        # Configure grid for search (row 0), header (row 1), content (row 2), footer (row 3)
+        self.form_container.grid_rowconfigure(0, weight=0)  # Search bar - fixed
+        self.form_container.grid_rowconfigure(1, weight=0)  # Header - fixed
+        self.form_container.grid_rowconfigure(2, weight=1)  # Content - expandable
+        self.form_container.grid_rowconfigure(3, weight=0)  # Footer - fixed
         self.form_container.grid_columnconfigure(0, weight=1)
 
-        # === FIXED HEADER ===
+        # === SEARCH & REPLACE BAR (row 0 — very top) ===
+        self._search_bar = ctk.CTkFrame(self.form_container, fg_color=("gray90", "gray17"))
+        self._search_bar.grid(row=0, column=0, sticky="ew", padx=10, pady=(5, 0))
+        self._search_bar.grid_remove()  # Hidden initially
+
+        search_row = ctk.CTkFrame(self._search_bar, fg_color="transparent")
+        search_row.pack(fill="x", padx=5, pady=5)
+        ctk.CTkLabel(search_row, text="\U0001F50D", width=20).pack(side="left")
+        self._form_search_var = ctk.StringVar()
+        self._form_search_entry = ctk.CTkEntry(
+            search_row, textvariable=self._form_search_var,
+            placeholder_text="Search property...", font=ctk.CTkFont(size=12), height=28
+        )
+        self._form_search_entry.pack(side="left", fill="x", expand=True, padx=(2, 3))
+        ctk.CTkButton(
+            search_row, text="Search", width=60, height=28,
+            command=self._on_form_search
+        ).pack(side="left", padx=(0, 6))
+        self._form_replace_var = ctk.StringVar()
+        self._form_replace_entry = ctk.CTkEntry(
+            search_row, textvariable=self._form_replace_var,
+            placeholder_text="Replace value...", font=ctk.CTkFont(size=12), height=28
+        )
+        self._form_replace_entry.pack(side="left", fill="x", expand=True, padx=(0, 3))
+        ctk.CTkButton(
+            search_row, text="Replace", width=65, height=28,
+            command=self._on_form_replace
+        ).pack(side="left", padx=(0, 3))
+        ctk.CTkButton(
+            search_row, text="Replace All", width=80, height=28,
+            command=self._on_form_replace_all
+        ).pack(side="left")
+        self._form_search_index = -1
+        self._form_search_matches: list = []
+
+        # === FIXED HEADER (row 1) ===
         self.form_header = ctk.CTkFrame(self.form_container, fg_color=("gray90", "gray17"))
-        self.form_header.grid(row=0, column=0, sticky="ew", padx=10, pady=(10, 0))
+        self.form_header.grid(row=1, column=0, sticky="ew", padx=10, pady=(10, 0))
         self.form_header.grid_remove()  # Hidden initially
 
         header_top_row = ctk.CTkFrame(self.form_header, fg_color="transparent")
@@ -2315,7 +2373,7 @@ class BuildingsView(ctk.CTkFrame):
 
         # === SCROLLABLE CONTENT ===
         self.form_scroll = ctk.CTkScrollableFrame(self.form_container, fg_color="transparent")
-        self.form_scroll.grid(row=1, column=0, sticky="nsew", padx=10, pady=5)
+        self.form_scroll.grid(row=2, column=0, sticky="nsew", padx=10, pady=5)
 
         # Placeholder message
         self.placeholder_label = ctk.CTkLabel(
@@ -2331,7 +2389,7 @@ class BuildingsView(ctk.CTkFrame):
 
         # === FIXED FOOTER ===
         self.form_footer = ctk.CTkFrame(self.form_container, fg_color=("gray90", "gray17"))
-        self.form_footer.grid(row=2, column=0, sticky="ew", padx=10, pady=(0, 10))
+        self.form_footer.grid(row=3, column=0, sticky="ew", padx=10, pady=(0, 10))
         self.form_footer.grid_remove()  # Hidden initially
 
         # Footer buttons
@@ -2357,6 +2415,102 @@ class BuildingsView(ctk.CTkFrame):
             command=self._save_changes
         )
         self.footer_save_btn.pack(side="right", padx=10, pady=10)
+
+    # -------------------------------------------------------------------------
+    # SEARCH & REPLACE
+    # -------------------------------------------------------------------------
+
+    def _get_form_property_pairs(self) -> list[tuple[str, object]]:
+        """Collect (property_name, value_entry) pairs from the form.
+
+        Walks form_content looking for frames containing a label + entry pair.
+        Returns list of (label_text, entry_widget) tuples.
+        """
+        import customtkinter as _ctk  # pylint: disable=import-outside-toplevel
+        pairs = []
+        if not hasattr(self, 'form_content') or not self.form_content:
+            return pairs
+        for child in self.form_content.winfo_children():
+            if not isinstance(child, _ctk.CTkFrame):
+                continue
+            label_text = ""
+            entry_widget = None
+            for sub in child.winfo_children():
+                if isinstance(sub, _ctk.CTkLabel) and not label_text:
+                    label_text = sub.cget("text").rstrip(":")
+                elif isinstance(sub, _ctk.CTkEntry):
+                    try:
+                        if sub.cget("state") != "disabled":
+                            entry_widget = sub
+                    except Exception:
+                        entry_widget = sub
+            if label_text and entry_widget:
+                pairs.append((label_text, entry_widget))
+        return pairs
+
+    def _on_form_search(self):
+        """Find and highlight the next property matching the search text."""
+        search_text = self._form_search_var.get()
+        if not search_text:
+            return
+        pairs = self._get_form_property_pairs()
+        if not pairs:
+            return
+        # Build list of matching indices
+        self._form_search_matches = [
+            i for i, (prop, _) in enumerate(pairs)
+            if search_text.lower() in prop.lower()
+        ]
+        if not self._form_search_matches:
+            self._form_search_index = -1
+            return
+        # Find next match after current index
+        start = self._form_search_index + 1
+        next_match = None
+        for idx in self._form_search_matches:
+            if idx >= start:
+                next_match = idx
+                break
+        if next_match is None:
+            next_match = self._form_search_matches[0]  # wrap around
+        self._form_search_index = next_match
+        _, entry = pairs[next_match]
+        entry.focus_set()
+        entry.select_range(0, "end")
+
+    def _on_form_replace(self):
+        """Replace the value of the current property match."""
+        search_text = self._form_search_var.get()
+        replace_text = self._form_replace_var.get()
+        if not search_text:
+            return
+        pairs = self._get_form_property_pairs()
+        if not pairs or self._form_search_index < 0:
+            self._on_form_search()
+            return
+        idx = self._form_search_index
+        if idx < len(pairs):
+            prop, entry = pairs[idx]
+            if search_text.lower() in prop.lower():
+                entry.delete(0, "end")
+                entry.insert(0, replace_text)
+        # Find next match
+        self._on_form_search()
+
+    def _on_form_replace_all(self):
+        """Replace values of all properties matching the search text."""
+        search_text = self._form_search_var.get()
+        replace_text = self._form_replace_var.get()
+        if not search_text:
+            return
+        pairs = self._get_form_property_pairs()
+        count = 0
+        for prop, entry in pairs:
+            if search_text.lower() in prop.lower():
+                entry.delete(0, "end")
+                entry.insert(0, replace_text)
+                count += 1
+        self._form_search_index = -1
 
     # -------------------------------------------------------------------------
     # FILE OPERATIONS
@@ -2467,7 +2621,7 @@ class BuildingsView(ctk.CTkFrame):
             self.current_def_path = file_path
             self._highlight_selected_item(file_path)
             # Defer heavy form rendering so the UI stays responsive
-            self.after(1, self._show_form)
+            self._schedule_show_form()
             self._set_status(f"Loaded: {file_path.name}")
         except (ET.ParseError, OSError, KeyError, json.JSONDecodeError) as e:
             logger.error("Error loading def file: %s", e)
@@ -3314,12 +3468,19 @@ class BuildingsView(ctk.CTkFrame):
     # FORM DISPLAY AND LAYOUT
     # -------------------------------------------------------------------------
 
+    def _schedule_show_form(self):
+        """Schedule _show_form with debouncing — cancels any pending call."""
+        if self._pending_show_form_id is not None:
+            self.after_cancel(self._pending_show_form_id)
+        self._pending_show_form_id = self.after(1, self._show_form)
+
     def _show_form(self):
         """Render the editable form, dispatching to per-type renderer.
 
         Hides the form during widget construction to avoid intermediate repaints,
         which significantly reduces perceived latency when switching items.
         """
+        self._pending_show_form_id = None
         logger.debug("Rendering form for view_mode=%s", self.view_mode)
         # Hide placeholder and show form widgets
         self.placeholder_label.pack_forget()
@@ -3352,7 +3513,8 @@ class BuildingsView(ctk.CTkFrame):
         else:
             self.form_header.grid_remove()
 
-        # Show footer with save/revert/delete buttons
+        # Show search bar and footer
+        self._search_bar.grid()
         self.form_footer.grid()
 
         self.form_vars.clear()
@@ -3400,7 +3562,7 @@ class BuildingsView(ctk.CTkFrame):
             has_data = True
             recipe = extract_recipe_fields(recipe_json)
 
-            self._create_section_header("Construction Recipe", "#FF9800")
+            self._create_section_header("Construction Recipe", ("#E65100", "#FF9800"))
 
             self._create_text_field("Name", recipe["Name"], label="Row Name")
             self._create_text_field(
@@ -3622,7 +3784,7 @@ class BuildingsView(ctk.CTkFrame):
         """Render item recipe section (shared by weapons, armor, tools, items)."""
         recipe = extract_item_recipe_fields(recipe_json)
 
-        self._create_section_header("Item Recipe", "#FF9800")
+        self._create_section_header("Item Recipe", ("#E65100", "#FF9800"))
 
         self._create_text_field("Name", recipe["Name"], label="Row Name")
         self._create_text_field(
@@ -3821,7 +3983,7 @@ class BuildingsView(ctk.CTkFrame):
             has_data = True
             a = extract_armor_fields(definition_json)
 
-            self._create_section_header("Armor Definition", "#FF9800")
+            self._create_section_header("Armor Definition", ("#E65100", "#FF9800"))
 
             self._create_text_field("Def_Name", a["Name"], label="Row Name", readonly=True)
 
@@ -4329,11 +4491,10 @@ class BuildingsView(ctk.CTkFrame):
         row_frame = ctk.CTkFrame(self.materials_frame, fg_color=("gray85", "gray20"))
         row_frame.pack(fill="x", pady=2)
 
-        # Material combobox with display names
-        raw_options = self._get_options("Materials", ["Item.Wood"])
-        if material and material not in raw_options:
-            raw_options.insert(0, material)
-        material_options = [self._format_material_display(m) for m in raw_options]
+        # Use pre-formatted material options from cache
+        material_options = list(self._cached_material_display)
+        if material and material not in self._cached_material_raw:
+            material_options.insert(0, self._format_material_display(material))
 
         mat_var = ctk.StringVar(value=self._format_material_display(material))
         mat_combo = FilterableComboBox(
@@ -4394,10 +4555,10 @@ class BuildingsView(ctk.CTkFrame):
         row_frame = ctk.CTkFrame(self.sandbox_materials_frame, fg_color=("gray85", "gray20"))
         row_frame.pack(fill="x", pady=2)
 
-        raw_options = self._get_options("Materials", ["Item.Wood"])
-        if material and material not in raw_options:
-            raw_options.insert(0, material)
-        material_options = [self._format_material_display(m) for m in raw_options]
+        # Use pre-formatted material options from cache
+        material_options = list(self._cached_material_display)
+        if material and material not in self._cached_material_raw:
+            material_options.insert(0, self._format_material_display(material))
 
         mat_var = ctk.StringVar(value=self._format_material_display(material))
         mat_combo = FilterableComboBox(
@@ -5513,20 +5674,6 @@ class BuildingsView(ctk.CTkFrame):
             shutil.copy2(src_defs, self._get_cache_constructions_path())
             logger.info("Refreshed cache: %s", src_defs.name)
 
-    def _load_secrets_prefix(self):
-        """Load the persisted secrets prefix from changesecrets config."""
-        config_file = get_default_changesecrets_dir() / 'current_prefix.ini'
-        if config_file.exists():
-            try:
-                config = configparser.ConfigParser()
-                config.read(config_file, encoding='utf-8')
-                prefix = config.get('ChangeSecrets', 'current_prefix', fallback='')
-                if hasattr(self, 'secrets_prefix_var'):
-                    self.secrets_prefix_var.set(prefix)
-                logger.debug("Loaded secrets prefix: %s", prefix)
-            except (configparser.Error, OSError) as e:
-                logger.warning("Failed to load secrets prefix: %s", e)
-
     def _save_secrets_prefix(self):
         """Save the current secrets prefix to changesecrets config."""
         logger.debug("Saving secrets prefix")
@@ -6637,7 +6784,7 @@ class BuildingsView(ctk.CTkFrame):
         self.current_def_path = None  # No file path for secrets items
 
         # Defer heavy form rendering so the UI stays responsive
-        self.after(1, self._show_form)
+        self._schedule_show_form()
         self._set_status(f"Loaded Secrets: {recipe_name}")
 
     def _highlight_secrets_item(self, selected_name: str):
