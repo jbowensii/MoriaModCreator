@@ -23,7 +23,6 @@ import customtkinter as ctk
 from src.config import (
     get_appdata_dir,
     get_utilities_dir,
-    get_output_dir,
     get_game_install_path,
     get_max_workers,
 )

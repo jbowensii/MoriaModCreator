@@ -12,11 +12,6 @@ from src.config import (
     get_available_install_options,
     load_config,
     save_config,
-    get_default_utilities_dir,
-    get_default_output_dir,
-    get_default_mymodfiles_dir,
-    get_default_definitions_dir,
-    get_default_final_destination_dir,
     get_game_install_path,
     get_utilities_dir,
     get_output_dir,
@@ -27,7 +22,6 @@ from src.config import (
     get_max_workers,
     get_debug_mode,
     COLOR_SCHEMES,
-    DEFAULT_COLOR_SCHEME,
 )
 
 

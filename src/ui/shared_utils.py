@@ -180,3 +180,80 @@ def update_buildings_ini_from_json() -> tuple[bool, str]:
     except OSError as e:
         logger.error("Error updating buildings INI: %s", e)
         return (False, f"Error: {e}")
+
+
+# ---------------------------------------------------------------------------
+# SEARCH & REPLACE HELPERS
+# ---------------------------------------------------------------------------
+
+# Search mode constants
+SEARCH_PROPERTIES = "Properties"
+SEARCH_VALUES = "Values"
+SEARCH_BOTH = "Both"
+SEARCH_MODES = [SEARCH_PROPERTIES, SEARCH_VALUES, SEARCH_BOTH]
+
+
+def find_search_matches(
+    pairs_text: list[tuple[str, str]],
+    search_text: str,
+    search_mode: str,
+) -> list[int]:
+    """Find indices of pairs matching *search_text* based on *search_mode*.
+
+    Args:
+        pairs_text: List of (property_name, value_text) string tuples.
+        search_text: The substring to look for (case-insensitive).
+        search_mode: One of SEARCH_PROPERTIES, SEARCH_VALUES, or SEARCH_BOTH.
+
+    Returns:
+        Sorted list of matching indices.
+    """
+    needle = search_text.lower()
+    matches: list[int] = []
+    for i, (prop, val) in enumerate(pairs_text):
+        if search_mode == SEARCH_PROPERTIES and needle in prop.lower():
+            matches.append(i)
+        elif search_mode == SEARCH_VALUES and needle in val.lower():
+            matches.append(i)
+        elif search_mode == SEARCH_BOTH and (
+            needle in prop.lower() or needle in val.lower()
+        ):
+            matches.append(i)
+    return matches
+
+
+def find_next_match(matches: list[int], current_index: int) -> int | None:
+    """Return the next match index after *current_index*, wrapping around.
+
+    Returns ``None`` when *matches* is empty.
+    """
+    if not matches:
+        return None
+    for idx in matches:
+        if idx > current_index:
+            return idx
+    return matches[0]  # wrap around
+
+
+def substring_replace(original: str, search_text: str, replace_text: str) -> str:
+    """Case-insensitive substring replacement.
+
+    Replaces every occurrence of *search_text* within *original* with
+    *replace_text*, preserving the surrounding text.
+    """
+    if not search_text:
+        return original
+    # Use case-insensitive find-and-replace by working through the string
+    lower_orig = original.lower()
+    lower_search = search_text.lower()
+    result: list[str] = []
+    start = 0
+    while True:
+        pos = lower_orig.find(lower_search, start)
+        if pos == -1:
+            result.append(original[start:])
+            break
+        result.append(original[start:pos])
+        result.append(replace_text)
+        start = pos + len(search_text)
+    return "".join(result)

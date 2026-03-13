@@ -38,6 +38,10 @@ from src.config import (
     get_default_changesecrets_dir, get_generate_builders_pack, get_output_dir,
 )
 from src.ui.filterable_combobox import FilterableComboBox
+from src.ui.shared_utils import (
+    SEARCH_BOTH, SEARCH_MODES, SEARCH_PROPERTIES, SEARCH_VALUES,
+    find_next_match, find_search_matches, substring_replace,
+)
 from src.ui.virtual_scroll_list import VirtualScrollList
 
 logger = logging.getLogger(__name__)
@@ -1911,6 +1915,7 @@ class BuildingsView(ctk.CTkFrame):
         self._form_search_entry = None
         self._form_replace_var = None
         self._form_replace_entry = None
+        self._form_search_mode_var = None
         self._form_search_index = -1
         self._form_search_matches: list = []
         self._search_bar = None
@@ -2299,6 +2304,13 @@ class BuildingsView(ctk.CTkFrame):
         search_row = ctk.CTkFrame(self._search_bar, fg_color="transparent")
         search_row.pack(fill="x", padx=5, pady=5)
         ctk.CTkLabel(search_row, text="\U0001F50D", width=20).pack(side="left")
+        self._form_search_mode_var = ctk.StringVar(value=SEARCH_PROPERTIES)
+        ctk.CTkOptionMenu(
+            search_row, variable=self._form_search_mode_var,
+            values=SEARCH_MODES, width=95, height=28,
+            font=ctk.CTkFont(size=11),
+            command=lambda _: self._on_form_search_mode_change(),
+        ).pack(side="left", padx=(2, 3))
         self._form_search_var = ctk.StringVar()
         self._form_search_entry = ctk.CTkEntry(
             search_row, textvariable=self._form_search_var,
@@ -2420,66 +2432,76 @@ class BuildingsView(ctk.CTkFrame):
     # SEARCH & REPLACE
     # -------------------------------------------------------------------------
 
-    def _get_form_property_pairs(self) -> list[tuple[str, object]]:
-        """Collect (property_name, value_entry) pairs from the form.
+    def _get_form_property_pairs(self) -> list[tuple[str, object, object]]:
+        """Collect (property_name, label_widget, value_entry) triples from the form.
 
         Walks form_content looking for frames containing a label + entry pair.
-        Returns list of (label_text, entry_widget) tuples.
+        Returns list of (label_text, label_widget, entry_widget) tuples.
         """
         import customtkinter as _ctk  # pylint: disable=import-outside-toplevel
-        pairs = []
+        pairs: list[tuple[str, object, object]] = []
         if not hasattr(self, 'form_content') or not self.form_content:
             return pairs
         for child in self.form_content.winfo_children():
             if not isinstance(child, _ctk.CTkFrame):
                 continue
             label_text = ""
+            label_widget = None
             entry_widget = None
             for sub in child.winfo_children():
                 if isinstance(sub, _ctk.CTkLabel) and not label_text:
                     label_text = sub.cget("text").rstrip(":")
+                    label_widget = sub
                 elif isinstance(sub, _ctk.CTkEntry):
                     try:
                         if sub.cget("state") != "disabled":
                             entry_widget = sub
-                    except Exception:
+                    except (ValueError, KeyError):
                         entry_widget = sub
             if label_text and entry_widget:
-                pairs.append((label_text, entry_widget))
+                pairs.append((label_text, label_widget, entry_widget))
         return pairs
 
+    def _on_form_search_mode_change(self):
+        """Update placeholder text when search mode changes."""
+        mode = self._form_search_mode_var.get()
+        if mode == SEARCH_PROPERTIES:
+            self._form_search_entry.configure(placeholder_text="Search property...")
+            self._form_replace_entry.configure(placeholder_text="Replace property...")
+        elif mode == SEARCH_VALUES:
+            self._form_search_entry.configure(placeholder_text="Search value...")
+            self._form_replace_entry.configure(placeholder_text="Replace value...")
+        else:
+            self._form_search_entry.configure(placeholder_text="Search...")
+            self._form_replace_entry.configure(placeholder_text="Replace...")
+        # Reset search state when mode changes
+        self._form_search_index = -1
+        self._form_search_matches = []
+
     def _on_form_search(self):
-        """Find and highlight the next property matching the search text."""
+        """Find and highlight the next property or value matching the search text."""
         search_text = self._form_search_var.get()
         if not search_text:
             return
         pairs = self._get_form_property_pairs()
         if not pairs:
             return
-        # Build list of matching indices
-        self._form_search_matches = [
-            i for i, (prop, _) in enumerate(pairs)
-            if search_text.lower() in prop.lower()
-        ]
+        mode = self._form_search_mode_var.get()
+        pairs_text = [(prop, entry.get()) for prop, _lbl, entry in pairs]
+        self._form_search_matches = find_search_matches(pairs_text, search_text, mode)
         if not self._form_search_matches:
             self._form_search_index = -1
             return
-        # Find next match after current index
-        start = self._form_search_index + 1
-        next_match = None
-        for idx in self._form_search_matches:
-            if idx >= start:
-                next_match = idx
-                break
-        if next_match is None:
-            next_match = self._form_search_matches[0]  # wrap around
-        self._form_search_index = next_match
-        _, entry = pairs[next_match]
+        next_idx = find_next_match(self._form_search_matches, self._form_search_index)
+        if next_idx is None:
+            return
+        self._form_search_index = next_idx
+        _, _lbl, entry = pairs[next_idx]
         entry.focus_set()
         entry.select_range(0, "end")
 
     def _on_form_replace(self):
-        """Replace the value of the current property match."""
+        """Replace the current match using substring replacement."""
         search_text = self._form_search_var.get()
         replace_text = self._form_replace_var.get()
         if not search_text:
@@ -2489,27 +2511,48 @@ class BuildingsView(ctk.CTkFrame):
             self._on_form_search()
             return
         idx = self._form_search_index
+        mode = self._form_search_mode_var.get()
         if idx < len(pairs):
-            prop, entry = pairs[idx]
-            if search_text.lower() in prop.lower():
+            prop, label_w, entry = pairs[idx]
+            val = entry.get()
+            if mode == SEARCH_PROPERTIES and search_text.lower() in prop.lower():
+                label_w.configure(text=substring_replace(prop, search_text, replace_text) + ":")
+            elif mode == SEARCH_VALUES and search_text.lower() in val.lower():
+                new_val = substring_replace(val, search_text, replace_text)
                 entry.delete(0, "end")
-                entry.insert(0, replace_text)
-        # Find next match
+                entry.insert(0, new_val)
+            elif mode == SEARCH_BOTH:
+                if search_text.lower() in prop.lower():
+                    label_w.configure(text=substring_replace(prop, search_text, replace_text) + ":")
+                if search_text.lower() in val.lower():
+                    new_val = substring_replace(val, search_text, replace_text)
+                    entry.delete(0, "end")
+                    entry.insert(0, new_val)
         self._on_form_search()
 
     def _on_form_replace_all(self):
-        """Replace values of all properties matching the search text."""
+        """Replace all matches using substring replacement."""
         search_text = self._form_search_var.get()
         replace_text = self._form_replace_var.get()
         if not search_text:
             return
         pairs = self._get_form_property_pairs()
-        count = 0
-        for prop, entry in pairs:
-            if search_text.lower() in prop.lower():
+        mode = self._form_search_mode_var.get()
+        for prop, label_w, entry in pairs:
+            val = entry.get()
+            if mode == SEARCH_PROPERTIES and search_text.lower() in prop.lower():
+                label_w.configure(text=substring_replace(prop, search_text, replace_text) + ":")
+            elif mode == SEARCH_VALUES and search_text.lower() in val.lower():
+                new_val = substring_replace(val, search_text, replace_text)
                 entry.delete(0, "end")
-                entry.insert(0, replace_text)
-                count += 1
+                entry.insert(0, new_val)
+            elif mode == SEARCH_BOTH:
+                if search_text.lower() in prop.lower():
+                    label_w.configure(text=substring_replace(prop, search_text, replace_text) + ":")
+                if search_text.lower() in val.lower():
+                    new_val = substring_replace(val, search_text, replace_text)
+                    entry.delete(0, "end")
+                    entry.insert(0, new_val)
         self._form_search_index = -1
 
     # -------------------------------------------------------------------------
@@ -2987,6 +3030,7 @@ class BuildingsView(ctk.CTkFrame):
                 continue
 
             has_recipes = cfg['recipes_name'] is not None
+            cache_recipes = {}
             try:
                 if has_recipes:
                     cache_recipes = self._load_table_data(self._get_cache_recipes_path())

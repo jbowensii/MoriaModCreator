@@ -56,6 +56,10 @@ from src.ui.secrets_import_dialog import (
     get_secrets_source_dir,
 )
 from src.ui.combined_import_dialog import show_combined_import_dialog
+from src.ui.shared_utils import (
+    SEARCH_BOTH, SEARCH_MODES, SEARCH_PROPERTIES, SEARCH_VALUES,
+    find_next_match, find_search_matches, substring_replace,
+)
 
 try:
     from tkinterdnd2 import TkinterDnD
@@ -309,6 +313,7 @@ class MainWindow(ctk.CTk, TkinterDnD.DnDWrapper if HAS_TKDND else object):
         self._card_search_entry = None
         self._card_replace_var = None
         self._card_replace_entry = None
+        self._card_search_mode_var = None
         self._card_search_index = -1
         self.card_changes = []
         self.change_cards = []
@@ -2882,6 +2887,13 @@ class MainWindow(ctk.CTk, TkinterDnD.DnDWrapper if HAS_TKDND else object):
         sr_row = ctk.CTkFrame(search_replace_frame, fg_color="transparent")
         sr_row.pack(fill="x", padx=5, pady=5)
         ctk.CTkLabel(sr_row, text="\U0001F50D", width=20).pack(side="left")
+        self._card_search_mode_var = ctk.StringVar(value=SEARCH_PROPERTIES)
+        ctk.CTkOptionMenu(
+            sr_row, variable=self._card_search_mode_var,
+            values=SEARCH_MODES, width=95, height=28,
+            font=ctk.CTkFont(size=11),
+            command=lambda _: self._on_card_search_mode_change(),
+        ).pack(side="left", padx=(2, 3))
         self._card_search_var = ctk.StringVar()
         self._card_search_entry = ctk.CTkEntry(
             sr_row, textvariable=self._card_search_var,
@@ -3341,54 +3353,57 @@ class MainWindow(ctk.CTk, TkinterDnD.DnDWrapper if HAS_TKDND else object):
             logger.error("Error saving file %s: %s", self.current_definition_path.name, e)
             self.set_status_message(f"Error saving file: {e}")
 
-    def _get_card_property_pairs(self) -> list[tuple[str, ctk.CTkEntry]]:
-        """Return (property_text, value_entry) pairs from change cards."""
-        pairs = []
+    def _get_card_property_pairs(self) -> list[tuple[str, ctk.CTkEntry, ctk.CTkEntry]]:
+        """Return (property_text, property_entry, value_entry) triples from change cards."""
+        pairs: list[tuple[str, ctk.CTkEntry, ctk.CTkEntry]] = []
         for card in self.change_cards:
             if card is None:
                 continue
             prop_text = card['property_entry'].get()
-            pairs.append((prop_text, card['value_entry']))
+            pairs.append((prop_text, card['property_entry'], card['value_entry']))
         return pairs
 
+    def _on_card_search_mode_change(self):
+        """Update placeholder text when search mode changes."""
+        mode = self._card_search_mode_var.get()
+        if mode == SEARCH_PROPERTIES:
+            self._card_search_entry.configure(placeholder_text="Search property...")
+            self._card_replace_entry.configure(placeholder_text="Replace property...")
+        elif mode == SEARCH_VALUES:
+            self._card_search_entry.configure(placeholder_text="Search value...")
+            self._card_replace_entry.configure(placeholder_text="Replace value...")
+        else:
+            self._card_search_entry.configure(placeholder_text="Search...")
+            self._card_replace_entry.configure(placeholder_text="Replace...")
+        self._card_search_index = -1
+
     def _on_card_search(self):
-        """Find and highlight the next card whose property matches the search text."""
+        """Find and highlight the next card whose property or value matches."""
         search_text = self._card_search_var.get()
         if not search_text:
             return
         pairs = self._get_card_property_pairs()
         if not pairs:
             return
-
-        # Build list of matching indices
-        matches = [
-            i for i, (prop, _) in enumerate(pairs)
-            if search_text.lower() in prop.lower()
-        ]
+        mode = self._card_search_mode_var.get()
+        pairs_text = [(prop, val_entry.get()) for prop, _pe, val_entry in pairs]
+        matches = find_search_matches(pairs_text, search_text, mode)
         if not matches:
             self.set_status_message("No matches found")
             self._card_search_index = -1
             return
-
-        # Find next match after current index
-        start = self._card_search_index + 1
-        next_match = None
-        for idx in matches:
-            if idx >= start:
-                next_match = idx
-                break
-        if next_match is None:
-            next_match = matches[0]  # wrap around
-
-        self._card_search_index = next_match
-        _, value_entry = pairs[next_match]
+        next_idx = find_next_match(matches, self._card_search_index)
+        if next_idx is None:
+            return
+        self._card_search_index = next_idx
+        _, _pe, value_entry = pairs[next_idx]
         value_entry.focus_set()
         value_entry.select_range(0, "end")
-        pos = matches.index(next_match) + 1
+        pos = matches.index(next_idx) + 1
         self.set_status_message(f"Match {pos}/{len(matches)}")
 
     def _on_card_replace(self):
-        """Replace the value of the current property match."""
+        """Replace the current match using substring replacement."""
         search_text = self._card_search_var.get()
         replace_text = self._card_replace_var.get()
         if not search_text:
@@ -3397,29 +3412,71 @@ class MainWindow(ctk.CTk, TkinterDnD.DnDWrapper if HAS_TKDND else object):
         if not pairs or self._card_search_index < 0:
             self._on_card_search()
             return
-
         idx = self._card_search_index
+        mode = self._card_search_mode_var.get()
         if idx < len(pairs):
-            prop, value_entry = pairs[idx]
-            if search_text.lower() in prop.lower():
+            prop, prop_entry, value_entry = pairs[idx]
+            val = value_entry.get()
+            replaced = False
+            if mode == SEARCH_PROPERTIES and search_text.lower() in prop.lower():
+                new_prop = substring_replace(prop, search_text, replace_text)
+                prop_entry.delete(0, "end")
+                prop_entry.insert(0, new_prop)
+                replaced = True
+            elif mode == SEARCH_VALUES and search_text.lower() in val.lower():
+                new_val = substring_replace(val, search_text, replace_text)
                 value_entry.delete(0, "end")
-                value_entry.insert(0, replace_text)
+                value_entry.insert(0, new_val)
+                replaced = True
+            elif mode == SEARCH_BOTH:
+                if search_text.lower() in prop.lower():
+                    new_prop = substring_replace(prop, search_text, replace_text)
+                    prop_entry.delete(0, "end")
+                    prop_entry.insert(0, new_prop)
+                    replaced = True
+                if search_text.lower() in val.lower():
+                    new_val = substring_replace(val, search_text, replace_text)
+                    value_entry.delete(0, "end")
+                    value_entry.insert(0, new_val)
+                    replaced = True
+            if replaced:
                 self.set_status_message("Replaced 1 match")
-        # Find next
         self._on_card_search()
 
     def _on_card_replace_all(self):
-        """Replace values of all cards whose property matches the search text."""
+        """Replace all matches using substring replacement."""
         search_text = self._card_search_var.get()
         replace_text = self._card_replace_var.get()
         if not search_text:
             return
         pairs = self._get_card_property_pairs()
+        mode = self._card_search_mode_var.get()
         count = 0
-        for prop, value_entry in pairs:
-            if search_text.lower() in prop.lower():
+        for prop, prop_entry, value_entry in pairs:
+            val = value_entry.get()
+            did_replace = False
+            if mode == SEARCH_PROPERTIES and search_text.lower() in prop.lower():
+                new_prop = substring_replace(prop, search_text, replace_text)
+                prop_entry.delete(0, "end")
+                prop_entry.insert(0, new_prop)
+                did_replace = True
+            elif mode == SEARCH_VALUES and search_text.lower() in val.lower():
+                new_val = substring_replace(val, search_text, replace_text)
                 value_entry.delete(0, "end")
-                value_entry.insert(0, replace_text)
+                value_entry.insert(0, new_val)
+                did_replace = True
+            elif mode == SEARCH_BOTH:
+                if search_text.lower() in prop.lower():
+                    new_prop = substring_replace(prop, search_text, replace_text)
+                    prop_entry.delete(0, "end")
+                    prop_entry.insert(0, new_prop)
+                    did_replace = True
+                if search_text.lower() in val.lower():
+                    new_val = substring_replace(val, search_text, replace_text)
+                    value_entry.delete(0, "end")
+                    value_entry.insert(0, new_val)
+                    did_replace = True
+            if did_replace:
                 count += 1
         self.set_status_message(f"Replaced {count} match{'es' if count != 1 else ''}")
         self._card_search_index = -1
