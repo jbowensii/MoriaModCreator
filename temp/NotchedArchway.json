@@ -1,0 +1,164 @@
+{
+  "$type": "UAssetAPI.PropertyTypes.Structs.StructPropertyData, UAssetAPI",
+  "StructType": "MorConstructionDefinition",
+  "SerializeNone": true,
+  "StructGUID": "{00000000-0000-0000-0000-000000000000}",
+  "SerializationControl": "NoExtension",
+  "Operation": "None",
+  "Name": "MereakPack_NotchedArchway_A",
+  "ArrayIndex": 0,
+  "IsZero": false,
+  "PropertyTagFlags": "None",
+  "PropertyTagExtensions": "NoExtension",
+  "Value": [
+    {
+      "$type": "UAssetAPI.PropertyTypes.Objects.TextPropertyData, UAssetAPI",
+      "Flags": 0,
+      "HistoryType": "StringTableEntry",
+      "TableId": "/Game/Mods/Tech/Data/StringTables/ST_Mod_Architecture.ST_Mod_Architecture",
+      "Namespace": null,
+      "CultureInvariantString": null,
+      "SourceFmt": null,
+      "Arguments": null,
+      "ArgumentsData": null,
+      "TransformType": "ToLower",
+      "SourceValue": null,
+      "FormatOptions": null,
+      "TargetCulture": null,
+      "Name": "DisplayName",
+      "ArrayIndex": 0,
+      "IsZero": false,
+      "PropertyTagFlags": "None",
+      "PropertyTagExtensions": "NoExtension",
+      "Value": "MereakPack_NotchedArchway_A.Name"
+    },
+    {
+      "$type": "UAssetAPI.PropertyTypes.Objects.TextPropertyData, UAssetAPI",
+      "Flags": 0,
+      "HistoryType": "StringTableEntry",
+      "TableId": "/Game/Mods/Tech/Data/StringTables/ST_Mod_Architecture.ST_Mod_Architecture",
+      "Namespace": null,
+      "CultureInvariantString": null,
+      "SourceFmt": null,
+      "Arguments": null,
+      "ArgumentsData": null,
+      "TransformType": "ToLower",
+      "SourceValue": null,
+      "FormatOptions": null,
+      "TargetCulture": null,
+      "Name": "Description",
+      "ArrayIndex": 0,
+      "IsZero": false,
+      "PropertyTagFlags": "None",
+      "PropertyTagExtensions": "NoExtension",
+      "Value": "MereakPack_NotchedArchway_A.Description"
+    },
+    {
+      "$type": "UAssetAPI.PropertyTypes.Objects.ObjectPropertyData, UAssetAPI",
+      "Name": "Icon",
+      "ArrayIndex": 0,
+      "IsZero": false,
+      "PropertyTagFlags": "None",
+      "PropertyTagExtensions": "NoExtension",
+      "Value": -1693
+    },
+    {
+      "$type": "UAssetAPI.PropertyTypes.Objects.SoftObjectPropertyData, UAssetAPI",
+      "Name": "Actor",
+      "ArrayIndex": 0,
+      "IsZero": false,
+      "PropertyTagFlags": "None",
+      "PropertyTagExtensions": "NoExtension",
+      "Value": {
+        "$type": "UAssetAPI.PropertyTypes.Objects.FSoftObjectPath, UAssetAPI",
+        "AssetPath": {
+          "$type": "UAssetAPI.PropertyTypes.Objects.FTopLevelAssetPath, UAssetAPI",
+          "PackageName": null,
+          "AssetName": "/Game/LevelDesign/Architecture/Suburbs/BP_Suburbs_Wall_Thin_Arch_B.BP_Suburbs_Wall_Thin_Arch_B_C"
+        },
+        "SubPathString": null
+      }
+    },
+    {
+      "$type": "UAssetAPI.PropertyTypes.Objects.ArrayPropertyData, UAssetAPI",
+      "ArrayType": "StructProperty",
+      "Name": "BackwardCompatibilityActors",
+      "ArrayIndex": 0,
+      "IsZero": false,
+      "PropertyTagFlags": "None",
+      "PropertyTagExtensions": "NoExtension",
+      "Value": [
+        {
+          "$type": "UAssetAPI.PropertyTypes.Structs.StructPropertyData, UAssetAPI",
+          "StructType": "SoftObjectPath",
+          "SerializeNone": true,
+          "StructGUID": "{00000000-0000-0000-0000-000000000000}",
+          "SerializationControl": "NoExtension",
+          "Operation": "None",
+          "Name": "BackwardCompatibilityActors",
+          "ArrayIndex": 0,
+          "IsZero": false,
+          "PropertyTagFlags": "None",
+          "PropertyTagExtensions": "NoExtension",
+          "Value": [
+            {
+              "$type": "UAssetAPI.PropertyTypes.Structs.SoftObjectPathPropertyData, UAssetAPI",
+              "Path": null,
+              "Name": "BackwardCompatibilityActors",
+              "ArrayIndex": 0,
+              "IsZero": false,
+              "PropertyTagFlags": "None",
+              "PropertyTagExtensions": "NoExtension",
+              "Value": {
+                "$type": "UAssetAPI.PropertyTypes.Objects.FSoftObjectPath, UAssetAPI",
+                "AssetPath": {
+                  "$type": "UAssetAPI.PropertyTypes.Objects.FTopLevelAssetPath, UAssetAPI",
+                  "PackageName": null,
+                  "AssetName": "/Game/LevelDesign/Architecture/Suburbs/BP_Suburbs_Wall_Thin_Arch_B.BP_Suburbs_Wall_Thin_Arch_B_C"
+                },
+                "SubPathString": null
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "$type": "UAssetAPI.PropertyTypes.Structs.StructPropertyData, UAssetAPI",
+      "StructType": "GameplayTagContainer",
+      "SerializeNone": true,
+      "StructGUID": "{00000000-0000-0000-0000-000000000000}",
+      "SerializationControl": "NoExtension",
+      "Operation": "None",
+      "Name": "Tags",
+      "ArrayIndex": 0,
+      "IsZero": false,
+      "PropertyTagFlags": "None",
+      "PropertyTagExtensions": "NoExtension",
+      "Value": [
+        {
+          "$type": "UAssetAPI.PropertyTypes.Structs.GameplayTagContainerPropertyData, UAssetAPI",
+          "Name": "Tags",
+          "ArrayIndex": 0,
+          "IsZero": false,
+          "PropertyTagFlags": "None",
+          "PropertyTagExtensions": "NoExtension",
+          "Value": [
+            "UI.Construction.Category.Advanced.Walls"
+          ]
+        }
+      ]
+    },
+    {
+      "$type": "UAssetAPI.PropertyTypes.Objects.EnumPropertyData, UAssetAPI",
+      "EnumType": "ERowEnabledState",
+      "InnerType": null,
+      "Name": "EnabledState",
+      "ArrayIndex": 0,
+      "IsZero": false,
+      "PropertyTagFlags": "None",
+      "PropertyTagExtensions": "NoExtension",
+      "Value": "ERowEnabledState::Live"
+    }
+  ]
+}

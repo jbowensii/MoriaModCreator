@@ -1,0 +1,647 @@
+{
+  "$type": "UAssetAPI.PropertyTypes.Structs.StructPropertyData, UAssetAPI",
+  "StructType": "MorConstructionRecipeDefinition",
+  "SerializeNone": true,
+  "StructGUID": "{00000000-0000-0000-0000-000000000000}",
+  "SerializationControl": "NoExtension",
+  "Operation": "None",
+  "Name": "MereakPack_NotchedArchway_A",
+  "ArrayIndex": 0,
+  "IsZero": false,
+  "PropertyTagFlags": "None",
+  "PropertyTagExtensions": "NoExtension",
+  "Value": [
+    {
+      "$type": "UAssetAPI.PropertyTypes.Structs.StructPropertyData, UAssetAPI",
+      "StructType": "MorConstructionRowHandle",
+      "SerializeNone": true,
+      "StructGUID": "{00000000-0000-0000-0000-000000000000}",
+      "SerializationControl": "NoExtension",
+      "Operation": "None",
+      "Name": "ResultConstructionHandle",
+      "ArrayIndex": 0,
+      "IsZero": false,
+      "PropertyTagFlags": "None",
+      "PropertyTagExtensions": "NoExtension",
+      "Value": [
+        {
+          "$type": "UAssetAPI.PropertyTypes.Objects.NamePropertyData, UAssetAPI",
+          "Name": "RowName",
+          "ArrayIndex": 0,
+          "IsZero": false,
+          "PropertyTagFlags": "None",
+          "PropertyTagExtensions": "NoExtension",
+          "Value": "MereakPack_NotchedArchway_A"
+        }
+      ]
+    },
+    {
+      "$type": "UAssetAPI.PropertyTypes.Objects.EnumPropertyData, UAssetAPI",
+      "EnumType": "EBuildProcess",
+      "InnerType": null,
+      "Name": "BuildProcess",
+      "ArrayIndex": 0,
+      "IsZero": false,
+      "PropertyTagFlags": "None",
+      "PropertyTagExtensions": "NoExtension",
+      "Value": "EBuildProcess::DualMode"
+    },
+    {
+      "$type": "UAssetAPI.PropertyTypes.Objects.EnumPropertyData, UAssetAPI",
+      "EnumType": "EConstructionLocation",
+      "InnerType": null,
+      "Name": "LocationRequirement",
+      "ArrayIndex": 0,
+      "IsZero": false,
+      "PropertyTagFlags": "None",
+      "PropertyTagExtensions": "NoExtension",
+      "Value": "EConstructionLocation::Base"
+    },
+    {
+      "$type": "UAssetAPI.PropertyTypes.Objects.EnumPropertyData, UAssetAPI",
+      "EnumType": "EPlacementType",
+      "InnerType": null,
+      "Name": "PlacementType",
+      "ArrayIndex": 0,
+      "IsZero": false,
+      "PropertyTagFlags": "None",
+      "PropertyTagExtensions": "NoExtension",
+      "Value": "EPlacementType::SnapGrid"
+    },
+    {
+      "$type": "UAssetAPI.PropertyTypes.Objects.BoolPropertyData, UAssetAPI",
+      "Name": "bOnWall",
+      "ArrayIndex": 0,
+      "IsZero": false,
+      "PropertyTagFlags": "None",
+      "PropertyTagExtensions": "NoExtension",
+      "Value": false
+    },
+    {
+      "$type": "UAssetAPI.PropertyTypes.Objects.BoolPropertyData, UAssetAPI",
+      "Name": "bOnFloor",
+      "ArrayIndex": 0,
+      "IsZero": false,
+      "PropertyTagFlags": "None",
+      "PropertyTagExtensions": "NoExtension",
+      "Value": true
+    },
+    {
+      "$type": "UAssetAPI.PropertyTypes.Objects.BoolPropertyData, UAssetAPI",
+      "Name": "bPlaceOnWater",
+      "ArrayIndex": 0,
+      "IsZero": false,
+      "PropertyTagFlags": "None",
+      "PropertyTagExtensions": "NoExtension",
+      "Value": false
+    },
+    {
+      "$type": "UAssetAPI.PropertyTypes.Objects.BoolPropertyData, UAssetAPI",
+      "Name": "bOverrideRotation",
+      "ArrayIndex": 0,
+      "IsZero": false,
+      "PropertyTagFlags": "None",
+      "PropertyTagExtensions": "NoExtension",
+      "Value": false
+    },
+    {
+      "$type": "UAssetAPI.PropertyTypes.Objects.EnumPropertyData, UAssetAPI",
+      "EnumType": "EFoundationRule",
+      "InnerType": null,
+      "Name": "FoundationRule",
+      "ArrayIndex": 0,
+      "IsZero": false,
+      "PropertyTagFlags": "None",
+      "PropertyTagExtensions": "NoExtension",
+      "Value": "EFoundationRule::Never"
+    },
+    {
+      "$type": "UAssetAPI.PropertyTypes.Objects.BoolPropertyData, UAssetAPI",
+      "Name": "bAutoFoundation",
+      "ArrayIndex": 0,
+      "IsZero": false,
+      "PropertyTagFlags": "None",
+      "PropertyTagExtensions": "NoExtension",
+      "Value": false
+    },
+    {
+      "$type": "UAssetAPI.PropertyTypes.Objects.BoolPropertyData, UAssetAPI",
+      "Name": "bInheritAutoFoundationStability",
+      "ArrayIndex": 0,
+      "IsZero": false,
+      "PropertyTagFlags": "None",
+      "PropertyTagExtensions": "NoExtension",
+      "Value": false
+    },
+    {
+      "$type": "UAssetAPI.PropertyTypes.Objects.BoolPropertyData, UAssetAPI",
+      "Name": "bAllowRefunds",
+      "ArrayIndex": 0,
+      "IsZero": false,
+      "PropertyTagFlags": "None",
+      "PropertyTagExtensions": "NoExtension",
+      "Value": true
+    },
+    {
+      "$type": "UAssetAPI.PropertyTypes.Objects.ObjectPropertyData, UAssetAPI",
+      "Name": "DialogueDataTable",
+      "ArrayIndex": 0,
+      "IsZero": false,
+      "PropertyTagFlags": "None",
+      "PropertyTagExtensions": "NoExtension",
+      "Value": 0
+    },
+    {
+      "$type": "UAssetAPI.PropertyTypes.Objects.ObjectPropertyData, UAssetAPI",
+      "Name": "RequiresNearby",
+      "ArrayIndex": 0,
+      "IsZero": false,
+      "PropertyTagFlags": "None",
+      "PropertyTagExtensions": "NoExtension",
+      "Value": 0
+    },
+    {
+      "$type": "UAssetAPI.PropertyTypes.Objects.FloatPropertyData, UAssetAPI",
+      "Value": 300.0,
+      "Name": "RequireNearbyRadius",
+      "ArrayIndex": 0,
+      "IsZero": false,
+      "PropertyTagFlags": "None",
+      "PropertyTagExtensions": "NoExtension"
+    },
+    {
+      "$type": "UAssetAPI.PropertyTypes.Objects.BoolPropertyData, UAssetAPI",
+      "Name": "bOnlyOnVoxel",
+      "ArrayIndex": 0,
+      "IsZero": false,
+      "PropertyTagFlags": "None",
+      "PropertyTagExtensions": "NoExtension",
+      "Value": false
+    },
+    {
+      "$type": "UAssetAPI.PropertyTypes.Objects.BoolPropertyData, UAssetAPI",
+      "Name": "bIsBlockedByNearbySettlementStones",
+      "ArrayIndex": 0,
+      "IsZero": false,
+      "PropertyTagFlags": "None",
+      "PropertyTagExtensions": "NoExtension",
+      "Value": false
+    },
+    {
+      "$type": "UAssetAPI.PropertyTypes.Objects.EnumPropertyData, UAssetAPI",
+      "EnumType": "EMonumentType",
+      "InnerType": null,
+      "Name": "MonumentType",
+      "ArrayIndex": 0,
+      "IsZero": false,
+      "PropertyTagFlags": "None",
+      "PropertyTagExtensions": "NoExtension",
+      "Value": "EMonumentType::None"
+    },
+    {
+      "$type": "UAssetAPI.PropertyTypes.Objects.BoolPropertyData, UAssetAPI",
+      "Name": "bIsBlockedByNearbyRavenConstructions",
+      "ArrayIndex": 0,
+      "IsZero": false,
+      "PropertyTagFlags": "None",
+      "PropertyTagExtensions": "NoExtension",
+      "Value": false
+    },
+    {
+      "$type": "UAssetAPI.PropertyTypes.Objects.FloatPropertyData, UAssetAPI",
+      "Value": -1.0,
+      "Name": "MaxAllowedPenetrationDepth",
+      "ArrayIndex": 0,
+      "IsZero": false,
+      "PropertyTagFlags": "None",
+      "PropertyTagExtensions": "NoExtension"
+    },
+    {
+      "$type": "UAssetAPI.PropertyTypes.Objects.ObjectPropertyData, UAssetAPI",
+      "Name": "CameraStateOverride",
+      "ArrayIndex": 0,
+      "IsZero": false,
+      "PropertyTagFlags": "None",
+      "PropertyTagExtensions": "NoExtension",
+      "Value": 0
+    },
+    {
+      "$type": "UAssetAPI.PropertyTypes.Objects.IntPropertyData, UAssetAPI",
+      "Name": "CameraStateOverridePriority",
+      "ArrayIndex": 0,
+      "IsZero": false,
+      "PropertyTagFlags": "None",
+      "PropertyTagExtensions": "NoExtension",
+      "Value": 5
+    },
+    {
+      "$type": "UAssetAPI.PropertyTypes.Objects.BoolPropertyData, UAssetAPI",
+      "Name": "bHasSandboxRequirementsOverride",
+      "ArrayIndex": 0,
+      "IsZero": false,
+      "PropertyTagFlags": "None",
+      "PropertyTagExtensions": "NoExtension",
+      "Value": false
+    },
+    {
+      "$type": "UAssetAPI.PropertyTypes.Objects.ArrayPropertyData, UAssetAPI",
+      "ArrayType": "StructProperty",
+      "DummyStruct": {
+        "$type": "UAssetAPI.PropertyTypes.Structs.StructPropertyData, UAssetAPI",
+        "StructType": "MorRequiredRecipeMaterial",
+        "SerializeNone": true,
+        "StructGUID": "{00000000-0000-0000-0000-000000000000}",
+        "SerializationControl": "NoExtension",
+        "Operation": "None",
+        "Name": "SandboxRequiredMaterials",
+        "ArrayIndex": 0,
+        "IsZero": false,
+        "PropertyTagFlags": "None",
+        "PropertyTagExtensions": "NoExtension",
+        "Value": []
+      },
+      "Name": "SandboxRequiredMaterials",
+      "ArrayIndex": 0,
+      "IsZero": false,
+      "PropertyTagFlags": "None",
+      "PropertyTagExtensions": "NoExtension",
+      "Value": []
+    },
+    {
+      "$type": "UAssetAPI.PropertyTypes.Objects.ArrayPropertyData, UAssetAPI",
+      "ArrayType": "StructProperty",
+      "DummyStruct": {
+        "$type": "UAssetAPI.PropertyTypes.Structs.StructPropertyData, UAssetAPI",
+        "StructType": "MorConstructionRowHandle",
+        "SerializeNone": true,
+        "StructGUID": "{00000000-0000-0000-0000-000000000000}",
+        "SerializationControl": "NoExtension",
+        "Operation": "None",
+        "Name": "SandboxRequiredConstructions",
+        "ArrayIndex": 0,
+        "IsZero": false,
+        "PropertyTagFlags": "None",
+        "PropertyTagExtensions": "NoExtension",
+        "Value": []
+      },
+      "Name": "SandboxRequiredConstructions",
+      "ArrayIndex": 0,
+      "IsZero": false,
+      "PropertyTagFlags": "None",
+      "PropertyTagExtensions": "NoExtension",
+      "Value": []
+    },
+    {
+      "$type": "UAssetAPI.PropertyTypes.Objects.ArrayPropertyData, UAssetAPI",
+      "ArrayType": "StructProperty",
+      "Name": "DefaultRequiredMaterials",
+      "ArrayIndex": 0,
+      "IsZero": false,
+      "PropertyTagFlags": "None",
+      "PropertyTagExtensions": "NoExtension",
+      "Value": [
+        {
+          "$type": "UAssetAPI.PropertyTypes.Structs.StructPropertyData, UAssetAPI",
+          "StructType": "MorRequiredRecipeMaterial",
+          "SerializeNone": true,
+          "StructGUID": "{00000000-0000-0000-0000-000000000000}",
+          "SerializationControl": "NoExtension",
+          "Operation": "None",
+          "Name": "DefaultRequiredMaterials",
+          "ArrayIndex": 0,
+          "IsZero": false,
+          "PropertyTagFlags": "None",
+          "PropertyTagExtensions": "NoExtension",
+          "Value": [
+            {
+              "$type": "UAssetAPI.PropertyTypes.Structs.StructPropertyData, UAssetAPI",
+              "StructType": "MorAnyItemRowHandle",
+              "SerializeNone": true,
+              "StructGUID": "{00000000-0000-0000-0000-000000000000}",
+              "SerializationControl": "NoExtension",
+              "Operation": "None",
+              "Name": "MaterialHandle",
+              "ArrayIndex": 0,
+              "IsZero": false,
+              "PropertyTagFlags": "None",
+              "PropertyTagExtensions": "NoExtension",
+              "Value": [
+                {
+                  "$type": "UAssetAPI.PropertyTypes.Objects.NamePropertyData, UAssetAPI",
+                  "Name": "RowName",
+                  "ArrayIndex": 0,
+                  "IsZero": false,
+                  "PropertyTagFlags": "None",
+                  "PropertyTagExtensions": "NoExtension",
+                  "Value": "Ore.Granite"
+                }
+              ]
+            },
+            {
+              "$type": "UAssetAPI.PropertyTypes.Structs.StructPropertyData, UAssetAPI",
+              "StructType": "MorCategoryTagRowHandle",
+              "SerializeNone": true,
+              "StructGUID": "{00000000-0000-0000-0000-000000000000}",
+              "SerializationControl": "NoExtension",
+              "Operation": "None",
+              "Name": "WildcardHandle",
+              "ArrayIndex": 0,
+              "IsZero": false,
+              "PropertyTagFlags": "None",
+              "PropertyTagExtensions": "NoExtension",
+              "Value": [
+                {
+                  "$type": "UAssetAPI.PropertyTypes.Objects.NamePropertyData, UAssetAPI",
+                  "Name": "RowName",
+                  "ArrayIndex": 0,
+                  "IsZero": false,
+                  "PropertyTagFlags": "None",
+                  "PropertyTagExtensions": "NoExtension",
+                  "Value": "None"
+                }
+              ]
+            },
+            {
+              "$type": "UAssetAPI.PropertyTypes.Objects.IntPropertyData, UAssetAPI",
+              "Name": "Count",
+              "ArrayIndex": 0,
+              "IsZero": false,
+              "PropertyTagFlags": "None",
+              "PropertyTagExtensions": "NoExtension",
+              "Value": 4
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "$type": "UAssetAPI.PropertyTypes.Objects.ArrayPropertyData, UAssetAPI",
+      "ArrayType": "StructProperty",
+      "DummyStruct": {
+        "$type": "UAssetAPI.PropertyTypes.Structs.StructPropertyData, UAssetAPI",
+        "StructType": "MorConstructionRowHandle",
+        "SerializeNone": true,
+        "StructGUID": "{00000000-0000-0000-0000-000000000000}",
+        "SerializationControl": "NoExtension",
+        "Operation": "None",
+        "Name": "DefaultRequiredConstructions",
+        "ArrayIndex": 0,
+        "IsZero": false,
+        "PropertyTagFlags": "None",
+        "PropertyTagExtensions": "NoExtension",
+        "Value": []
+      },
+      "Name": "DefaultRequiredConstructions",
+      "ArrayIndex": 0,
+      "IsZero": false,
+      "PropertyTagFlags": "None",
+      "PropertyTagExtensions": "NoExtension",
+      "Value": []
+    },
+    {
+      "$type": "UAssetAPI.PropertyTypes.Objects.BoolPropertyData, UAssetAPI",
+      "Name": "bHasSandboxUnlockOverride",
+      "ArrayIndex": 0,
+      "IsZero": false,
+      "PropertyTagFlags": "None",
+      "PropertyTagExtensions": "NoExtension",
+      "Value": false
+    },
+    {
+      "$type": "UAssetAPI.PropertyTypes.Structs.StructPropertyData, UAssetAPI",
+      "StructType": "MorRecipeUnlock",
+      "SerializeNone": true,
+      "StructGUID": "{00000000-0000-0000-0000-000000000000}",
+      "SerializationControl": "NoExtension",
+      "Operation": "None",
+      "Name": "SandboxUnlocks",
+      "ArrayIndex": 0,
+      "IsZero": false,
+      "PropertyTagFlags": "None",
+      "PropertyTagExtensions": "NoExtension",
+      "Value": [
+        {
+          "$type": "UAssetAPI.PropertyTypes.Objects.EnumPropertyData, UAssetAPI",
+          "EnumType": "EMorRecipeUnlockType",
+          "InnerType": null,
+          "Name": "UnlockType",
+          "ArrayIndex": 0,
+          "IsZero": false,
+          "PropertyTagFlags": "None",
+          "PropertyTagExtensions": "NoExtension",
+          "Value": "EMorRecipeUnlockType::Manual"
+        },
+        {
+          "$type": "UAssetAPI.PropertyTypes.Objects.IntPropertyData, UAssetAPI",
+          "Name": "NumFragments",
+          "ArrayIndex": 0,
+          "IsZero": false,
+          "PropertyTagFlags": "None",
+          "PropertyTagExtensions": "NoExtension",
+          "Value": 1
+        },
+        {
+          "$type": "UAssetAPI.PropertyTypes.Objects.ArrayPropertyData, UAssetAPI",
+          "ArrayType": "StructProperty",
+          "DummyStruct": {
+            "$type": "UAssetAPI.PropertyTypes.Structs.StructPropertyData, UAssetAPI",
+            "StructType": "MorRecipeFragmentRowHandle",
+            "SerializeNone": true,
+            "StructGUID": "{00000000-0000-0000-0000-000000000000}",
+            "SerializationControl": "NoExtension",
+            "Operation": "None",
+            "Name": "UnlockRequiredFragments",
+            "ArrayIndex": 0,
+            "IsZero": false,
+            "PropertyTagFlags": "None",
+            "PropertyTagExtensions": "NoExtension",
+            "Value": []
+          },
+          "Name": "UnlockRequiredFragments",
+          "ArrayIndex": 0,
+          "IsZero": false,
+          "PropertyTagFlags": "None",
+          "PropertyTagExtensions": "NoExtension",
+          "Value": []
+        },
+        {
+          "$type": "UAssetAPI.PropertyTypes.Objects.ArrayPropertyData, UAssetAPI",
+          "ArrayType": "StructProperty",
+          "DummyStruct": {
+            "$type": "UAssetAPI.PropertyTypes.Structs.StructPropertyData, UAssetAPI",
+            "StructType": "MorAnyItemRowHandle",
+            "SerializeNone": true,
+            "StructGUID": "{00000000-0000-0000-0000-000000000000}",
+            "SerializationControl": "NoExtension",
+            "Operation": "None",
+            "Name": "UnlockRequiredItems",
+            "ArrayIndex": 0,
+            "IsZero": false,
+            "PropertyTagFlags": "None",
+            "PropertyTagExtensions": "NoExtension",
+            "Value": []
+          },
+          "Name": "UnlockRequiredItems",
+          "ArrayIndex": 0,
+          "IsZero": false,
+          "PropertyTagFlags": "None",
+          "PropertyTagExtensions": "NoExtension",
+          "Value": []
+        },
+        {
+          "$type": "UAssetAPI.PropertyTypes.Objects.ArrayPropertyData, UAssetAPI",
+          "ArrayType": "StructProperty",
+          "DummyStruct": {
+            "$type": "UAssetAPI.PropertyTypes.Structs.StructPropertyData, UAssetAPI",
+            "StructType": "MorConstructionRowHandle",
+            "SerializeNone": true,
+            "StructGUID": "{00000000-0000-0000-0000-000000000000}",
+            "SerializationControl": "NoExtension",
+            "Operation": "None",
+            "Name": "UnlockRequiredConstructions",
+            "ArrayIndex": 0,
+            "IsZero": false,
+            "PropertyTagFlags": "None",
+            "PropertyTagExtensions": "NoExtension",
+            "Value": []
+          },
+          "Name": "UnlockRequiredConstructions",
+          "ArrayIndex": 0,
+          "IsZero": false,
+          "PropertyTagFlags": "None",
+          "PropertyTagExtensions": "NoExtension",
+          "Value": []
+        }
+      ]
+    },
+    {
+      "$type": "UAssetAPI.PropertyTypes.Structs.StructPropertyData, UAssetAPI",
+      "StructType": "MorRecipeUnlock",
+      "SerializeNone": true,
+      "StructGUID": "{00000000-0000-0000-0000-000000000000}",
+      "SerializationControl": "NoExtension",
+      "Operation": "None",
+      "Name": "DefaultUnlocks",
+      "ArrayIndex": 0,
+      "IsZero": false,
+      "PropertyTagFlags": "None",
+      "PropertyTagExtensions": "NoExtension",
+      "Value": [
+        {
+          "$type": "UAssetAPI.PropertyTypes.Objects.EnumPropertyData, UAssetAPI",
+          "EnumType": "EMorRecipeUnlockType",
+          "InnerType": null,
+          "Name": "UnlockType",
+          "ArrayIndex": 0,
+          "IsZero": false,
+          "PropertyTagFlags": "None",
+          "PropertyTagExtensions": "NoExtension",
+          "Value": "EMorRecipeUnlockType::DiscoverDependencies"
+        },
+        {
+          "$type": "UAssetAPI.PropertyTypes.Objects.IntPropertyData, UAssetAPI",
+          "Name": "NumFragments",
+          "ArrayIndex": 0,
+          "IsZero": false,
+          "PropertyTagFlags": "None",
+          "PropertyTagExtensions": "NoExtension",
+          "Value": 1
+        },
+        {
+          "$type": "UAssetAPI.PropertyTypes.Objects.ArrayPropertyData, UAssetAPI",
+          "ArrayType": "StructProperty",
+          "DummyStruct": {
+            "$type": "UAssetAPI.PropertyTypes.Structs.StructPropertyData, UAssetAPI",
+            "StructType": "MorRecipeFragmentRowHandle",
+            "SerializeNone": true,
+            "StructGUID": "{00000000-0000-0000-0000-000000000000}",
+            "SerializationControl": "NoExtension",
+            "Operation": "None",
+            "Name": "UnlockRequiredFragments",
+            "ArrayIndex": 0,
+            "IsZero": false,
+            "PropertyTagFlags": "None",
+            "PropertyTagExtensions": "NoExtension",
+            "Value": []
+          },
+          "Name": "UnlockRequiredFragments",
+          "ArrayIndex": 0,
+          "IsZero": false,
+          "PropertyTagFlags": "None",
+          "PropertyTagExtensions": "NoExtension",
+          "Value": []
+        },
+        {
+          "$type": "UAssetAPI.PropertyTypes.Objects.ArrayPropertyData, UAssetAPI",
+          "ArrayType": "StructProperty",
+          "Name": "UnlockRequiredItems",
+          "ArrayIndex": 0,
+          "IsZero": false,
+          "PropertyTagFlags": "None",
+          "PropertyTagExtensions": "NoExtension",
+          "Value": [
+            {
+              "$type": "UAssetAPI.PropertyTypes.Structs.StructPropertyData, UAssetAPI",
+              "StructType": "MorAnyItemRowHandle",
+              "SerializeNone": true,
+              "StructGUID": "{00000000-0000-0000-0000-000000000000}",
+              "SerializationControl": "NoExtension",
+              "Operation": "None",
+              "Name": "UnlockRequiredItems",
+              "ArrayIndex": 0,
+              "IsZero": false,
+              "PropertyTagFlags": "None",
+              "PropertyTagExtensions": "NoExtension",
+              "Value": [
+                {
+                  "$type": "UAssetAPI.PropertyTypes.Objects.NamePropertyData, UAssetAPI",
+                  "Name": "RowName",
+                  "ArrayIndex": 0,
+                  "IsZero": false,
+                  "PropertyTagFlags": "None",
+                  "PropertyTagExtensions": "NoExtension",
+                  "Value": "Tool.Restoration_Hammer_Gunmetal"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "$type": "UAssetAPI.PropertyTypes.Objects.ArrayPropertyData, UAssetAPI",
+          "ArrayType": "StructProperty",
+          "DummyStruct": {
+            "$type": "UAssetAPI.PropertyTypes.Structs.StructPropertyData, UAssetAPI",
+            "StructType": "MorConstructionRowHandle",
+            "SerializeNone": true,
+            "StructGUID": "{00000000-0000-0000-0000-000000000000}",
+            "SerializationControl": "NoExtension",
+            "Operation": "None",
+            "Name": "UnlockRequiredConstructions",
+            "ArrayIndex": 0,
+            "IsZero": false,
+            "PropertyTagFlags": "None",
+            "PropertyTagExtensions": "NoExtension",
+            "Value": []
+          },
+          "Name": "UnlockRequiredConstructions",
+          "ArrayIndex": 0,
+          "IsZero": false,
+          "PropertyTagFlags": "None",
+          "PropertyTagExtensions": "NoExtension",
+          "Value": []
+        }
+      ]
+    },
+    {
+      "$type": "UAssetAPI.PropertyTypes.Objects.EnumPropertyData, UAssetAPI",
+      "EnumType": "ERowEnabledState",
+      "InnerType": null,
+      "Name": "EnabledState",
+      "ArrayIndex": 0,
+      "IsZero": false,
+      "PropertyTagFlags": "None",
+      "PropertyTagExtensions": "NoExtension",
+      "Value": "ERowEnabledState::Live"
+    }
+  ]
+}
