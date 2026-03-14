@@ -361,13 +361,56 @@ def generate_def_xml(diffs, mod_path, title, author, description,
 
 
 def _detect_category(mod_file_path: str) -> str:
-    """Determine the Definitions category folder from the mod file path.
+    """Determine the Definitions category folder from the DT filename.
 
-    Uses the last directory component before the filename.
-    E.g. ``Moria\\Content\\Items\\Effects\\DT_ItemTint.json`` → ``Effects``
+    Extracts the category from the DataTable filename itself (e.g.
+    ``DT_Storage.json`` → ``Storage``, ``DT_Items.json`` → ``Items``).
+    Falls back to the parent directory name if no DT_ prefix is found.
     """
-    normalized = mod_file_path.replace("/", "\\")
-    parts = [p for p in normalized.split("\\") if p]
+    # Extract the filename (without extension)
+    normalized = mod_file_path.replace("\\", "/")
+    filename = normalized.rsplit("/", 1)[-1]
+    basename = filename.rsplit(".", 1)[0]  # strip .json
+
+    # Known DT filename → category mappings
+    _CATEGORY_MAP = {
+        "DT_Armor": "Items",
+        "DT_Consumables": "Items",
+        "DT_ConstructionRecipes": "Building",
+        "DT_Constructions": "Building",
+        "DT_ConstructionStabilities": "Building",
+        "DT_Items": "Items",
+        "DT_ItemRecipes": "Items",
+        "DT_ItemTint": "Effects",
+        "DT_Loot": "Loot",
+        "DT_MonumentData": "Monuments",
+        "DT_Moria_Flora": "Flora",
+        "DT_Ores": "Items",
+        "DT_RecipeBundles": "Trade",
+        "DT_SettlementLevelData": "Settlement",
+        "DT_Storage": "Storage",
+        "DT_Tools": "Items",
+        "DT_TradeGoods": "Trade",
+        "DT_Weapons": "Items",
+        "DT_WorldLevelData": "Settlement",
+    }
+
+    # Check exact match first, then prefix match for variants like
+    # DT_ItemTint_EnabledState → DT_ItemTint → Effects
+    if basename in _CATEGORY_MAP:
+        return _CATEGORY_MAP[basename]
+    for prefix, category in _CATEGORY_MAP.items():
+        if basename.startswith(prefix):
+            return category
+
+    # Fallback: if filename starts with GE_ or Curve_, use Buffs
+    if basename.startswith("GE_") or basename.startswith("Curve_"):
+        return "Buffs"
+    if basename.startswith("Properties_"):
+        return "Ores"
+
+    # Last resort: parent directory name
+    parts = [p for p in normalized.split("/") if p]
     if len(parts) >= 2:
         return parts[-2]
     return "Misc"
