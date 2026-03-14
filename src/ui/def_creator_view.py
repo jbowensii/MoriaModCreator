@@ -790,7 +790,7 @@ class DefCreatorView(ctk.CTkFrame):
 
         file_stem = Path(json_filename).stem
 
-        # Step 1: Extract .uasset from game paks using retoc
+        # Step 1: Extract .uasset from base game paks only (exclude DLC subdirectories)
         self._log(f"  [IMPORT] Extracting {file_stem} from game files...")
         kwargs = {}
         if os.name == "nt":
@@ -798,7 +798,23 @@ class DefCreatorView(ctk.CTkFrame):
                 subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0x08000000
             )
 
-        cmd = f'"{retoc_exe}" to-legacy --version {RETOC_UE_VERSION} --filter "{file_stem}" "{paks_path}" "{retoc_dir}"'
+        # Copy only base game paks to temp dir so retoc doesn't pick up DLC paks
+        game_paks_temp = tempfile.mkdtemp(prefix="game_paks_")
+        try:
+            for ext in (".pak", ".ucas", ".utoc"):
+                src = paks_path / f"Moria-WindowsNoEditor{ext}"
+                if src.exists():
+                    shutil.copy2(str(src), game_paks_temp)
+            for gname in ("global.ucas", "global.utoc"):
+                src = paks_path / gname
+                if src.exists():
+                    shutil.copy2(str(src), game_paks_temp)
+        except OSError as e:
+            self._log(f"  [ERROR] Failed to copy base game paks: {e}")
+            shutil.rmtree(game_paks_temp, ignore_errors=True)
+            return None
+
+        cmd = f'"{retoc_exe}" to-legacy --version {RETOC_UE_VERSION} --filter "{file_stem}" "{game_paks_temp}" "{retoc_dir}"'
         try:
             result = subprocess.run(
                 cmd, capture_output=True, text=True, encoding="utf-8",
@@ -813,6 +829,8 @@ class DefCreatorView(ctk.CTkFrame):
         except OSError as e:
             self._log(f"  [ERROR] retoc error for {file_stem}: {e}")
             return None
+        finally:
+            shutil.rmtree(game_paks_temp, ignore_errors=True)
 
         # Step 2: Find the extracted .uasset file
         extracted = list(retoc_dir.rglob(f"{file_stem}.uasset"))

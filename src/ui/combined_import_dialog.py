@@ -332,15 +332,34 @@ class CombinedImportDialog(ctk.CTkToplevel):
 
         # --- Phase 2: (directories already cleared in upfront cleanup) ---
 
-        # --- Phase 3: extract ---
+        # --- Phase 3: extract base game files only (exclude DLC subdirectories) ---
         logger.info("Part 1 Phase 3: Extracting %d game files with retoc", len(files_to_import))
         q.put(("title", "Extracting Game Files"))
         q.put(("status", f"Extracting {len(files_to_import)} game files..."))
         total = len(files_to_import)
         ok_count = 0
 
+        # Copy only base game paks to a temp dir so retoc doesn't pick up DLC paks
+        game_paks_temp = tempfile.mkdtemp(prefix="game_paks_")
+        try:
+            for ext in (".pak", ".ucas", ".utoc"):
+                src = paks_path / f"Moria-WindowsNoEditor{ext}"
+                if src.exists():
+                    shutil.copy2(str(src), game_paks_temp)
+            for name_g in ("global.ucas", "global.utoc"):
+                src = paks_path / name_g
+                if src.exists():
+                    shutil.copy2(str(src), game_paks_temp)
+            logger.info("Copied base game paks to temp dir (excluding DLC)")
+        except OSError as e:
+            logger.error("Failed to copy base game paks: %s", e)
+            q.put(("error", f"Failed to copy base game paks: {e}"))
+            shutil.rmtree(game_paks_temp, ignore_errors=True)
+            return False
+
         for i, fp in enumerate(files_to_import):
             if self.cancelled:
+                shutil.rmtree(game_paks_temp, ignore_errors=True)
                 return False
             name = Path(fp).stem
             display = name if len(name) <= 50 else name[:47] + "..."
@@ -350,7 +369,7 @@ class CombinedImportDialog(ctk.CTkToplevel):
 
             cmd = (
                 f'"{retoc_exe}" to-legacy --version UE4_27 '
-                f'--filter "{name}" "{paks_path}" "{retoc_output}"'
+                f'--filter "{name}" "{game_paks_temp}" "{retoc_output}"'
             )
             try:
                 result = subprocess.run(
@@ -375,6 +394,7 @@ class CombinedImportDialog(ctk.CTkToplevel):
             except (subprocess.TimeoutExpired, OSError) as e:
                 logger.warning("Extract error %s: %s", fp, e)
 
+        shutil.rmtree(game_paks_temp, ignore_errors=True)
         logger.info("Part 1 Phase 3 complete: %d of %d extracted", ok_count, total)
         q.put(("progress", 1.0))
         q.put(("status", f"Extracted {ok_count} of {total} files"))
