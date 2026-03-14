@@ -235,10 +235,6 @@ def extract_other_zip_files(secrets_dir: Path) -> list[tuple[str, int]]:
     zip_files = list(secrets_dir.glob("*.zip"))
 
     for zip_path in zip_files:
-        # Skip the GitHub ZIP file
-        if zip_path.name == GITHUB_ZIP_FILENAME:
-            continue
-
         # Create a subdirectory named after the ZIP (minus .zip)
         extract_dir = secrets_dir / zip_path.stem
 
@@ -505,7 +501,7 @@ class SecretsImportDialog(ctk.CTkToplevel):
                 return
 
             # Step 4: Extract any other ZIP files in Secrets Source
-            other_zips = [z for z in secrets_dir.glob("*.zip") if z.name != GITHUB_ZIP_FILENAME]
+            other_zips = list(secrets_dir.glob("*.zip"))
             if other_zips:
                 self.update_queue.put(("status", f"Extracting {len(other_zips)} additional ZIP file(s)..."))
                 zip_results = extract_other_zip_files(secrets_dir)

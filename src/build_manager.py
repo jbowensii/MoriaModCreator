@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Callable
 
 from src.config import get_appdata_dir, get_output_dir, get_default_mymodfiles_dir, get_utilities_dir, get_final_destination_dir
+from src.ui.import_dialog import merge_secrets_rows
 from src.constants import (
     UE_VERSION,
     RETOC_UE_VERSION,
@@ -277,9 +278,16 @@ class BuildManager:  # pylint: disable=too-few-public-methods
 
                 dest_file = mymodfiles_dir / normalized_path
                 dest_file.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(source_file, dest_file)
+
+                if dest_file.exists():
+                    # Merge new secrets rows into the existing game file
+                    merged = merge_secrets_rows(dest_file, source_file, dest_file)
+                    logger.info("Phase B: Merged %d new rows into: %s", merged, normalized_path)
+                else:
+                    # No game file — just copy the secrets file
+                    shutil.copy2(source_file, dest_file)
+                    logger.info("Phase B: Copied new secrets file: %s", normalized_path)
                 file_count += 1
-                logger.info("Phase B: Overlaid secrets file: %s", normalized_path)
 
             logger.info("Phase B: Copied %d files from secrets manifest", file_count)
 
@@ -385,7 +393,7 @@ class BuildManager:  # pylint: disable=too-few-public-methods
                     if item_name == 'NONE':
                         continue
 
-                    if property_path in ('ExcludeItems', 'AllowedItems') and value_to_delete:
+                    if property_path and value_to_delete:
                         logger.info(
                             "  DELETE: item=%s prop=%s value=%s",
                             item_name, property_path, value_to_delete
@@ -412,7 +420,7 @@ class BuildManager:  # pylint: disable=too-few-public-methods
                         item_name, property_path, new_value
                     )
 
-                    if property_path in ('ExcludeItems', 'AllowedItems'):
+                    if self._is_gameplay_tag_container(json_data, item_name, property_path):
                         if item_name == 'NONE':
                             continue
                         original_tag = change.get('original', '')
@@ -801,6 +809,40 @@ class BuildManager:  # pylint: disable=too-few-public-methods
                 return new_value
         return new_value
 
+    def _is_gameplay_tag_container(
+        self,
+        json_data: dict,
+        item_name: str,
+        property_name: str
+    ) -> bool:
+        """Check if a property is a GameplayTagContainer by inspecting the JSON structure."""
+        try:
+            items = json_data['Exports'][0]['Table']['Data']
+        except (KeyError, IndexError, TypeError):
+            return False
+
+        for item in items:
+            if item.get('Name') != item_name:
+                continue
+            for prop in item.get('Value', []):
+                if prop.get('Name') != property_name:
+                    continue
+                # Check if it's a struct with GameplayTagContainer type,
+                # or directly a GameplayTagContainerPropertyData
+                t = prop.get('$type', '')
+                if 'GameplayTagContainer' in t:
+                    return True
+                if prop.get('StructType') == 'GameplayTagContainer':
+                    return True
+                # Check inner Value for GameplayTagContainerPropertyData
+                outer = prop.get('Value', [])
+                if isinstance(outer, list) and outer:
+                    inner = outer[0] if isinstance(outer[0], dict) else None
+                    if inner and 'GameplayTagContainer' in inner.get('$type', ''):
+                        return True
+            break
+        return False
+
     def _remove_gameplay_tag(
         self,
         json_data: dict,
@@ -1131,9 +1173,6 @@ class BuildManager:  # pylint: disable=too-few-public-methods
 
         target_files = {
             'SecretsOfKhazadDum_Localization_P.pak',
-            'TobiModsAddons_P.pak',
-            'TobiModsAddons_P.ucas',
-            'TobiModsAddons_P.utoc',
         }
 
         mymodfiles_base = get_default_mymodfiles_dir() / mod_name

@@ -48,13 +48,8 @@ from src.ui.about_dialog import show_about_dialog
 from src.ui.buildings_view import BuildingsView
 from src.ui.constructions_view import ConstructionsView
 from src.ui.def_creator_view import DefCreatorView
-from src.ui.import_dialog import show_import_dialog
+from src.ui.object_editor_view import ObjectEditorView
 from src.ui.mod_name_dialog import show_mod_name_dialog
-from src.ui.secrets_import_dialog import (
-    show_secrets_import_dialog,
-    show_secrets_download_dialog,
-    get_secrets_source_dir,
-)
 from src.ui.combined_import_dialog import show_combined_import_dialog
 from src.ui.shared_utils import (
     SEARCH_BOTH, SEARCH_MODES, SEARCH_PROPERTIES, SEARCH_VALUES,
@@ -258,9 +253,9 @@ class MainWindow(ctk.CTk, TkinterDnD.DnDWrapper if HAS_TKDND else object):
         self._current_mod_name = None
         self.left_select_all_var = None  # BooleanVar for left pane select all
         self.buildings_view = None
+        self.object_editor_view = None
         self.definitions_view_frame = None
         self.buildings_btn = None
-        self.secrets_btn = None
         self.novice_view_frame = None
         self.novice_mod_vars = {}  # {ini_stem: BooleanVar}
         self.novice_mod_name_var = None
@@ -329,7 +324,6 @@ class MainWindow(ctk.CTk, TkinterDnD.DnDWrapper if HAS_TKDND else object):
 
         # Navigation buttons (initialized in _create_header)
         self.mod_builder_btn = None
-        self.import_btn = None
         self.convert_btn = None
 
         self._create_widgets()
@@ -441,6 +435,20 @@ class MainWindow(ctk.CTk, TkinterDnD.DnDWrapper if HAS_TKDND else object):
         )
         self.buildings_btn.pack(side="left", padx=5)
 
+        # Create/Edit Secret button (between Secrets and Constructions)
+        self.object_editor_btn = ctk.CTkButton(
+            center_frame,
+            text="Create/Edit Secret",
+            width=150,
+            height=40,
+            fg_color=("gray70", "gray30"),
+            hover_color=("gray60", "gray40"),
+            font=ctk.CTkFont(size=13, weight="bold"),
+            corner_radius=8,
+            command=self._show_object_editor_view,
+        )
+        self.object_editor_btn.pack(side="left", padx=5)
+
         # Constructions button
         self.constructions_btn = ctk.CTkButton(
             center_frame,
@@ -474,33 +482,7 @@ class MainWindow(ctk.CTk, TkinterDnD.DnDWrapper if HAS_TKDND else object):
             center_frame, text="|", text_color="gray50", font=ctk.CTkFont(size=20)
         )
 
-        # Import Game Files button (Advanced mode only)
-        self.import_btn = ctk.CTkButton(
-            center_frame,
-            text="Import Game Files",
-            width=140,
-            height=40,
-            fg_color=("#2E7D32", "#1B5E20"),
-            hover_color=("#1B5E20", "#0D3610"),
-            font=ctk.CTkFont(size=13, weight="bold"),
-            corner_radius=8,
-            command=self._run_import
-        )
-
-        # Import Secrets button (Advanced mode only)
-        self.secrets_btn = ctk.CTkButton(
-            center_frame,
-            text="Import Secrets",
-            width=150,
-            height=40,
-            fg_color=("#F57C00", "#E65100"),
-            hover_color=("#E65100", "#BF360C"),
-            font=ctk.CTkFont(size=13, weight="bold"),
-            corner_radius=8,
-            command=self._run_secrets_import
-        )
-
-        # Combined Import button (Novice mode only)
+        # Import button (both modes)
         self.combined_import_btn = ctk.CTkButton(
             center_frame,
             text="Import",
@@ -604,6 +586,14 @@ class MainWindow(ctk.CTk, TkinterDnD.DnDWrapper if HAS_TKDND else object):
             on_back=self._show_definitions_view
         )
         # Don't grid it yet - will be shown when Create DEF button is clicked
+
+        # === OBJECT EDITOR VIEW (hidden initially) ===
+        self.object_editor_view = ObjectEditorView(
+            self.main_area,
+            on_status_message=self.set_status_message,
+            on_back=self._show_definitions_view
+        )
+        # Don't grid it yet - will be shown when Create/Edit Object button is clicked
 
         # Apply initial view based on default mode
         self._apply_view_mode(self.ui_mode_var.get())
@@ -4198,59 +4188,6 @@ class MainWindow(ctk.CTk, TkinterDnD.DnDWrapper if HAS_TKDND else object):
         # Store tooltip reference for future tooltip implementation
         # tooltip_text = tooltip  # For future use
 
-    def _run_import(self):
-        """Run the retoc import and JSON conversion process."""
-        logger.info("Opening import dialog")
-        show_import_dialog(self)
-
-    def _has_secrets_zip(self) -> bool:
-        """Check if any non-GitHub ZIP files exist in Secrets Source."""
-        secrets_dir = get_secrets_source_dir()
-        if not secrets_dir.exists():
-            return False
-        from src.ui.secrets_import_dialog import GITHUB_ZIP_FILENAME  # pylint: disable=import-outside-toplevel
-        return any(
-            z.name != GITHUB_ZIP_FILENAME
-            for z in secrets_dir.glob("*.zip")
-        )
-
-    def _update_secrets_btn_state(self):
-        """Enable or disable the Import Secrets button based on ZIP availability."""
-        if self._has_secrets_zip():
-            self.secrets_btn.configure(
-                state="normal",
-                fg_color=("#F57C00", "#E65100"),
-            )
-        else:
-            self.secrets_btn.configure(
-                state="normal",
-                fg_color=("gray60", "gray40"),
-            )
-
-    def _run_secrets_import(self):
-        """Run the Secrets Source import process, always prompting for fresh download."""
-        logger.info("Running secrets import")
-        # Always remove old non-GitHub ZIPs so user provides fresh file each time
-        self._clear_secrets_zips()
-        show_secrets_download_dialog(self, on_file_added=self._update_secrets_btn_state)
-        # After download dialog closes, auto-proceed if ZIP now exists
-        if not self._has_secrets_zip():
-            return
-        show_secrets_import_dialog(self)
-        self._update_secrets_btn_state()
-
-    def _clear_secrets_zips(self):
-        """Remove ALL ZIP files from Secrets Source so user must provide fresh copy."""
-        secrets_dir = get_secrets_source_dir()
-        if not secrets_dir.exists():
-            return
-        for z in secrets_dir.glob("*.zip"):
-            try:
-                z.unlink()
-                logger.info("Removed ZIP: %s", z.name)
-            except OSError as e:
-                logger.warning("Could not remove %s: %s", z.name, e)
-
     def _on_ui_mode_changed(self, mode: str):
         """Handle UI mode toggle between Novice and Advanced.
 
@@ -4302,9 +4239,8 @@ class MainWindow(ctk.CTk, TkinterDnD.DnDWrapper if HAS_TKDND else object):
         self.buildings_btn.pack_forget()
         self.constructions_btn.pack_forget()
         self.def_creator_btn.pack_forget()
+        self.object_editor_btn.pack_forget()
         self.toolbar_sep.pack_forget()
-        self.import_btn.pack_forget()
-        self.secrets_btn.pack_forget()
         self.combined_import_btn.pack_forget()
 
         if mode == "Novice":
@@ -4314,15 +4250,16 @@ class MainWindow(ctk.CTk, TkinterDnD.DnDWrapper if HAS_TKDND else object):
             # Show nav buttons, separator, and combined import button
             self.mod_builder_btn.pack(side="left", padx=5)
             self.buildings_btn.pack(side="left", padx=5)
+            self.object_editor_btn.pack(side="left", padx=5)
             self.constructions_btn.pack(side="left", padx=5)
             self.def_creator_btn.pack(side="left", padx=5)
             self.toolbar_sep.pack(side="left", padx=10)
             self.combined_import_btn.pack(side="left", padx=5)
 
     def _run_combined_import(self):
-        """Run the combined import process (Novice mode)."""
-        logger.info("Opening combined import dialog (Novice mode)")
-        show_combined_import_dialog(self, on_secrets_btn_update=self._update_secrets_btn_state)
+        """Run the combined import process."""
+        logger.info("Opening combined import dialog")
+        show_combined_import_dialog(self)
 
     def _open_settings(self):
         """Open the settings/configuration dialog."""
@@ -4450,6 +4387,8 @@ class MainWindow(ctk.CTk, TkinterDnD.DnDWrapper if HAS_TKDND else object):
             self.constructions_view.grid_forget()
         if self.def_creator_view:
             self.def_creator_view.grid_forget()
+        if self.object_editor_view:
+            self.object_editor_view.grid_forget()
 
     def _reset_nav_buttons(self):
         """Reset all navigation buttons to inactive state."""
@@ -4462,6 +4401,8 @@ class MainWindow(ctk.CTk, TkinterDnD.DnDWrapper if HAS_TKDND else object):
             self.constructions_btn.configure(fg_color=inactive)
         if self.def_creator_btn:
             self.def_creator_btn.configure(fg_color=inactive)
+        if self.object_editor_btn:
+            self.object_editor_btn.configure(fg_color=inactive)
 
     def _show_buildings_view(self):
         """
@@ -4530,6 +4471,28 @@ class MainWindow(ctk.CTk, TkinterDnD.DnDWrapper if HAS_TKDND else object):
             self.def_creator_btn.configure(fg_color=("#3B8ED0", "#1F6AA5"))
 
         self.set_status_message("Create DEF view active")
+
+    def _show_object_editor_view(self):
+        """Switch to the Create/Edit Object view.
+
+        If already in object_editor view, toggles back to definitions view.
+        """
+        if self.current_view == "object_editor":
+            self._show_definitions_view()
+            return
+
+        logger.debug("Switching to Create/Edit Object view")
+        self.current_view = "object_editor"
+        self._hide_all_views()
+
+        if self.object_editor_view:
+            self.object_editor_view.grid(row=0, column=0, columnspan=2, sticky="nsew")
+
+        self._reset_nav_buttons()
+        if self.object_editor_btn:
+            self.object_editor_btn.configure(fg_color=("#3B8ED0", "#1F6AA5"))
+
+        self.set_status_message("Create/Edit Object view active")
 
     def _show_definitions_view(self):
         """Switch back to the Mod Builder view."""

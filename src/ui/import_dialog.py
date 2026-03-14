@@ -1,46 +1,22 @@
-"""Import dialog for running retoc to import game files and convert to JSON.
+"""Import helpers for scanning .def files and converting game assets to JSON.
 
-This module scans all .def files in the Definitions directory to find
-which game files are actually needed. It also checks for an optional
-includes.xml file in the Definitions directory for additional files to import.
-It then uses retoc to extract those specific files from the game (silently
-skipping any that don't exist), and finally converts them to JSON using UAssetGUI.
+This module provides helper functions used by the combined import dialog to:
+- Scan .def files and includes.xml for game file paths to import
+- Convert .uasset files to JSON using UAssetGUI
+
+The actual import UI is in combined_import_dialog.py.
 """
 
+import json
 import logging
-import shutil
 import subprocess
-import threading
-import queue
 import xml.etree.ElementTree as ET
 from pathlib import Path
-try:
-    from concurrent.futures import ThreadPoolExecutor, as_completed
-except ImportError:
-    ThreadPoolExecutor = None
-    as_completed = None
 
-import customtkinter as ctk
-
-from src.config import get_utilities_dir, get_output_dir, get_game_install_path, get_appdata_dir, get_max_workers
-from src.ui.shared_utils import (
-    get_retoc_dir, get_jsondata_dir, get_files_to_convert, update_buildings_ini_from_json,
-)
+from src.config import get_appdata_dir
 
 
 logger = logging.getLogger(__name__)
-
-
-def check_retoc_output_exists() -> bool:
-    """Check if retoc output directory exists and has files."""
-    retoc_dir = get_output_dir() / "retoc"
-    if not retoc_dir.exists():
-        return False
-    # Check if directory has any files
-    try:
-        return any(retoc_dir.iterdir())
-    except OSError:
-        return False
 
 
 def scan_def_files_for_mod_paths() -> set[str]:
@@ -241,362 +217,132 @@ def convert_file_to_json(
         return (False, f"Error: {source_file.name} - {str(e)}")
 
 
-class ImportDialog(ctk.CTkToplevel):
-    """Dialog showing progress of game file import and conversion."""
+def strip_duplicate_rows(
+    secrets_json_path: Path,
+    game_json_path: Path,
+) -> tuple[int, int]:
+    """Remove DataTable rows from secrets JSON that exist in the game JSON.
 
-    def __init__(self, parent: ctk.CTk):
-        super().__init__(parent)
-
-        self.title("Moria MOD Creator - Importing Game Files")
-        self.geometry("550x220")
-        self.resizable(False, False)
-
-        # Make this dialog modal
-        self.transient(parent)
-        self.grab_set()
-
-        # Set application icon
-        icon_path = Path(__file__).parent.parent.parent / "assets" / "icons" / "application icons" / "app_icon.ico"
-        if icon_path.exists():
-            self.after(10, lambda: self.iconbitmap(str(icon_path)))
-
-        # Center the dialog on screen
-        self.update_idletasks()
-        x = (self.winfo_screenwidth() - 550) // 2
-        y = (self.winfo_screenheight() - 220) // 2
-        self.geometry(f"550x220+{x}+{y}")
-
-        # Result tracking
-        self.result = False
-        self.cancelled = False
-        self.import_thread = None
-        self.update_queue = queue.Queue()
-
-        self._create_widgets()
-
-        # Handle window close button
-        self.protocol("WM_DELETE_WINDOW", self._on_cancel)
-
-        # Start import automatically
-        self.after(100, self._start_import)
-
-    def _create_widgets(self):
-        """Create the dialog widgets."""
-        # Main frame with padding
-        main_frame = ctk.CTkFrame(self, fg_color="transparent")
-        main_frame.pack(fill="both", expand=True, padx=20, pady=20)
-
-        # Title
-        self.title_label = ctk.CTkLabel(
-            main_frame,
-            text="Importing Game Files",
-            font=ctk.CTkFont(size=16, weight="bold")
-        )
-        self.title_label.pack(pady=(0, 10))
-
-        # Status message
-        self.status_label = ctk.CTkLabel(
-            main_frame,
-            text="Scanning .def files for required game files...",
-            font=ctk.CTkFont(size=12)
-        )
-        self.status_label.pack(pady=(0, 5))
-
-        # Current file label
-        self.file_label = ctk.CTkLabel(
-            main_frame,
-            text="",
-            font=ctk.CTkFont(size=10),
-            text_color="gray"
-        )
-        self.file_label.pack(pady=(0, 10))
-
-        # Progress bar
-        self.progress = ctk.CTkProgressBar(main_frame, mode="determinate", width=450)
-        self.progress.pack(pady=(0, 10))
-        self.progress.set(0)
-
-        # Progress count label
-        self.count_label = ctk.CTkLabel(
-            main_frame,
-            text="",
-            font=ctk.CTkFont(size=11)
-        )
-        self.count_label.pack(pady=(0, 10))
-
-        # Cancel button
-        self.cancel_btn = ctk.CTkButton(
-            main_frame,
-            text="Cancel",
-            command=self._on_cancel,
-            fg_color="#dc3545",
-            hover_color="#c82333",
-            width=100
-        )
-        self.cancel_btn.pack()
-
-    def _start_import(self):
-        """Start the import process in a background thread."""
-        logger.info("Import dialog opened, starting import process")
-        self.import_thread = threading.Thread(target=self._run_import_and_convert, daemon=True)
-        self.import_thread.start()
-        self._check_queue()
-
-    def _check_queue(self):
-        """Check the update queue for progress updates."""
-        try:
-            while True:
-                msg_type, data = self.update_queue.get_nowait()
-
-                if msg_type == "title":
-                    self.title_label.configure(text=data)
-                elif msg_type == "status":
-                    self.status_label.configure(text=data)
-                elif msg_type == "file":
-                    self.file_label.configure(text=data)
-                elif msg_type == "progress":
-                    self.progress.set(data)
-                elif msg_type == "count":
-                    self.count_label.configure(text=data)
-                elif msg_type == "done":
-                    self.result = data
-                    self._show_close_button()
-                    return
-                elif msg_type == "error":
-                    self.status_label.configure(text=data, text_color="red")
-
-        except queue.Empty:
-            pass
-
-        if not self.cancelled:
-            self.after(100, self._check_queue)
-
-    def _run_import_and_convert(self):
-        """Run the full import and conversion process."""
-        try:
-            utilities_dir = get_utilities_dir()
-            game_path = get_game_install_path()
-            max_workers = get_max_workers()
-
-            # Check prerequisites
-            if not game_path:
-                logger.error("Game install path not configured")
-                self.update_queue.put(("error", "Game install path not configured"))
-                self.update_queue.put(("done", False))
-                return
-
-            retoc_exe = utilities_dir / "retoc.exe"
-            uassetgui_exe = utilities_dir / "UAssetGUI.exe"
-            retoc_output = get_retoc_dir()
-            jsondata_output = get_jsondata_dir()
-
-            if not retoc_exe.exists():
-                logger.error("retoc.exe not found at %s", retoc_exe)
-                self.update_queue.put(("error", "retoc.exe not found in utilities folder"))
-                self.update_queue.put(("done", False))
-                return
-
-            if not uassetgui_exe.exists():
-                logger.error("UAssetGUI.exe not found at %s", uassetgui_exe)
-                self.update_queue.put(("error", "UAssetGUI.exe not found in utilities folder"))
-                self.update_queue.put(("done", False))
-                return
-
-            paks_path = Path(game_path) / "Moria" / "Content" / "Paks"
-            if not paks_path.exists():
-                logger.error("Paks directory not found at %s", paks_path)
-                self.update_queue.put(("error", f"Paks directory not found at {paks_path}"))
-                self.update_queue.put(("done", False))
-                return
-
-            # ========== PHASE 1: SCAN .DEF FILES ==========
-            logger.info("Phase 1: Scanning .def files for required game files")
-            self.update_queue.put(("status", "Scanning .def files for required game files..."))
-            files_to_import = get_game_file_paths_to_import()
-
-            if not files_to_import:
-                logger.warning("No files to import - no .def files found")
-                self.update_queue.put(("status", "No files to import - no .def files found"))
-                self.update_queue.put(("done", True))
-                return
-
-            logger.info("Found %d game files to import", len(files_to_import))
-            self.update_queue.put(("status", f"Found {len(files_to_import)} game files to import"))
-
-            if self.cancelled:
-                self.update_queue.put(("done", False))
-                return
-
-            # ========== PHASE 2: CLEAR DIRECTORIES ==========
-            logger.info("Phase 2: Clearing output directories")
-            self.update_queue.put(("status", "Clearing output directories..."))
-
-            if retoc_output.exists():
-                shutil.rmtree(retoc_output, ignore_errors=True)
-            retoc_output.mkdir(parents=True, exist_ok=True)
-
-            if jsondata_output.exists():
-                shutil.rmtree(jsondata_output, ignore_errors=True)
-            jsondata_output.mkdir(parents=True, exist_ok=True)
-
-            if self.cancelled:
-                self.update_queue.put(("done", False))
-                return
-
-            # ========== PHASE 3: EXTRACT WITH RETOC ==========
-            logger.info("Phase 3: Extracting %d game files with retoc", len(files_to_import))
-            self.update_queue.put(("title", "Extracting Game Files"))
-            self.update_queue.put(("status", f"Extracting {len(files_to_import)} game files..."))
-            total_files = len(files_to_import)
-            import_success = 0
-            import_errors = 0
-
-            for i, file_path in enumerate(files_to_import):
-                if self.cancelled:
-                    self.update_queue.put(("done", False))
-                    return
-
-                file_name = Path(file_path).stem
-
-                # Truncate for display
-                display_name = file_name if len(file_name) <= 50 else file_name[:47] + "..."
-                self.update_queue.put(("file", display_name))
-                self.update_queue.put(("progress", i / total_files))
-                self.update_queue.put(("count", f"Extracting {i + 1} / {total_files}"))
-
-                cmd = f'"{retoc_exe}" to-legacy --version UE4_27 --filter "{file_name}" "{paks_path}" "{retoc_output}"'
-
-                try:
-                    result = subprocess.run(
-                        cmd,
-                        capture_output=True,
-                        text=True,
-                        encoding='utf-8',
-                        errors='replace',
-                        timeout=120,
-                        shell=True,
-                        check=False,
-                        creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0
-                    )
-
-                    if result.returncode == 0:
-                        import_success += 1
-                    else:
-                        import_errors += 1
-                        logger.warning("Failed to extract %s: %s", file_path, result.stderr)
-
-                except subprocess.TimeoutExpired:
-                    import_errors += 1
-                    logger.error("Timeout extracting %s", file_path)
-                except OSError as e:
-                    import_errors += 1
-                    logger.warning("Error extracting %s: %s", file_path, e)
-
-            logger.info("Phase 3 complete: %d extracted, %d errors", import_success, import_errors)
-            self.update_queue.put(("progress", 1.0))
-            self.update_queue.put(("status", f"Extracted {import_success} files ({import_errors} errors)"))
-
-            if self.cancelled:
-                self.update_queue.put(("done", False))
-                return
-
-            # ========== PHASE 4: CONVERT TO JSON ==========
-            logger.info("Phase 4: Converting extracted files to JSON")
-            self.update_queue.put(("title", "Converting to JSON"))
-            self.update_queue.put(("status", "Scanning for files to convert..."))
-            self.update_queue.put(("progress", 0))
-
-            uasset_files = get_files_to_convert()
-            total_convert = len(uasset_files)
-
-            if total_convert == 0:
-                logger.warning("No files found to convert after extraction")
-                self.update_queue.put(("status", "No files to convert"))
-                self.update_queue.put(("done", True))
-                return
-
-            logger.info("Converting %d files using %d workers", total_convert, max_workers)
-            self.update_queue.put(("status", f"Converting {total_convert} files using {max_workers} workers..."))
-
-            converted = 0
-            convert_errors = 0
-
-            with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                futures = {
-                    executor.submit(
-                        convert_file_to_json,
-                        uassetgui_exe,
-                        f,
-                        retoc_output,
-                        jsondata_output
-                    ): f for f in uasset_files
-                }
-
-                for future in as_completed(futures):
-                    if self.cancelled:
-                        executor.shutdown(wait=False, cancel_futures=True)
-                        self.update_queue.put(("done", False))
-                        return
-
-                    success, _ = future.result()
-                    if success:
-                        converted += 1
-                    else:
-                        convert_errors += 1
-
-                    self.update_queue.put(("progress", (converted + convert_errors) / total_convert))
-                    self.update_queue.put(("count", f"Converted {converted} / {total_convert} ({convert_errors} errors)"))
-
-            logger.info("Phase 4 complete: %d converted, %d errors", converted, convert_errors)
-
-            # ========== PHASE 5: UPDATE BUILDINGS CACHE ==========
-            logger.info("Phase 5: Updating buildings cache")
-            self.update_queue.put(("status", "Updating buildings cache..."))
-            ini_success, ini_message = update_buildings_ini_from_json()
-
-            if ini_success:
-                logger.info("Buildings cache updated: %s", ini_message)
-                self.update_queue.put(("status", f"Complete! {converted} files converted. {ini_message}"))
-            else:
-                logger.warning("Buildings cache update failed: %s", ini_message)
-                self.update_queue.put(("status", f"Complete! {converted} files converted."))
-
-            logger.info("Import process completed successfully")
-            self.update_queue.put(("file", ""))
-            self.update_queue.put(("progress", 1.0))
-            self.update_queue.put(("done", True))
-
-        except OSError as e:
-            logger.exception("Import/convert error")
-            self.update_queue.put(("error", f"Error: {str(e)}"))
-            self.update_queue.put(("done", False))
-
-    def _show_close_button(self):
-        """Update the cancel button to a close button."""
-        self.cancel_btn.configure(
-            text="Close",
-            fg_color=("#2E7D32", "#1B5E20"),
-            hover_color=("#1B5E20", "#0D3610"),
-            command=self.destroy
-        )
-        self.protocol("WM_DELETE_WINDOW", self.destroy)
-
-    def _on_cancel(self):
-        """Handle cancel button click."""
-        logger.info("Import cancelled by user")
-        self.cancelled = True
-        self.status_label.configure(text="Cancelling...")
-
-
-def show_import_dialog(parent: ctk.CTk) -> bool:
-    """Show the import dialog and wait for it to close.
+    Matches rows by their Name field. Modifies the secrets file in-place.
 
     Args:
-        parent: The parent window.
+        secrets_json_path: Path to the secrets mod JSON file
+        game_json_path: Path to the game's version of the same JSON file
 
     Returns:
-        True if import succeeded, False otherwise.
+        Tuple of (rows_removed, rows_remaining)
     """
-    dialog = ImportDialog(parent)
-    parent.wait_window(dialog)
-    return dialog.result
+    try:
+        with open(secrets_json_path, 'r', encoding='utf-8') as f:
+            secrets_data = json.load(f)
+        with open(game_json_path, 'r', encoding='utf-8') as f:
+            game_data = json.load(f)
+    except (json.JSONDecodeError, OSError) as e:
+        logger.warning("Failed to load JSON for comparison: %s", e)
+        return (0, 0)
+
+    exports = secrets_data.get("Exports", [])
+    game_exports = game_data.get("Exports", [])
+    total_removed = 0
+    total_remaining = 0
+
+    for idx, export in enumerate(exports):
+        table = export.get("Table")
+        if not table or "Data" not in table:
+            continue
+
+        # Find matching game export by index
+        game_export = game_exports[idx] if idx < len(game_exports) else None
+        if not game_export:
+            continue
+        game_table = game_export.get("Table")
+        if not game_table or "Data" not in game_table:
+            continue
+
+        # Build set of game row names
+        game_row_names = {
+            row.get("Name") for row in game_table["Data"]
+            if isinstance(row, dict) and "Name" in row
+        }
+
+        # Filter secrets rows — keep only those NOT in the game
+        original_rows = table["Data"]
+        filtered_rows = [
+            row for row in original_rows
+            if not isinstance(row, dict) or row.get("Name") not in game_row_names
+        ]
+
+        removed = len(original_rows) - len(filtered_rows)
+        total_removed += removed
+        total_remaining += len(filtered_rows)
+        table["Data"] = filtered_rows
+
+    if total_removed > 0:
+        with open(secrets_json_path, 'w', encoding='utf-8') as f:
+            json.dump(secrets_data, f, indent=2, ensure_ascii=False)
+
+    return (total_removed, total_remaining)
+
+
+def merge_secrets_rows(
+    game_json_path: Path,
+    secrets_json_path: Path,
+    dest_json_path: Path,
+) -> int:
+    """Merge new secrets rows into a game JSON file.
+
+    For DataTable files: appends rows from secrets that don't exist in game.
+    For non-DataTable files: copies secrets file as-is.
+
+    Args:
+        game_json_path: Path to the game's JSON file (already in build dir)
+        secrets_json_path: Path to the secrets mod JSON file (new rows only)
+        dest_json_path: Path to write the merged output
+
+    Returns:
+        Number of rows merged (0 if non-DataTable or file copy)
+    """
+    try:
+        with open(game_json_path, 'r', encoding='utf-8') as f:
+            game_data = json.load(f)
+        with open(secrets_json_path, 'r', encoding='utf-8') as f:
+            secrets_data = json.load(f)
+    except (json.JSONDecodeError, OSError) as e:
+        logger.warning("Failed to load JSON for merge: %s", e)
+        return 0
+
+    game_exports = game_data.get("Exports", [])
+    secrets_exports = secrets_data.get("Exports", [])
+    total_merged = 0
+
+    for idx, secrets_export in enumerate(secrets_exports):
+        secrets_table = secrets_export.get("Table")
+        if not secrets_table or "Data" not in secrets_table:
+            continue
+
+        # Find matching game export by index
+        game_export = game_exports[idx] if idx < len(game_exports) else None
+        if not game_export:
+            continue
+        game_table = game_export.get("Table")
+        if not game_table or "Data" not in game_table:
+            continue
+
+        # Build set of existing game row names to avoid duplicates
+        existing_names = {
+            row.get("Name") for row in game_table["Data"]
+            if isinstance(row, dict) and "Name" in row
+        }
+
+        # Append secrets rows that don't already exist in game
+        for row in secrets_table["Data"]:
+            if isinstance(row, dict) and row.get("Name") not in existing_names:
+                game_table["Data"].append(row)
+                total_merged += 1
+
+    # Write merged result (game data with appended secrets rows)
+    dest_json_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(dest_json_path, 'w', encoding='utf-8') as f:
+        json.dump(game_data, f, indent=2, ensure_ascii=False)
+
+    return total_merged

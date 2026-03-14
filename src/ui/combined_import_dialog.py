@@ -1,13 +1,14 @@
-"""Combined import dialog for Novice mode.
+"""Combined import dialog.
 
 Chains the game-file import (retoc extract + JSON conversion) with
-the secrets import (download GitHub repo, extract ZIPs, generate manifest)
+the secrets import (IoStore extraction, JSON conversion, manifest generation)
 into a single seamless flow with continuous progress.
 """
 
 import logging
 import shutil
 import subprocess
+import tempfile
 import threading
 import queue
 from pathlib import Path
@@ -26,7 +27,9 @@ from src.config import (
     get_game_install_path,
     get_max_workers,
 )
+from src.constants import RETOC_EXE, RETOC_UE_VERSION, UASSETGUI_EXE
 from src.ui.shared_utils import (
+    UASSET_EXTENSIONS,
     get_retoc_dir,
     get_jsondata_dir,
     get_files_to_convert,
@@ -35,15 +38,16 @@ from src.ui.shared_utils import (
 from src.ui.import_dialog import (
     get_game_file_paths_to_import,
     convert_file_to_json,
+    strip_duplicate_rows,
 )
 from src.ui.secrets_import_dialog import (
     get_secrets_source_dir,
-    download_github_repo,
-    extract_moria_from_github_zip,
+    # download_github_repo,        # Commented out — GitHub flow replaced by IoStore extraction
+    # extract_moria_from_github_zip,
     extract_other_zip_files,
     generate_secrets_manifest,
     clear_all_directories_in_secrets_source,
-    GITHUB_ZIP_FILENAME,
+    # GITHUB_ZIP_FILENAME,
     show_secrets_download_dialog,
 )
 
@@ -54,7 +58,7 @@ logger = logging.getLogger(__name__)
 class CombinedImportDialog(ctk.CTkToplevel):
     """Dialog that runs game-file import then secrets import in one flow."""
 
-    def __init__(self, parent: ctk.CTk, on_secrets_btn_update=None):
+    def __init__(self, parent: ctk.CTk):
         super().__init__(parent)
 
         self.title("Moria MOD Creator - Import")
@@ -62,8 +66,6 @@ class CombinedImportDialog(ctk.CTkToplevel):
         self.resizable(False, False)
         self.transient(parent)
         self.grab_set()
-
-        self.on_secrets_btn_update = on_secrets_btn_update
 
         # Set application icon
         icon_path = (
@@ -248,14 +250,24 @@ class CombinedImportDialog(ctk.CTkToplevel):
         # 3. Secrets Source (dirs + stale files, keep .zip/.def/.ini)
         secrets_dir = get_secrets_source_dir()
         if secrets_dir.exists():
-            # Remove ALL ZIPs (GitHub ZIP gets re-downloaded fresh)
+            # Remove ALL ZIPs
             for z in secrets_dir.glob("*.zip"):
                 try:
                     z.unlink()
                     logger.info("Removed ZIP: %s", z.name)
                 except OSError:
                     pass
-            # Clear subdirectories
+            # Clear retoc output from secrets extraction
+            secrets_retoc = secrets_dir / "retoc"
+            if secrets_retoc.exists():
+                shutil.rmtree(secrets_retoc, ignore_errors=True)
+                logger.info("Cleared Secrets Source/retoc")
+            # Clear jsondata output from secrets conversion
+            secrets_jsondata = secrets_dir / "jsondata"
+            if secrets_jsondata.exists():
+                shutil.rmtree(secrets_jsondata, ignore_errors=True)
+                logger.info("Cleared Secrets Source/jsondata")
+            # Clear subdirectories (extracted mod files)
             cleaned = clear_all_directories_in_secrets_source()
             logger.info("Cleared Secrets Source: %d items", cleaned)
 
@@ -427,26 +439,32 @@ class CombinedImportDialog(ctk.CTkToplevel):
     # ------------------------------------------------------------------
 
     def _part2_import_secrets(self):
-        """Download, extract, and manifest the Secrets Source data."""
+        """Extract IoStore mod, convert to JSON, and generate manifest."""
         q = self.update_queue
         secrets_dir = get_secrets_source_dir()
 
-        # Always remove old non-GitHub ZIPs so user provides a fresh copy each time
+        # Remove old ZIPs so user provides a fresh copy each time
         if secrets_dir.exists():
             for z in secrets_dir.glob("*.zip"):
-                if z.name != GITHUB_ZIP_FILENAME:
-                    try:
-                        z.unlink()
-                        logger.info("Removed old secrets ZIP: %s", z.name)
-                    except OSError as e:
-                        logger.warning("Could not remove %s: %s", z.name, e)
+                try:
+                    z.unlink()
+                    logger.info("Removed old secrets ZIP: %s", z.name)
+                except OSError as e:
+                    logger.warning("Could not remove %s: %s", z.name, e)
 
         # Always prompt user to download/provide the latest Secrets ZIP
         logger.info("Prompting user for Secrets ZIP")
         q.put(("need_secrets_zip", None))
 
     def _run_secrets_pipeline(self, secrets_dir: Path):
-        """Execute the secrets pipeline (runs in background thread)."""
+        """Execute the secrets pipeline (runs in background thread).
+
+        Steps:
+        1. Extract user-provided ZIPs into subdirectories
+        2. IoStore extraction — retoc to-legacy on each mod's .pak/.ucas/.utoc
+        3. JSON conversion — parallel UAssetGUI tojson on extracted .uasset files
+        4. Generate secrets manifest from all converted JSON files
+        """
         q = self.update_queue
 
         def _cancel_cleanup():
@@ -457,7 +475,6 @@ class CombinedImportDialog(ctk.CTkToplevel):
             q.put(("status", "Cancelled — directories reset"))
             q.put(("done", False))
 
-        # Step 1: (directories already cleared in upfront cleanup)
         q.put(("title", "Importing Secrets"))
         q.put(("progress", 0))
         q.put(("file", ""))
@@ -466,48 +483,12 @@ class CombinedImportDialog(ctk.CTkToplevel):
             _cancel_cleanup()
             return
 
-        # Step 2: download GitHub repo
-        logger.info("Secrets pipeline step 2: Downloading from GitHub")
-        q.put(("status", "Downloading from GitHub..."))
-        ok, msg = download_github_repo(
-            secrets_dir,
-            progress_callback=lambda m: q.put(("file", m)),
-        )
-        if not ok:
-            logger.error("GitHub download failed: %s", msg)
-            q.put(("error", f"Download failed: {msg}"))
-            q.put(("done", False))
-            return
-        logger.info("GitHub download complete")
-        q.put(("progress", 0.5))
-        if self.cancelled:
-            _cancel_cleanup()
-            return
-
-        # Step 3: extract GitHub ZIP → jsondata
-        logger.info("Secrets pipeline step 3: Extracting Moria data to jsondata")
-        q.put(("status", "Extracting Moria data to jsondata..."))
-        ok, msg, file_count = extract_moria_from_github_zip(secrets_dir)
-        if not ok:
-            logger.error("GitHub ZIP extraction failed: %s", msg)
-            q.put(("error", f"Extract failed: {msg}"))
-            q.put(("done", False))
-            return
-        logger.info("Extracted %d files from GitHub ZIP", file_count)
-        q.put(("file", msg))
-        q.put(("progress", 0.7))
-        if self.cancelled:
-            _cancel_cleanup()
-            return
-
-        # Step 4: extract other ZIP files
-        logger.info("Secrets pipeline step 4: Extracting additional ZIP files")
-        other_zips = [
-            z for z in secrets_dir.glob("*.zip") if z.name != GITHUB_ZIP_FILENAME
-        ]
-        if other_zips:
-            logger.info("Found %d additional ZIP file(s) to extract", len(other_zips))
-            q.put(("status", f"Extracting {len(other_zips)} additional ZIP file(s)..."))
+        # --- Step 1: Extract user ZIP files ---
+        logger.info("Secrets pipeline step 1: Extracting ZIP files")
+        all_zips = list(secrets_dir.glob("*.zip"))
+        if all_zips:
+            logger.info("Found %d ZIP file(s) to extract", len(all_zips))
+            q.put(("status", f"Extracting {len(all_zips)} ZIP file(s)..."))
             zip_results = extract_other_zip_files(secrets_dir)
             for zip_name, count in zip_results:
                 if count >= 0:
@@ -517,21 +498,276 @@ class CombinedImportDialog(ctk.CTkToplevel):
                     logger.error("Failed to extract %s", zip_name)
                     q.put(("file", f"Failed to extract {zip_name}"))
         else:
-            logger.debug("No additional ZIP files found")
-        q.put(("progress", 0.9))
+            logger.debug("No ZIP files found")
+        q.put(("progress", 0.05))
         if self.cancelled:
             _cancel_cleanup()
             return
 
-        # Step 5: manifest
-        logger.info("Secrets pipeline step 5: Generating secrets manifest")
+        # --- Step 2: IoStore extraction (retoc to-legacy) ---
+        logger.info("Secrets pipeline step 2: IoStore extraction")
+        q.put(("status", "Extracting IoStore mod files..."))
+
+        secrets_retoc_dir = secrets_dir / "retoc"
+        secrets_retoc_dir.mkdir(parents=True, exist_ok=True)
+
+        utils_dir = get_utilities_dir()
+        retoc_exe = utils_dir / RETOC_EXE
+        if not retoc_exe.exists():
+            logger.error("retoc.exe not found at %s", retoc_exe)
+            q.put(("error", f"retoc.exe not found at {retoc_exe}"))
+            q.put(("done", False))
+            return
+
+        # Get game Paks path for global.ucas/global.utoc
+        game_path = get_game_install_path()
+        paks_path = Path(game_path) / "Moria" / "Content" / "Paks" if game_path else None
+        if not paks_path or not paks_path.exists():
+            logger.error("Game Paks directory not found: %s", paks_path)
+            q.put(("error", "Game Paks directory not found — configure game path in Settings"))
+            q.put(("done", False))
+            return
+
+        global_ucas = paks_path / "global.ucas"
+        global_utoc = paks_path / "global.utoc"
+        if not global_ucas.exists() or not global_utoc.exists():
+            logger.error("global.ucas/global.utoc not found in %s", paks_path)
+            q.put(("error", "global.ucas/global.utoc not found in game Paks directory"))
+            q.put(("done", False))
+            return
+
+        # Find all IoStore mods in extracted subdirectories
+        utoc_files = []
+        for subdir in secrets_dir.iterdir():
+            if subdir.is_dir() and subdir.name not in ("retoc", "jsondata"):
+                utoc_files.extend(subdir.glob("*.utoc"))
+
+        if not utoc_files:
+            logger.warning("No IoStore mod files (.utoc) found in extracted directories")
+            q.put(("status", "No IoStore mod files found"))
+            q.put(("progress", 0.45))
+        else:
+            total_mods = len(utoc_files)
+            logger.info("Found %d IoStore mod(s) to extract", total_mods)
+            extracted_count = 0
+
+            for i, utoc_file in enumerate(utoc_files):
+                if self.cancelled:
+                    _cancel_cleanup()
+                    return
+
+                stem = utoc_file.stem
+                mod_dir = utoc_file.parent
+                q.put(("file", f"Extracting {stem} ({i + 1}/{total_mods})..."))
+
+                # Create temp dir with mod files + global files
+                temp_paks = tempfile.mkdtemp(prefix="secrets_paks_")
+                try:
+                    # Copy matching mod files (.pak, .ucas, .utoc with same stem)
+                    for ext in (".pak", ".ucas", ".utoc"):
+                        src = mod_dir / (stem + ext)
+                        if src.exists():
+                            shutil.copy2(str(src), temp_paks)
+                            logger.debug("Copied %s to temp dir", src.name)
+
+                    # Copy global files for name resolution
+                    shutil.copy2(str(global_ucas), temp_paks)
+                    shutil.copy2(str(global_utoc), temp_paks)
+
+                    # Run retoc to-legacy (no filter — extract ALL)
+                    cmd = (
+                        f'"{retoc_exe}" to-legacy --version {RETOC_UE_VERSION} '
+                        f'"{temp_paks}" "{secrets_retoc_dir}"'
+                    )
+                    logger.info("Running retoc: %s", cmd)
+                    result = subprocess.run(
+                        cmd, shell=True, capture_output=True, text=True,
+                        encoding='utf-8', errors='replace', timeout=300,
+                        creationflags=subprocess.CREATE_NO_WINDOW
+                        if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0,
+                    )
+                    if result.returncode == 0:
+                        extracted_count += 1
+                        logger.info("Successfully extracted IoStore mod: %s", stem)
+                    else:
+                        logger.error("retoc failed for %s: %s", stem,
+                                     result.stderr.strip() if result.stderr else "Unknown error")
+                        q.put(("file", f"Failed to extract {stem}"))
+
+                except subprocess.TimeoutExpired:
+                    logger.error("retoc timed out for %s", stem)
+                    q.put(("file", f"Timeout extracting {stem}"))
+                except OSError as e:
+                    logger.error("Error extracting %s: %s", stem, e)
+                    q.put(("file", f"Error extracting {stem}: {e}"))
+                finally:
+                    shutil.rmtree(temp_paks, ignore_errors=True)
+
+                q.put(("progress", 0.05 + 0.40 * (i + 1) / total_mods))
+
+            logger.info("IoStore extraction complete: %d/%d mods extracted",
+                         extracted_count, total_mods)
+
+        if self.cancelled:
+            _cancel_cleanup()
+            return
+
+        # --- Step 3: Convert extracted .uasset files to JSON ---
+        logger.info("Secrets pipeline step 3: Converting to JSON")
+        q.put(("title", "Converting Secrets to JSON"))
+        q.put(("status", "Scanning for extracted files..."))
+
+        secrets_jsondata_dir = secrets_dir / "jsondata"
+        secrets_jsondata_dir.mkdir(parents=True, exist_ok=True)
+
+        uassetgui_exe = utils_dir / UASSETGUI_EXE
+        if not uassetgui_exe.exists():
+            logger.error("UAssetGUI.exe not found at %s", uassetgui_exe)
+            q.put(("error", f"UAssetGUI.exe not found at {uassetgui_exe}"))
+            q.put(("done", False))
+            return
+
+        # Find all .uasset files in secrets retoc output
+        uasset_files = []
+        if secrets_retoc_dir.exists():
+            for ext in UASSET_EXTENSIONS:
+                uasset_files.extend(secrets_retoc_dir.rglob(f"*{ext}"))
+
+        total_c = len(uasset_files)
+        if total_c == 0:
+            logger.warning("No .uasset files found in Secrets Source/retoc/")
+            q.put(("status", "No files to convert"))
+            q.put(("progress", 0.70))
+        else:
+            max_workers = get_max_workers()
+            logger.info("Converting %d secrets files using %d workers", total_c, max_workers)
+            q.put(("status", f"Converting {total_c} files using {max_workers} workers..."))
+            converted = 0
+            errors = 0
+
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                futures = {
+                    executor.submit(
+                        convert_file_to_json,
+                        uassetgui_exe,
+                        f,
+                        secrets_retoc_dir,
+                        secrets_jsondata_dir,
+                    ): f
+                    for f in uasset_files
+                }
+                for future in as_completed(futures):
+                    if self.cancelled:
+                        executor.shutdown(wait=True, cancel_futures=True)
+                        _cancel_cleanup()
+                        return
+                    success, _ = future.result()
+                    if success:
+                        converted += 1
+                    else:
+                        errors += 1
+                    q.put(("progress", 0.45 + 0.25 * (converted + errors) / total_c))
+                    q.put(("count", f"Converted {converted} / {total_c} ({errors} errors)"))
+
+            logger.info("Secrets JSON conversion complete: %d converted, %d errors",
+                         converted, errors)
+
+        if self.cancelled:
+            _cancel_cleanup()
+            return
+
+        # --- Step 3a: Cross-reference secrets retoc against game files ---
+        logger.info("Secrets pipeline step 3a: Cross-referencing with game files")
+        q.put(("title", "Cross-Referencing Game Files"))
+        q.put(("status", "Checking for missing game JSON files..."))
+
+        game_retoc_dir = get_retoc_dir()
+        game_jsondata_dir = get_jsondata_dir()
+        crossref_converted = 0
+
+        if secrets_retoc_dir.exists() and game_retoc_dir.exists():
+            for secrets_uasset in secrets_retoc_dir.rglob("*.uasset"):
+                rel_path = secrets_uasset.relative_to(secrets_retoc_dir)
+                game_retoc_file = game_retoc_dir / rel_path
+                game_json_file = game_jsondata_dir / rel_path.with_suffix(".json")
+
+                if game_retoc_file.exists() and not game_json_file.exists():
+                    success, msg = convert_file_to_json(
+                        uassetgui_exe, game_retoc_file,
+                        game_retoc_dir, game_jsondata_dir,
+                    )
+                    if success:
+                        crossref_converted += 1
+                        logger.info("Cross-ref converted: %s", rel_path)
+                    else:
+                        logger.warning("Cross-ref failed: %s", msg)
+
+        if crossref_converted > 0:
+            q.put(("file", f"Converted {crossref_converted} missing game file(s)"))
+        q.put(("progress", 0.75))
+
+        if self.cancelled:
+            _cancel_cleanup()
+            return
+
+        # --- Step 3b: Strip duplicate rows from secrets JSON ---
+        logger.info("Secrets pipeline step 3b: Stripping duplicate rows")
+        q.put(("title", "Stripping Duplicate Rows"))
+        q.put(("status", "Comparing secrets to game data..."))
+
+        secrets_json_files = list(secrets_jsondata_dir.rglob("*.json")) if secrets_jsondata_dir.exists() else []
+        total_stripped = 0
+        total_new_rows = 0
+        files_stripped = 0
+
+        for i, secrets_json in enumerate(secrets_json_files):
+            if self.cancelled:
+                _cancel_cleanup()
+                return
+
+            rel_path = secrets_json.relative_to(secrets_jsondata_dir)
+            game_json = game_jsondata_dir / rel_path
+
+            if not game_json.exists():
+                logger.debug("No game file for %s — keeping as-is (new file)", rel_path)
+                continue
+
+            removed, remaining = strip_duplicate_rows(secrets_json, game_json)
+            if removed > 0:
+                files_stripped += 1
+                total_stripped += removed
+                total_new_rows += remaining
+                logger.info("Stripped %d duplicate rows from %s, %d new rows remain",
+                            removed, rel_path, remaining)
+                q.put(("file", f"Stripped {removed} rows from {rel_path.name} ({remaining} new)"))
+
+            if secrets_json_files:
+                q.put(("progress", 0.75 + 0.15 * (i + 1) / len(secrets_json_files)))
+
+        if files_stripped > 0:
+            logger.info("Duplicate stripping complete: %d rows removed from %d files, %d new rows total",
+                         total_stripped, files_stripped, total_new_rows)
+            q.put(("status", f"Stripped {total_stripped} duplicate rows from {files_stripped} files"))
+        else:
+            logger.info("No duplicate rows found in secrets JSON files")
+        q.put(("progress", 0.90))
+
+        if self.cancelled:
+            _cancel_cleanup()
+            return
+
+        # --- Step 4: Generate manifest ---
+        logger.info("Secrets pipeline step 4: Generating secrets manifest")
         q.put(("status", "Generating secrets manifest..."))
         manifest_count, _ = generate_secrets_manifest(secrets_dir)
         logger.info("Secrets manifest generated with %d entries", manifest_count)
         q.put(("file", f"Manifest: {manifest_count} entries"))
         q.put(("progress", 1.0))
-        logger.info("Combined import completed: %d secret files, %d manifest entries", file_count, manifest_count)
-        q.put(("status", f"Import complete! {file_count} secret files, {manifest_count} manifest entries"))
+
+        json_count = len(uasset_files) if uasset_files else 0
+        logger.info("Combined import completed: %d files converted, %d manifest entries",
+                     json_count, manifest_count)
+        q.put(("status", f"Import complete! {json_count} files converted, {manifest_count} manifest entries"))
         q.put(("done", True))
 
     # ------------------------------------------------------------------
@@ -543,18 +779,13 @@ class CombinedImportDialog(ctk.CTkToplevel):
         # Temporarily release grab so the child dialog can work
         self.grab_release()
 
-        def _on_zip_added():
-            if self.on_secrets_btn_update:
-                self.on_secrets_btn_update()
-
-        show_secrets_download_dialog(self, on_file_added=_on_zip_added)
+        show_secrets_download_dialog(self)
 
         # Re-grab and check whether a ZIP appeared
         self.grab_set()
         secrets_dir = get_secrets_source_dir()
         has_zip = any(
-            z.name != GITHUB_ZIP_FILENAME
-            for z in secrets_dir.glob("*.zip")
+            secrets_dir.glob("*.zip")
         ) if secrets_dir.exists() else False
 
         if has_zip:
@@ -596,16 +827,15 @@ class CombinedImportDialog(ctk.CTkToplevel):
         self.status_label.configure(text="Cancelling (waiting for current work to finish)...")
 
 
-def show_combined_import_dialog(parent, on_secrets_btn_update=None) -> bool:
+def show_combined_import_dialog(parent) -> bool:
     """Show the combined import dialog and wait for it to close.
 
     Args:
         parent: Parent window.
-        on_secrets_btn_update: Callback to update secrets button state.
 
     Returns:
         True if import succeeded.
     """
-    dialog = CombinedImportDialog(parent, on_secrets_btn_update=on_secrets_btn_update)
+    dialog = CombinedImportDialog(parent)
     parent.wait_window(dialog)
     return dialog.result

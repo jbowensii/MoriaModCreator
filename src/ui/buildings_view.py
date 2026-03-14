@@ -6006,12 +6006,9 @@ class BuildingsView(ctk.CTkFrame):
     def _load_secrets_buildings(self):
         """Load building recipes from Secrets mod, showing only mod-added items.
 
-        Shows items that exist in BOTH:
-        - New recipes (in Secret Recipe but not in Game Recipe)
-        - New constructions (in Secret Constructions but not in Game Constructions)
-
-        This ensures we only show complete building definitions with both
-        a recipe and a construction entry. All operations use cached copies.
+        Shows items that exist in BOTH secrets recipes AND secrets constructions.
+        Duplicate game rows are already stripped during import (strip_duplicate_rows),
+        so we only need to cross-reference the two secret tables.
         """
         logger.debug("Switching to buildings view mode")
         self.view_mode = 'buildings'
@@ -6020,28 +6017,28 @@ class BuildingsView(ctk.CTkFrame):
         # Refresh cache from Secrets Source (always re-copy in case files changed)
         self._refresh_cache()
 
-        # Get names from cache and game JSON files using Table.Data structure
+        # Get names from cache — game filtering already done at import time
         secret_recipe_names = self._get_names_from_table_data(self._get_cache_recipes_path())
-        game_recipe_names = self._get_names_from_table_data(self._get_game_recipes_path())
         secret_construction_names = self._get_names_from_table_data(self._get_cache_constructions_path())
-        game_construction_names = self._get_names_from_table_data(self._get_game_constructions_path())
 
-        # Find NEW items (in Secret but not in Game)
-        new_recipes = secret_recipe_names - game_recipe_names
-        new_constructions = secret_construction_names - game_construction_names
+        # Cross-reference: items must have both a recipe and a construction entry
+        matching_items = secret_recipe_names & secret_construction_names
 
-        # Find MATCHING items (in both new recipes AND new constructions)
-        matching_items = new_recipes & new_constructions
+        # Subtract game rows so only mod-added items remain
+        game_def_names = self._get_names_from_table_data(self._get_game_constructions_path())
+        game_recipe_names = self._get_names_from_table_data(self._get_game_recipes_path()) if self._get_game_recipes_path() else set()
+        matching_items -= game_def_names
+        matching_items -= game_recipe_names
 
-        logger.info("New recipes: %s, New constructions: %s, Matching: %s", len(new_recipes), len(new_constructions), len(matching_items))
+        logger.info("Secret recipes: %s, Secret constructions: %s, Matching (after game filter): %s",
+                     len(secret_recipe_names), len(secret_construction_names), len(matching_items))
 
         # Build secrets_recipes dict for the matching items
         self.secrets_recipes = {}
         for name in matching_items:
             self.secrets_recipes[name] = {'Name': name}
 
-        # Store for reference
-        self.game_recipe_names = game_recipe_names
+        self.game_recipe_names = set()
         self.secrets_constructions = {name: {'Name': name} for name in matching_items}
 
         if not self.secrets_recipes:
@@ -6287,9 +6284,8 @@ class BuildingsView(ctk.CTkFrame):
     def _load_secrets_weapons(self):
         """Load weapon items from Secrets mod, showing only mod-added items.
 
-        Shows items that exist in BOTH:
-        - New recipes (in Secret ItemRecipes but not in Game ItemRecipes)
-        - New weapons (in Secret Weapons but not in Game Weapons)
+        Cross-references secret recipes with secret weapons.
+        Game filtering already done at import time (strip_duplicate_rows).
         """
         logger.debug("Switching to weapons view mode")
         self.view_mode = 'weapons'
@@ -6298,22 +6294,21 @@ class BuildingsView(ctk.CTkFrame):
         self._refresh_cache()
 
         secret_recipe_names = self._get_names_from_table_data(self._get_cache_recipes_path())
-        game_recipe_names = self._get_names_from_table_data(self._get_game_recipes_path())
         secret_weapon_names = self._get_names_from_table_data(self._get_cache_constructions_path())
-        game_weapon_names = self._get_names_from_table_data(self._get_game_constructions_path())
 
-        new_recipes = secret_recipe_names - game_recipe_names
-        new_weapons = secret_weapon_names - game_weapon_names
-        matching_items = new_recipes & new_weapons
+        matching_items = secret_recipe_names & secret_weapon_names
 
-        logger.info("New item recipes: %s, New weapons: %s, Matching: %s",
-                     len(new_recipes), len(new_weapons), len(matching_items))
+        # Subtract game rows so only mod-added items remain
+        game_def_names = self._get_names_from_table_data(self._get_game_constructions_path())
+        game_recipe_names = self._get_names_from_table_data(self._get_game_recipes_path()) if self._get_game_recipes_path() else set()
+        matching_items -= game_def_names
+        matching_items -= game_recipe_names
 
-        self.secrets_recipes = {}
-        for name in matching_items:
-            self.secrets_recipes[name] = {'Name': name}
+        logger.info("Secret recipes: %s, Secret weapons: %s, Matching (after game filter): %s",
+                     len(secret_recipe_names), len(secret_weapon_names), len(matching_items))
 
-        self.game_recipe_names = game_recipe_names
+        self.secrets_recipes = {name: {'Name': name} for name in matching_items}
+        self.game_recipe_names = set()
         self.secrets_constructions = {name: {'Name': name} for name in matching_items}
 
         if not self.secrets_recipes:
@@ -6326,9 +6321,8 @@ class BuildingsView(ctk.CTkFrame):
     def _load_secrets_armor(self):
         """Load armor items from Secrets mod, showing only mod-added items.
 
-        Shows items that exist in BOTH:
-        - New recipes (in Secret ItemRecipes but not in Game ItemRecipes)
-        - New armor (in Secret Armor but not in Game Armor)
+        Cross-references secret recipes with secret armor.
+        Game filtering already done at import time (strip_duplicate_rows).
         """
         logger.debug("Switching to armor view mode")
         self.view_mode = 'armor'
@@ -6337,22 +6331,21 @@ class BuildingsView(ctk.CTkFrame):
         self._refresh_cache()
 
         secret_recipe_names = self._get_names_from_table_data(self._get_cache_recipes_path())
-        game_recipe_names = self._get_names_from_table_data(self._get_game_recipes_path())
         secret_armor_names = self._get_names_from_table_data(self._get_cache_constructions_path())
-        game_armor_names = self._get_names_from_table_data(self._get_game_constructions_path())
 
-        new_recipes = secret_recipe_names - game_recipe_names
-        new_armor = secret_armor_names - game_armor_names
-        matching_items = new_recipes & new_armor
+        matching_items = secret_recipe_names & secret_armor_names
 
-        logger.info("New item recipes: %s, New armor: %s, Matching: %s",
-                     len(new_recipes), len(new_armor), len(matching_items))
+        # Subtract game rows so only mod-added items remain
+        game_def_names = self._get_names_from_table_data(self._get_game_constructions_path())
+        game_recipe_names = self._get_names_from_table_data(self._get_game_recipes_path()) if self._get_game_recipes_path() else set()
+        matching_items -= game_def_names
+        matching_items -= game_recipe_names
 
-        self.secrets_recipes = {}
-        for name in matching_items:
-            self.secrets_recipes[name] = {'Name': name}
+        logger.info("Secret recipes: %s, Secret armor: %s, Matching (after game filter): %s",
+                     len(secret_recipe_names), len(secret_armor_names), len(matching_items))
 
-        self.game_recipe_names = game_recipe_names
+        self.secrets_recipes = {name: {'Name': name} for name in matching_items}
+        self.game_recipe_names = set()
         self.secrets_constructions = {name: {'Name': name} for name in matching_items}
 
         if not self.secrets_recipes:
@@ -6363,7 +6356,11 @@ class BuildingsView(ctk.CTkFrame):
         self._populate_secrets_list(self.secrets_recipes)
 
     def _load_secrets_tools(self):
-        """Load tool items from Secrets mod, showing only mod-added items."""
+        """Load tool items from Secrets mod, showing only mod-added items.
+
+        Cross-references secret recipes with secret tools.
+        Game filtering already done at import time (strip_duplicate_rows).
+        """
         logger.debug("Switching to tools view mode")
         self.view_mode = 'tools'
         self._set_status("Loading Secrets tools...")
@@ -6371,19 +6368,21 @@ class BuildingsView(ctk.CTkFrame):
         self._refresh_cache()
 
         secret_recipe_names = self._get_names_from_table_data(self._get_cache_recipes_path())
-        game_recipe_names = self._get_names_from_table_data(self._get_game_recipes_path())
         secret_tool_names = self._get_names_from_table_data(self._get_cache_constructions_path())
-        game_tool_names = self._get_names_from_table_data(self._get_game_constructions_path())
 
-        new_recipes = secret_recipe_names - game_recipe_names
-        new_tools = secret_tool_names - game_tool_names
-        matching_items = new_recipes & new_tools
+        matching_items = secret_recipe_names & secret_tool_names
 
-        logger.info("New item recipes: %s, New tools: %s, Matching: %s",
-                     len(new_recipes), len(new_tools), len(matching_items))
+        # Subtract game rows so only mod-added items remain
+        game_def_names = self._get_names_from_table_data(self._get_game_constructions_path())
+        game_recipe_names = self._get_names_from_table_data(self._get_game_recipes_path()) if self._get_game_recipes_path() else set()
+        matching_items -= game_def_names
+        matching_items -= game_recipe_names
+
+        logger.info("Secret recipes: %s, Secret tools: %s, Matching (after game filter): %s",
+                     len(secret_recipe_names), len(secret_tool_names), len(matching_items))
 
         self.secrets_recipes = {name: {'Name': name} for name in matching_items}
-        self.game_recipe_names = game_recipe_names
+        self.game_recipe_names = set()
         self.secrets_constructions = {name: {'Name': name} for name in matching_items}
 
         if not self.secrets_recipes:
@@ -6394,7 +6393,10 @@ class BuildingsView(ctk.CTkFrame):
         self._populate_secrets_list(self.secrets_recipes)
 
     def _load_secrets_flora(self):
-        """Load flora items from Secrets mod, showing only mod-added items."""
+        """Load flora items from Secrets mod, showing only mod-added items.
+
+        Game filtering already done at import time (strip_duplicate_rows).
+        """
         logger.debug("Switching to flora view mode")
         self.view_mode = 'flora'
         self._set_status("Loading Secrets flora...")
@@ -6402,15 +6404,16 @@ class BuildingsView(ctk.CTkFrame):
         self._refresh_cache()
 
         secret_flora_names = self._get_names_from_table_data(self._get_cache_constructions_path())
-        game_flora_names = self._get_names_from_table_data(self._get_game_constructions_path())
 
-        new_flora = secret_flora_names - game_flora_names
+        # Subtract game rows so only mod-added items remain
+        game_def_names = self._get_names_from_table_data(self._get_game_constructions_path())
+        secret_flora_names -= game_def_names
 
-        logger.info("New flora: %s", len(new_flora))
+        logger.info("Secret flora (after game filter): %s", len(secret_flora_names))
 
-        self.secrets_recipes = {name: {'Name': name} for name in new_flora}
+        self.secrets_recipes = {name: {'Name': name} for name in secret_flora_names}
         self.game_recipe_names = set()
-        self.secrets_constructions = {name: {'Name': name} for name in new_flora}
+        self.secrets_constructions = {name: {'Name': name} for name in secret_flora_names}
 
         if not self.secrets_recipes:
             self._set_status("No mod-unique flora found in Secrets Source")
@@ -6420,7 +6423,10 @@ class BuildingsView(ctk.CTkFrame):
         self._populate_secrets_list(self.secrets_recipes)
 
     def _load_secrets_loot(self):
-        """Load loot items from Secrets mod, showing only mod-added items."""
+        """Load loot items from Secrets mod, showing only mod-added items.
+
+        Game filtering already done at import time (strip_duplicate_rows).
+        """
         logger.debug("Switching to loot view mode")
         self.view_mode = 'loot'
         self._set_status("Loading Secrets loot...")
@@ -6428,15 +6434,16 @@ class BuildingsView(ctk.CTkFrame):
         self._refresh_cache()
 
         secret_loot_names = self._get_names_from_table_data(self._get_cache_constructions_path())
-        game_loot_names = self._get_names_from_table_data(self._get_game_constructions_path())
 
-        new_loot = secret_loot_names - game_loot_names
+        # Subtract game rows so only mod-added items remain
+        game_def_names = self._get_names_from_table_data(self._get_game_constructions_path())
+        secret_loot_names -= game_def_names
 
-        logger.info("New loot: %s", len(new_loot))
+        logger.info("Secret loot (after game filter): %s", len(secret_loot_names))
 
-        self.secrets_recipes = {name: {'Name': name} for name in new_loot}
+        self.secrets_recipes = {name: {'Name': name} for name in secret_loot_names}
         self.game_recipe_names = set()
-        self.secrets_constructions = {name: {'Name': name} for name in new_loot}
+        self.secrets_constructions = {name: {'Name': name} for name in secret_loot_names}
 
         if not self.secrets_recipes:
             self._set_status("No mod-unique loot found in Secrets Source")
@@ -6446,7 +6453,11 @@ class BuildingsView(ctk.CTkFrame):
         self._populate_secrets_list(self.secrets_recipes)
 
     def _load_secrets_items(self):
-        """Load general items from Secrets mod, showing only mod-added items."""
+        """Load general items from Secrets mod, showing only mod-added items.
+
+        Cross-references secret recipes with secret items.
+        Game filtering already done at import time (strip_duplicate_rows).
+        """
         logger.debug("Switching to items view mode")
         self.view_mode = 'items'
         self._set_status("Loading Secrets items...")
@@ -6454,19 +6465,21 @@ class BuildingsView(ctk.CTkFrame):
         self._refresh_cache()
 
         secret_recipe_names = self._get_names_from_table_data(self._get_cache_recipes_path())
-        game_recipe_names = self._get_names_from_table_data(self._get_game_recipes_path())
         secret_item_names = self._get_names_from_table_data(self._get_cache_constructions_path())
-        game_item_names = self._get_names_from_table_data(self._get_game_constructions_path())
 
-        new_recipes = secret_recipe_names - game_recipe_names
-        new_items = secret_item_names - game_item_names
-        matching_items = new_recipes & new_items
+        matching_items = secret_recipe_names & secret_item_names
 
-        logger.info("New item recipes: %s, New items: %s, Matching: %s",
-                     len(new_recipes), len(new_items), len(matching_items))
+        # Subtract game rows so only mod-added items remain
+        game_def_names = self._get_names_from_table_data(self._get_game_constructions_path())
+        game_recipe_names = self._get_names_from_table_data(self._get_game_recipes_path()) if self._get_game_recipes_path() else set()
+        matching_items -= game_def_names
+        matching_items -= game_recipe_names
+
+        logger.info("Secret recipes: %s, Secret items: %s, Matching (after game filter): %s",
+                     len(secret_recipe_names), len(secret_item_names), len(matching_items))
 
         self.secrets_recipes = {name: {'Name': name} for name in matching_items}
-        self.game_recipe_names = game_recipe_names
+        self.game_recipe_names = set()
         self.secrets_constructions = {name: {'Name': name} for name in matching_items}
 
         if not self.secrets_recipes:

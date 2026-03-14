@@ -5741,16 +5741,13 @@ class ConstructionsView(ctk.CTkFrame):
                                     string_table[alt_name]["description"] = value
                             continue
 
-                    # Direct name entry (no .Name suffix) - store full key as lookup
-                    if key not in string_table:
-                        string_table[key] = {"name": "", "description": ""}
-                    string_table[key]["name"] = value
-                    # Also store with dots replaced by underscores
-                    if "." in key:
-                        alt_key = key.replace(".", "_")
-                        if alt_key not in string_table:
-                            string_table[alt_key] = {"name": "", "description": ""}
-                        string_table[alt_key]["name"] = value
+                    # Keys with dots but non-Name/Description suffix are skipped
+                    # (they may be descriptions or other field types)
+                    # Only store entries without any dots as direct name lookups
+                    if "." not in key:
+                        if key not in string_table:
+                            string_table[key] = {"name": "", "description": ""}
+                        string_table[key]["name"] = value
 
             except (json.JSONDecodeError, OSError, KeyError, TypeError) as e:
                 logger.error("Error loading string table %s: %s", st_path.name, e)

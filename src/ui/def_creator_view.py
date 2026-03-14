@@ -111,18 +111,69 @@ def _compare_properties(mod_props, orig_props, current_path=""):
             })
             continue
 
-        if "ArrayPropertyData" in type_str:
+        if "GameplayTagContainerPropertyData" in type_str:
+            # Value is a plain list of tag strings, e.g. ["Item.EpicPack", ...]
+            # Use the *parent* property name (e.g. "ExcludeItems") for .def
+            # because the build system's <delete> uses the container name.
+            container_prop = current_path.split(".")[-1] if current_path else prop_name
+            m_tags = m.get("Value", [])
+            o_tags = o.get("Value", [])
+            if m_tags != o_tags:
+                m_set = set(m_tags) if isinstance(m_tags, list) else set()
+                o_set = set(o_tags) if isinstance(o_tags, list) else set()
+                removed = o_set - m_set
+                added = m_set - o_set
+                for tag in sorted(removed):
+                    changes.append({
+                        "type": "delete",
+                        "property": container_prop,
+                        "value": tag,
+                        "old_value": tag,
+                        "context": _extract_context(orig_props, prop_name),
+                    })
+                for tag in sorted(added):
+                    changes.append({
+                        "type": "add_tag",
+                        "property": container_prop,
+                        "value": tag,
+                        "old_value": "(new tag)",
+                        "context": _extract_context(orig_props, prop_name),
+                    })
+        elif "ArrayPropertyData" in type_str or "SetPropertyData" in type_str:
             m_list = m.get("Value", [])
             o_list = o.get("Value", [])
+            # Check if array lengths differ or contents differ
+            if len(m_list) != len(o_list):
+                # Array size changed — report as a single change
+                changes.append({
+                    "type": "change",
+                    "property": new_path,
+                    "value": f"[{len(m_list)} items]",
+                    "old_value": f"[{len(o_list)} items]",
+                    "context": _extract_context(orig_props, prop_name),
+                })
             for i in range(max(len(m_list), len(o_list))):
                 arr_path = f"{new_path}[{i}]"
                 m_val = m_list[i] if i < len(m_list) else None
                 o_val = o_list[i] if i < len(o_list) else None
                 if m_val and not o_val:
+                    # Element added by mod
                     if isinstance(m_val, dict) and "Value" in m_val:
                         changes.extend(_compare_properties(
                             m_val.get("Value", []), [], arr_path
                         ))
+                elif not m_val and o_val:
+                    # Element removed by mod
+                    if isinstance(o_val, dict):
+                        o_name = o_val.get("Name", f"[{i}]")
+                        o_display = o_val.get("Value", o_name)
+                        changes.append({
+                            "type": "remove",
+                            "property": arr_path,
+                            "value": "(removed)",
+                            "old_value": _format_value(o_display) if not isinstance(o_display, (list, dict)) else o_name,
+                            "context": _extract_context(orig_props, prop_name),
+                        })
                 elif m_val and o_val:
                     if isinstance(m_val, dict) and isinstance(o_val, dict):
                         changes.extend(_compare_properties(
@@ -139,6 +190,7 @@ def _compare_properties(mod_props, orig_props, current_path=""):
                 "IntPropertyData", "BoolPropertyData", "FloatPropertyData",
                 "EnumPropertyData", "NamePropertyData", "StrPropertyData",
                 "BytePropertyData", "TextPropertyData",
+                "ObjectPropertyData", "SoftObjectPropertyData",
             )
             if any(pt in type_str for pt in primitive_types):
                 m_val = m.get("Value")
@@ -152,14 +204,51 @@ def _compare_properties(mod_props, orig_props, current_path=""):
                         "old_value": _format_value(o_val),
                         "context": context,
                     })
+            else:
+                # Fallback: compare Value directly for any unhandled types
+                m_val = m.get("Value")
+                o_val = o.get("Value")
+                if m_val != o_val:
+                    if isinstance(m_val, list) and isinstance(o_val, list):
+                        # Both are lists — recurse if elements are dicts
+                        for i in range(max(len(m_val), len(o_val))):
+                            sub_m = m_val[i] if i < len(m_val) else None
+                            sub_o = o_val[i] if i < len(o_val) else None
+                            if isinstance(sub_m, dict) and isinstance(sub_o, dict):
+                                changes.extend(_compare_properties(
+                                    sub_m.get("Value", []),
+                                    sub_o.get("Value", []),
+                                    f"{new_path}[{i}]",
+                                ))
+                            elif sub_m != sub_o:
+                                changes.append({
+                                    "type": "change",
+                                    "property": f"{new_path}[{i}]",
+                                    "value": _format_value(sub_m) if sub_m is not None else "(removed)",
+                                    "old_value": _format_value(sub_o) if sub_o is not None else "(new)",
+                                    "context": _extract_context(orig_props, prop_name),
+                                })
+                    else:
+                        changes.append({
+                            "type": "change",
+                            "property": new_path,
+                            "value": _format_value(m_val) if not isinstance(m_val, (list, dict)) else str(m_val)[:100],
+                            "old_value": _format_value(o_val) if not isinstance(o_val, (list, dict)) else str(o_val)[:100],
+                            "context": _extract_context(orig_props, prop_name),
+                        })
     return changes
 
 
 def find_differences(orig_data, mod_data):
-    """Compare two DataTable Data arrays and return all differences."""
+    """Compare two DataTable Data arrays and return all differences.
+
+    Detects added rows, modified rows, and deleted rows.
+    """
     differences = []
     orig_dict = {item.get("Name"): item for item in orig_data}
+    mod_dict = {item.get("Name"): item for item in mod_data}
 
+    # Check mod items for additions and changes
     for mod_item in mod_data:
         item_name = mod_item.get("Name")
         orig_item = orig_dict.get(item_name)
@@ -169,6 +258,20 @@ def find_differences(orig_data, mod_data):
         for diff in diffs:
             diff["item"] = item_name
             differences.append(diff)
+
+    # Check for rows deleted by the mod (exist in original but not in mod)
+    for orig_item in orig_data:
+        item_name = orig_item.get("Name")
+        if item_name and item_name not in mod_dict:
+            differences.append({
+                "type": "remove",
+                "item": item_name,
+                "property": "(entire row)",
+                "value": "(deleted)",
+                "old_value": "Row existed in original",
+                "context": None,
+            })
+
     return differences
 
 
@@ -204,15 +307,37 @@ def generate_def_xml(diffs, mod_path, title, author, description,
     ]
 
     for diff in diffs:
+        diff_type = diff.get("type", "change")
+
         if include_comments:
             item_info = diff["item"]
             if diff.get("context"):
                 item_info += f": {diff['context']}"
-            old_text = "Added" if diff.get("type") == "add" else f"was {diff['old_value']}"
+            if diff_type == "add":
+                old_text = "Added"
+            elif diff_type == "delete":
+                old_text = f"Delete tag {diff['value']}"
+            elif diff_type == "add_tag":
+                old_text = f"Add tag {diff['value']}"
+            elif diff_type == "remove":
+                old_text = "Removed"
+            else:
+                old_text = f"was {diff['old_value']}"
             comment = f"{change_note} - {item_info}" if change_note else item_info
             lines.append(f"    <!--  {comment} ({old_text})  -->")
 
-        if diff.get("type") == "add":
+        if diff_type == "delete":
+            # <delete> for removing tags from GameplayTagContainers
+            lines.append(f'    <delete item="{diff["item"]}" '
+                         f'property="{diff["property"]}" '
+                         f'value="{diff["value"]}" />')
+        elif diff_type == "add_tag":
+            # <change> with value for adding tags to GameplayTagContainers
+            lines.append(f'    <change item="{diff["item"]}" '
+                         f'property="{diff["property"]}" '
+                         f'value="{diff["value"]}" />')
+        elif diff_type == "add":
+            # <change> with <add_property> for new properties
             lines.append(f'    <change item="{diff["item"]}" '
                          f'property="{diff["property"]}" '
                          f'value="{diff["value"]}">')
@@ -220,7 +345,12 @@ def generate_def_xml(diffs, mod_path, title, author, description,
                          f'<![CDATA[{diff.get("json_data", "")}]]>'
                          f'</add_property>')
             lines.append('    </change>')
+        elif diff_type == "remove":
+            # Row deletion — not directly supported in .def, add as comment
+            lines.append(f'    <!-- ROW DELETED: {diff["item"]} '
+                         f'property="{diff["property"]}" -->')
         else:
+            # <change> for regular property modifications
             lines.append(f'    <change item="{diff["item"]}" '
                          f'property="{diff["property"]}" '
                          f'value="{diff["value"]}" />')

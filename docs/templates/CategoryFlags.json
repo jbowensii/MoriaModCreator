@@ -1,0 +1,146 @@
+{
+    "Ceilings": [
+        "EConstructionLocation::Base",
+        "EPlacementType::SnapGrid",
+        false,
+        true,
+        false,
+        false,
+        true
+    ],
+    "Columns": [
+        "EConstructionLocation::Base",
+        "EPlacementType::SnapGrid",
+        false,
+        true,
+        false,
+        false,
+        true
+    ],
+    "Granite.Floors": [
+        "EConstructionLocation::Anywhere",
+        "EPlacementType::SnapGrid",
+        false,
+        true,
+        true,
+        true,
+        true
+    ],
+    "Floors": [
+        "EConstructionLocation::Anywhere",
+        "EPlacementType::SnapGrid",
+        false,
+        true,
+        true,
+        false,
+        true
+    ],
+    "Stairs": [
+        "EConstructionLocation::Base",
+        "EPlacementType::SnapGrid",
+        false,
+        true,
+        false,
+        false,
+        true
+    ],
+    "Walls": [
+        "EConstructionLocation::Base",
+        "EPlacementType::SnapGrid",
+        false,
+        true,
+        false,
+        false,
+        true
+    ],
+    "Banners": [
+        "EConstructionLocation::Base",
+        "EPlacementType::FreePlacement",
+        true,
+        false,
+        false,
+        false,
+        true
+    ],
+    "Furniture": [
+        "EConstructionLocation::Base",
+        "EPlacementType::FreePlacement",
+        false,
+        true,
+        false,
+        false,
+        true
+    ],
+    "Deco.Decor_Wall": [
+        "EConstructionLocation::Base",
+        "EPlacementType::FreePlacement",
+        true,
+        false,
+        false,
+        false,
+        true
+    ],
+    "Deco.Decor_Floor": [
+        "EConstructionLocation::Base",
+        "EPlacementType::FreePlacement",
+        false,
+        true,
+        false,
+        false,
+        true
+    ],
+    "Lighting": [
+        "EConstructionLocation::Base",
+        "EPlacementType::FreePlacement",
+        false,
+        true,
+        false,
+        false,
+        true
+    ],
+    "Plants": [
+        "EConstructionLocation::Base",
+        "EPlacementType::FreePlacement",
+        false,
+        true,
+        false,
+        false,
+        true
+    ],
+    "Rugs_Floor": [
+        "EConstructionLocation::Base",
+        "EPlacementType::FreePlacement",
+        false,
+        true,
+        false,
+        false,
+        true
+    ],
+    "Rugs_Wall": [
+        "EConstructionLocation::Base",
+        "EPlacementType::FreePlacement",
+        true,
+        false,
+        false,
+        false,
+        true
+    ],
+    "Signs": [
+        "EConstructionLocation::Base",
+        "EPlacementType::FreePlacement",
+        true,
+        false,
+        false,
+        false,
+        true
+    ],
+    "Scaffolding": [
+        "EConstructionLocation::Base",
+        "EPlacementType::SnapGrid",
+        false,
+        true,
+        false,
+        false,
+        true
+    ]
+}

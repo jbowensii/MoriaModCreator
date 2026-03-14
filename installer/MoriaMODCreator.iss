@@ -2,7 +2,7 @@
 ; Created with Inno Setup 6.7
 
 #define MyAppName "Moria MOD Creator"
-#define MyAppVersion "2.1.0"
+#define MyAppVersion "2.2.0"
 #define MyAppPublisher "John B Owens II"
 #define MyAppURL "https://github.com/jbowensii/MoriaModCreator"
 #define MyAppExeName "MoriaMODCreator.exe"

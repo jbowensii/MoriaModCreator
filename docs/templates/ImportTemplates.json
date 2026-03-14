@@ -1,0 +1,20 @@
+{
+    "Package": {
+        "$type": "UAssetAPI.Import, UAssetAPI",
+        "ObjectName": "",
+        "OuterIndex": 0,
+        "ClassPackage": "/Script/CoreUObject",
+        "ClassName": "Package",
+        "PackageName": null,
+        "bImportOptional": false
+    },
+    "Texture2D": {
+        "$type": "UAssetAPI.Import, UAssetAPI",
+        "ObjectName": "",
+        "OuterIndex": 0,
+        "ClassPackage": "/Script/Engine",
+        "ClassName": "Texture2D",
+        "PackageName": null,
+        "bImportOptional": false
+    }
+}
