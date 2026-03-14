@@ -7,12 +7,20 @@ import_dialog.py and json_convert_dialog.py to avoid code duplication.
 import configparser
 import json
 import logging
+import sys
 from collections import defaultdict
 from pathlib import Path
 
 from src.config import get_output_dir, get_appdata_dir
 
 logger = logging.getLogger(__name__)
+
+
+def get_assets_dir() -> Path:
+    """Get the assets directory path (works in both dev and PyInstaller bundle)."""
+    if getattr(sys, 'frozen', False):
+        return Path(sys._MEIPASS) / "assets"  # pylint: disable=protected-access
+    return Path(__file__).parent.parent.parent / "assets"
 
 # File extensions to convert
 UASSET_EXTENSIONS = {".uasset", ".umap"}

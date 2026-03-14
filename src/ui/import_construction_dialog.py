@@ -13,6 +13,7 @@ import json
 import logging
 import xml.etree.ElementTree as ET
 from pathlib import Path
+from src.ui.shared_utils import get_assets_dir
 from tkinter import filedialog, messagebox, ttk
 from typing import Optional
 
@@ -151,7 +152,7 @@ class ImportConstructionDialog(ctk.CTkToplevel):
         self.grab_set()
 
         # Set application icon
-        icon_path = Path(__file__).parent.parent.parent / "assets" / "icons" / "application icons" / "app_icon.ico"
+        icon_path = get_assets_dir() / "icons" / "application icons" / "app_icon.ico"
         if icon_path.exists():
             self.after(10, lambda: self.iconbitmap(str(icon_path)))
 

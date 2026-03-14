@@ -28,6 +28,7 @@ import shutil
 import xml.etree.ElementTree as ET
 from collections import defaultdict
 from pathlib import Path
+from src.ui.shared_utils import get_assets_dir
 from typing import Callable, Optional
 
 import customtkinter as ctk
@@ -1551,7 +1552,7 @@ class _ConfirmConstructionsDeleteDialog(ctk.CTkToplevel):
         self.transient(parent)
         self.grab_set()
 
-        icon_path = Path(__file__).parent.parent.parent / "assets" / "icons" / "application icons" / "app_icon.ico"
+        icon_path = get_assets_dir() / "icons" / "application icons" / "app_icon.ico"
         if icon_path.exists():
             self.after(10, lambda: self.iconbitmap(str(icon_path)))
 
@@ -1613,7 +1614,7 @@ class _ChangeConstructionsDialog(ctk.CTkToplevel):
         self.transient(parent)
         self.grab_set()
 
-        icon_path = Path(__file__).parent.parent.parent / "assets" / "icons" / "application icons" / "app_icon.ico"
+        icon_path = get_assets_dir() / "icons" / "application icons" / "app_icon.ico"
         if icon_path.exists():
             self.after(10, lambda: self.iconbitmap(str(icon_path)))
 

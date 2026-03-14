@@ -19,6 +19,7 @@ import json
 import logging
 import re
 import shutil
+import sys
 import tkinter as tk
 from tkinter import ttk
 import xml.etree.ElementTree as ET
@@ -70,9 +71,7 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 
 
-def get_assets_dir() -> Path:
-    """Get the assets directory path."""
-    return Path(__file__).parent.parent.parent / "assets"
+from src.ui.shared_utils import get_assets_dir  # noqa: E402  # pylint: disable=wrong-import-position
 
 
 def get_icon_path(name: str) -> Path:
@@ -100,7 +99,7 @@ class _ConfirmDefDeleteDialog(ctk.CTkToplevel):
         self.grab_set()
 
         # Set application icon
-        icon_path = Path(__file__).parent.parent.parent / "assets" / "icons" / "application icons" / "app_icon.ico"
+        icon_path = get_assets_dir() / "icons" / "application icons" / "app_icon.ico"
         if icon_path.exists():
             self.after(10, lambda: self.iconbitmap(str(icon_path)))
 
@@ -4324,7 +4323,7 @@ class MainWindow(ctk.CTk, TkinterDnD.DnDWrapper if HAS_TKDND else object):
         dialog.grab_set()
 
         # App icon
-        icon_path = Path(__file__).parent.parent.parent / "assets" / "icons" / "application icons" / "app_icon.ico"
+        icon_path = get_assets_dir() / "icons" / "application icons" / "app_icon.ico"
         if icon_path.exists():
             dialog.after(10, lambda: dialog.iconbitmap(str(icon_path)))
 

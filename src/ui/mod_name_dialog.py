@@ -3,6 +3,7 @@
 import logging
 import shutil
 from pathlib import Path
+from src.ui.shared_utils import get_assets_dir
 
 import customtkinter as ctk
 
@@ -26,7 +27,7 @@ class _ConfirmDeleteDialog(ctk.CTkToplevel):
         self.grab_set()
 
         # Set application icon
-        icon_path = Path(__file__).parent.parent.parent / "assets" / "icons" / "application icons" / "app_icon.ico"
+        icon_path = get_assets_dir() / "icons" / "application icons" / "app_icon.ico"
         if icon_path.exists():
             self.after(10, lambda: self.iconbitmap(str(icon_path)))
 
@@ -91,7 +92,7 @@ class ModNameDialog(ctk.CTkToplevel):
         self.grab_set()
 
         # Set application icon
-        icon_path = Path(__file__).parent.parent.parent / "assets" / "icons" / "application icons" / "app_icon.ico"
+        icon_path = get_assets_dir() / "icons" / "application icons" / "app_icon.ico"
         if icon_path.exists():
             self.after(10, lambda: self.iconbitmap(str(icon_path)))
 

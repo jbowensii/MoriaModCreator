@@ -24,6 +24,7 @@ LicenseFile=..\LICENSE
 OutputDir=..\release
 OutputBaseFilename=MoriaMODCreator_Setup_v{#MyAppVersion}
 SetupIconFile=..\assets\icons\application icons\app_icon.ico
+UninstallDisplayIcon={app}\{#MyAppExeName}
 Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern
