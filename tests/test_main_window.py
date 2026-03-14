@@ -585,9 +585,9 @@ class TestGetOriginalValue:
 class TestVersionInfo:
     """Tests for version constants."""
 
-    def test_version_is_2_5_0(self):
+    def test_version_is_2_6_0(self):
         from src.ui.about_dialog import APP_VERSION
-        assert APP_VERSION == "2.5.0"
+        assert APP_VERSION == "2.6.0"
 
     def test_app_name(self):
         from src.ui.about_dialog import APP_NAME
