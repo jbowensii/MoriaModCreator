@@ -1,11 +1,21 @@
-"""Object Editor view for creating and editing DataTable rows.
+"""Object Editor view — Advanced tab for creating and editing game DataTable rows.
 
-Provides a two-pane layout:
-- Left pane: Secrets object browser (mirrors the Secrets tab)
-- Right pane: Object creation/editing forms (ported from RtoM-Moding-Tool)
+Two-pane layout:
+  Left pane:  Browsable list of mod-only items per category (buildings, weapons,
+              armor, tools, items, flora, loot). Base-game rows are filtered out
+              so only user-added objects appear.
+  Right pane: Structured form that mirrors the Secrets tab field layout. Supports
+              viewing/editing existing rows and creating new objects via the
+              "New" button with Construction, Recipe, or Both templates.
 
-Supports creating new constructions and item recipes (armor, weapons, tools)
-by cloning JSON templates and modifying properties.
+Workflow:
+  1. User selects a category tab -> left pane loads mod-only row names from
+     Secrets Source JSON files (compared against base-game output/jsondata).
+  2. Clicking an item loads its definition + recipe JSON rows, extracts fields
+     via extract_*_fields() helpers, and renders editable structured forms.
+  3. The "New" button renders blank forms with game-accurate defaults. On save,
+     rows are injected into the Secrets Source JSON files via object_templates.
+  4. Search/replace bar allows batch-editing property names and values.
 """
 
 import json
@@ -24,7 +34,6 @@ from src.object_templates import (
     create_item_recipe_row,
     gen_unique_tag,
     get_existing_row_names,
-    get_row_property,
     load_json,
     save_json,
 )
@@ -63,23 +72,8 @@ from src.ui.virtual_scroll_list import VirtualScrollList
 
 logger = logging.getLogger(__name__)
 
-# Crafting station options (tag -> display name)
-CRAFTING_STATIONS = {
-    "CraftingStation_BasicForge": "Forge",
-    "CraftingStation_KhuzdulForge": "Khuzdul Forge",
-    "CraftingStation_Workbench": "Workbench",
-    "CraftingStation_Loom": "Loom",
-    "CraftingStation_AdvancedForge": "Great Forge of Narvi",
-    "CraftingStation_ForgeUpgrade_GemCutter": "Great Belegost Forge",
-    "CraftingStation_NogrodForge": "Great Forge of Nogrod",
-    "CraftingStation_FloodedForge": "Great Forge of Durin",
-    "CraftingStation_MithrilForge": "Great Mithril Forge",
-}
+TEMPLATE_TYPES = ["Construction", "Recipe", "Both"]
 
-# Template types available from the dropdown
-TEMPLATE_TYPES = ["Construction", "Item Recipe"]
-
-# Category flags from CategoryFlags.json
 CATEGORY_FLAGS_FILE = (
     Path(__file__).resolve().parent.parent.parent / "docs" / "templates" / "CategoryFlags.json"
 )
@@ -99,43 +93,41 @@ class ObjectEditorView(ctk.CTkFrame):
         self.on_status_message = on_status_message
         self.on_back = on_back
 
-        # View state
+        # Active category and selected item in the left pane
         self.view_mode = "buildings"
         self.current_selected_name = None
 
-        # Data holders
+        # Loaded mod-only items, display name lookup, and row data cache
         self.secrets_items = {}
         self.string_table = {}
         self._json_row_cache = {}
 
-        # Checkbox tracking
         self.construction_check_vars = {}
 
-        # Left pane widgets
+        # Left pane widget references (set during _create_widgets)
         self.building_list = None
         self.def_search_var = None
         self.def_search_entry = None
         self.count_label = None
 
-        # Right pane widgets
+        # Right pane widget references
         self.form_scroll = None
         self.template_type_var = None
         self.placeholder_label = None
         self._search_bar = None
 
-        # Right-pane search state
+        # Search/replace cycling state
         self._form_search_index = -1
         self._form_search_matches = []
 
-        # Editor form state
-        self._material_rows = []
-        self._station_vars = {}
-        self._property_widgets = []  # List of (label, value_widget) for JSON display
-        self._showing_new_form = False  # True when a blank template form is shown
+        # Tracks raw JSON property widgets for _apply_property_edits on save
+        self._property_widgets = []
+        self._showing_new_form = False
 
-        # Structured form state (mirrors Secrets tab)
+        # Structured form state — form_vars maps field names to StringVar/BooleanVar,
+        # material_rows tracks dynamically added/removed material row widgets
         self.form_vars = {}
-        self.form_content = None  # Will be set during widget creation
+        self.form_content = None
         self.material_rows: list[dict] = []
         self.sandbox_material_rows: list[dict] = []
         self.materials_frame = None
@@ -144,22 +136,18 @@ class ObjectEditorView(ctk.CTkFrame):
         self._cached_material_display: list[str] = []
         self._cached_material_raw: set[str] = set()
 
-        # Category data
         self._category_flags = {}
         self._load_category_flags()
 
-        # Icon reference cache
+        # Populated lazily from Secrets Source JSON on first load
         self._icon_paths = []
-        # Material item names for ingredient picker
         self._material_items = []
 
         logger.debug("ObjectEditorView initialized")
         self._create_widgets()
         self.after(100, self._initial_load)
 
-    # ------------------------------------------------------------------
-    # Category flags
-    # ------------------------------------------------------------------
+    # ---- Reference data loaders (icons, materials, category flags) ----
 
     def _load_category_flags(self):
         try:
@@ -216,9 +204,7 @@ class ObjectEditorView(ctk.CTkFrame):
         except (json.JSONDecodeError, OSError) as e:
             logger.warning("Failed to load material items: %s", e)
 
-    # ------------------------------------------------------------------
-    # Widget creation
-    # ------------------------------------------------------------------
+    # ---- Widget creation (two-pane grid layout) ----
 
     def _create_widgets(self):
         self.grid_rowconfigure(0, weight=1)
@@ -228,15 +214,12 @@ class ObjectEditorView(ctk.CTkFrame):
         self._create_left_pane()
         self._create_right_pane()
 
-    # ------------------------------------------------------------------
-    # LEFT PANE
-    # ------------------------------------------------------------------
+    # ---- Left pane: filter bar, category buttons, virtual scroll list ----
 
     def _create_left_pane(self):
         list_frame = ctk.CTkFrame(self)
         list_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 10))
 
-        # === FILTER BAR (simple type-to-filter) ===
         filter_bar = ctk.CTkFrame(list_frame, fg_color="transparent")
         filter_bar.pack(fill="x", padx=10, pady=(8, 0))
 
@@ -261,11 +244,9 @@ class ObjectEditorView(ctk.CTkFrame):
             command=lambda: self.def_search_var.set(""),
         ).pack(side="left")
 
-        # === CATEGORY BUTTONS ===
         btn_container = ctk.CTkFrame(list_frame, fg_color="transparent")
         btn_container.pack(fill="x", padx=10, pady=(10, 5))
 
-        # Row 1: Buildings, Weapons, Armor
         btn_row1 = ctk.CTkFrame(btn_container, fg_color="transparent")
         btn_row1.pack(fill="x")
         for col in range(3):
@@ -295,7 +276,6 @@ class ObjectEditorView(ctk.CTkFrame):
         )
         self.armor_btn.grid(row=0, column=2, sticky="ew", padx=2)
 
-        # Row 2: Tools, Flora
         btn_row2 = ctk.CTkFrame(btn_container, fg_color="transparent")
         btn_row2.pack(fill="x", pady=(2, 0))
         btn_row2.grid_columnconfigure(0, weight=1)
@@ -317,7 +297,6 @@ class ObjectEditorView(ctk.CTkFrame):
         )
         self.flora_btn.grid(row=0, column=1, sticky="ew", padx=2)
 
-        # Row 3: Loot, Items
         btn_row3 = ctk.CTkFrame(btn_container, fg_color="transparent")
         btn_row3.pack(fill="x", pady=(2, 0))
         btn_row3.grid_columnconfigure(0, weight=1)
@@ -339,7 +318,6 @@ class ObjectEditorView(ctk.CTkFrame):
         )
         self.items_btn.grid(row=0, column=1, sticky="ew", padx=2)
 
-        # Refresh button
         top_row = ctk.CTkFrame(list_frame, fg_color="transparent")
         top_row.pack(fill="x", padx=10, pady=(5, 2))
 
@@ -351,7 +329,6 @@ class ObjectEditorView(ctk.CTkFrame):
         )
         refresh_btn.pack(side="right")
 
-        # Virtual scrollable list
         self.building_list = VirtualScrollList(
             list_frame,
             on_item_click=self._on_item_click,
@@ -361,15 +338,12 @@ class ObjectEditorView(ctk.CTkFrame):
         )
         self.building_list.pack(fill="both", expand=True, padx=10, pady=(0, 5))
 
-        # Count label
         self.count_label = ctk.CTkLabel(
             list_frame, text="", font=ctk.CTkFont(size=11), text_color="gray"
         )
         self.count_label.pack(padx=10, anchor="w", pady=(0, 10))
 
-    # ------------------------------------------------------------------
-    # RIGHT PANE
-    # ------------------------------------------------------------------
+    # ---- Right pane: search bar, header, scrollable form, footer ----
 
     def _create_right_pane(self):
         self.form_container = ctk.CTkFrame(self)
@@ -377,16 +351,15 @@ class ObjectEditorView(ctk.CTkFrame):
         self.form_container.grid_rowconfigure(2, weight=1)
         self.form_container.grid_columnconfigure(0, weight=1)
 
-        # Row 0: Search/replace bar (initially hidden)
+        # Search/replace bar — hidden until an item is clicked
         self._search_bar = ctk.CTkFrame(self.form_container, fg_color=("gray90", "gray17"))
         self._search_bar.grid(row=0, column=0, sticky="ew", padx=10, pady=(5, 0))
-        self._search_bar.grid_remove()  # Hidden initially
+        self._search_bar.grid_remove()
 
         search_row = ctk.CTkFrame(self._search_bar, fg_color="transparent")
         search_row.pack(fill="x", padx=5, pady=5)
         ctk.CTkLabel(search_row, text="\U0001F50D", width=20).pack(side="left")
 
-        # Search mode dropdown
         self._form_search_mode_var = ctk.StringVar(value=SEARCH_PROPERTIES)
         ctk.CTkOptionMenu(
             search_row, variable=self._form_search_mode_var,
@@ -395,7 +368,6 @@ class ObjectEditorView(ctk.CTkFrame):
             command=lambda _: self._on_form_search_mode_change(),
         ).pack(side="left", padx=(2, 3))
 
-        # Search entry
         self._form_search_var = ctk.StringVar()
         self._form_search_entry = ctk.CTkEntry(
             search_row, textvariable=self._form_search_var,
@@ -403,13 +375,11 @@ class ObjectEditorView(ctk.CTkFrame):
         )
         self._form_search_entry.pack(side="left", fill="x", expand=True, padx=(2, 3))
 
-        # Search button
         ctk.CTkButton(
             search_row, text="Search", width=60, height=28,
             command=self._on_form_search,
         ).pack(side="left", padx=(0, 6))
 
-        # Replace entry
         self._form_replace_var = ctk.StringVar()
         self._form_replace_entry = ctk.CTkEntry(
             search_row, textvariable=self._form_replace_var,
@@ -417,7 +387,6 @@ class ObjectEditorView(ctk.CTkFrame):
         )
         self._form_replace_entry.pack(side="left", fill="x", expand=True, padx=(0, 3))
 
-        # Replace and Replace All buttons
         ctk.CTkButton(
             search_row, text="Replace", width=65, height=28,
             command=self._on_form_replace,
@@ -428,7 +397,6 @@ class ObjectEditorView(ctk.CTkFrame):
             command=self._on_form_replace_all,
         ).pack(side="left")
 
-        # Row 1: Header — "Object Editor" label + template type dropdown + New button
         header = ctk.CTkFrame(self.form_container, fg_color=("gray90", "gray17"))
         header.grid(row=1, column=0, sticky="ew", padx=0, pady=0)
 
@@ -437,7 +405,6 @@ class ObjectEditorView(ctk.CTkFrame):
             font=ctk.CTkFont(size=18, weight="bold"),
         ).pack(side="left", padx=15, pady=10)
 
-        # Template type dropdown
         self.template_type_var = ctk.StringVar(value="Construction")
         ctk.CTkOptionMenu(
             header,
@@ -448,7 +415,6 @@ class ObjectEditorView(ctk.CTkFrame):
             command=lambda _: self._on_template_type_change(),
         ).pack(side="left", padx=(20, 5), pady=10)
 
-        # New button
         ctk.CTkButton(
             header, text="New", width=70,
             fg_color="#4CAF50", hover_color="#388E3C",
@@ -456,19 +422,14 @@ class ObjectEditorView(ctk.CTkFrame):
             command=self._on_new_object,
         ).pack(side="left", padx=5, pady=10)
 
-        # Row 2: Scrollable form area
         self.form_scroll = ctk.CTkScrollableFrame(
             self.form_container, fg_color="transparent"
         )
         self.form_scroll.grid(row=2, column=0, sticky="nsew", padx=5, pady=5)
 
-        # form_content frame inside scroll (same pattern as Secrets tab)
         self.form_content = ctk.CTkFrame(self.form_scroll, fg_color="transparent")
-
-        # Placeholder
         self._show_placeholder()
 
-        # Row 3: Footer with save/delete/clear
         footer = ctk.CTkFrame(self.form_container, fg_color=("gray90", "gray17"))
         footer.grid(row=3, column=0, sticky="ew")
 
@@ -495,9 +456,7 @@ class ObjectEditorView(ctk.CTkFrame):
         )
         self.clear_btn.pack(side="right", padx=5, pady=8)
 
-    # ------------------------------------------------------------------
-    # Placeholder
-    # ------------------------------------------------------------------
+    # ---- Placeholder and form reset ----
 
     def _show_placeholder(self):
         self._clear_form_widgets()
@@ -515,39 +474,48 @@ class ObjectEditorView(ctk.CTkFrame):
             text_color="gray",
             justify="center",
         ).pack(expand=True, pady=100)
-        # form_content is destroyed and re-created in _clear_form_widgets
-        # but placeholder goes directly on form_scroll, not form_content
-
     def _clear_form_widgets(self):
+        """Destroy all form widgets and reset state for a fresh render."""
         for widget in self.form_scroll.winfo_children():
             widget.destroy()
-        # Re-create form_content frame
         self.form_content = ctk.CTkFrame(self.form_scroll, fg_color="transparent")
-        self._material_rows.clear()
-        self._station_vars.clear()
         self._property_widgets.clear()
         self.form_vars.clear()
         self.material_rows.clear()
         self.sandbox_material_rows.clear()
 
-    # ------------------------------------------------------------------
-    # "New" button handler
-    # ------------------------------------------------------------------
+    # ---- New object creation (blank template forms) ----
 
     def _on_new_object(self):
-        """Show a blank template form for the selected template type."""
+        """Render a blank structured form for the selected template type."""
         self.current_selected_name = None
         self._showing_new_form = True
         template_type = self.template_type_var.get()
+
+        if self.building_list:
+            self.building_list.set_selected(None)
 
         self._clear_form_widgets()
         if self._search_bar:
             self._search_bar.grid_remove()
 
+        self.form_content.pack(fill="both", expand=True)
+
+        ctk.CTkLabel(
+            self.form_content, text=f"New {template_type}",
+            font=ctk.CTkFont(size=16, weight="bold"),
+        ).pack(fill="x", padx=15, pady=(10, 2), anchor="w")
+        ctk.CTkFrame(
+            self.form_content, height=2, fg_color=("gray70", "gray30")
+        ).pack(fill="x", padx=15, pady=(2, 10))
+
         if template_type == "Construction":
-            self._render_construction_form()
-        else:
-            self._render_item_recipe_form()
+            self._render_new_construction_recipe()
+            self._render_new_construction_definition()
+        elif template_type == "Recipe":
+            self._render_new_item_recipe()
+        elif template_type == "Both":
+            self._render_new_both()
 
         self._set_status(f"New {template_type} — fill in the form and click Save")
 
@@ -556,19 +524,16 @@ class ObjectEditorView(ctk.CTkFrame):
         if self._showing_new_form:
             self._on_new_object()
 
-    # ------------------------------------------------------------------
-    # Item click — populate right pane with JSON row data
-    # ------------------------------------------------------------------
+    # ---- Item click: load JSON rows and render per-category structured form ----
 
     def _on_item_click(self, key: str):
-        """Load the selected item's JSON data into the right pane."""
+        """Load definition + recipe rows for the clicked item and render the form."""
         self.current_selected_name = key
         self._showing_new_form = False
         self._clear_form_widgets()
         if self._search_bar:
             self._search_bar.grid()
 
-        # Load both definition and recipe rows
         def_row, recipe_row = self._load_both_rows(key)
         if not def_row and not recipe_row:
             ctk.CTkLabel(
@@ -579,10 +544,8 @@ class ObjectEditorView(ctk.CTkFrame):
             ).pack(pady=20, padx=15)
             return
 
-        # Show form_content
         self.form_content.pack(fill="both", expand=True)
 
-        # Display header with item name
         display_name = self._lookup_game_name(key)
         header_text = f"{display_name}" if display_name != key else key
         if display_name != key:
@@ -593,12 +556,10 @@ class ObjectEditorView(ctk.CTkFrame):
             font=ctk.CTkFont(size=16, weight="bold"),
         ).pack(fill="x", padx=15, pady=(10, 2), anchor="w")
 
-        # Separator
         ctk.CTkFrame(
             self.form_content, height=2, fg_color=("gray70", "gray30")
         ).pack(fill="x", padx=15, pady=(2, 10))
 
-        # Dispatch to per-category structured form renderer
         mode = self.view_mode or "buildings"
         has_data = False
 
@@ -625,9 +586,9 @@ class ObjectEditorView(ctk.CTkFrame):
 
         self._set_status(f"Loaded: {display_name}")
 
-    # ------------------------------------------------------------------
-    # Structured form helpers (mirrors Secrets tab in buildings_view.py)
-    # ------------------------------------------------------------------
+    # ---- Structured form helpers (shared field creation methods) ----
+    # These create labeled widgets and store their variables in self.form_vars
+    # so save operations can read back all field values by key name.
 
     def _get_options(self, key: str, defaults: list[str] | None = None) -> list[str]:
         """Get dropdown options, merging cached values with defaults."""
@@ -821,6 +782,8 @@ class ObjectEditorView(ctk.CTkFrame):
 
     def _add_new_structured_material_row(self):
         """Add a new empty material row."""
+        if self.materials_frame and not self.materials_frame.winfo_ismapped():
+            self.materials_frame.pack(fill="x", pady=5)
         self._add_structured_material_row("Item.Wood", 1)
 
     def _remove_structured_material_row(self, row_frame):
@@ -865,6 +828,8 @@ class ObjectEditorView(ctk.CTkFrame):
         })
 
     def _add_new_sandbox_material_row(self):
+        if self.sandbox_materials_frame and not self.sandbox_materials_frame.winfo_ismapped():
+            self.sandbox_materials_frame.pack(fill="x", pady=(0, 5))
         self._add_sandbox_material_row("Item.Wood", 1)
 
     def _remove_sandbox_material_row(self, row_frame):
@@ -884,9 +849,10 @@ class ObjectEditorView(ctk.CTkFrame):
         ).pack(anchor="w", pady=(0, 5))
 
         self.materials_frame = ctk.CTkFrame(self.form_content, fg_color="transparent")
-        self.materials_frame.pack(fill="x", pady=5)
-        for mat in recipe["Materials"]:
-            self._add_structured_material_row(mat["Material"], mat["Amount"])
+        if recipe["Materials"]:
+            self.materials_frame.pack(fill="x", pady=5)
+            for mat in recipe["Materials"]:
+                self._add_structured_material_row(mat["Material"], mat["Amount"])
 
         self._create_text_field(
             "DefaultRequiredConstructions",
@@ -1086,9 +1052,10 @@ class ObjectEditorView(ctk.CTkFrame):
             DEFAULT_ENABLED_STATE, label="Definition Enabled State"
         )
 
-    # ------------------------------------------------------------------
-    # Per-category form renderers (mirrors Secrets tab exactly)
-    # ------------------------------------------------------------------
+    # ---- Per-category form renderers ----
+    # Each _show_*_form method extracts fields from raw JSON using the
+    # extract_*_fields() helpers from buildings_view, then renders the
+    # appropriate recipe + definition sections for that category.
 
     def _show_buildings_form(self, recipe_json, construction_json):
         """Render buildings form (construction recipe + construction definition)."""
@@ -1614,9 +1581,7 @@ class ObjectEditorView(ctk.CTkFrame):
 
         return True
 
-    # ------------------------------------------------------------------
-    # Load row data from JSON files
-    # ------------------------------------------------------------------
+    # ---- Row data loading with cache ----
 
     def _load_row_data(self, row_name: str) -> dict | None:
         """Load a specific row from the secrets JSON files (first match)."""
@@ -1653,256 +1618,228 @@ class ObjectEditorView(ctk.CTkFrame):
 
         return self._json_row_cache[cache_key].get(row_name)
 
-    # ------------------------------------------------------------------
-    # Construction form (for "New" Construction)
-    # ------------------------------------------------------------------
+    # ---- New-object template renderers ----
+    # These render blank forms with game-accurate defaults. The field keys
+    # match what extract_*_fields() returns so the save workflow is identical.
 
-    def _render_construction_form(self):
-        frame = self.form_scroll
+    def _render_new_construction_recipe(self, row_name_var=None):
+        """Render blank construction recipe form with default values."""
+        recipe = {
+            "Name": "", "ResultConstructionHandle": "",
+            "BuildProcess": "EBuildProcess::DualMode",
+            "PlacementType": "EPlacementType::FreePlacement",
+            "LocationRequirement": "EConstructionLocation::Base",
+            "FoundationRule": "EFoundationRule::Never",
+            "MonumentType": "EMonumentType::None",
+            "bOnWall": False, "bOnFloor": True, "bPlaceOnWater": False,
+            "bOverrideRotation": False, "bAllowRefunds": True,
+            "bAutoFoundation": False, "bInheritAutoFoundationStability": False,
+            "bOnlyOnVoxel": False, "bIsBlockedByNearbySettlementStones": False,
+            "bIsBlockedByNearbyRavenConstructions": False,
+            "MaxAllowedPenetrationDepth": -1.0, "RequireNearbyRadius": 300.0,
+            "CameraStateOverridePriority": 5,
+            "Materials": [], "DefaultRequiredConstructions": [],
+            "DefaultUnlocks_UnlockType": "EMorRecipeUnlockType::Manual",
+            "DefaultUnlocks_NumFragments": 1,
+            "DefaultUnlocks_RequiredItems": [],
+            "DefaultUnlocks_RequiredConstructions": [],
+            "DefaultUnlocks_RequiredFragments": [],
+            "bHasSandboxRequirementsOverride": False,
+            "bHasSandboxUnlockOverride": False,
+            "SandboxUnlocks_UnlockType": "EMorRecipeUnlockType::Manual",
+            "SandboxUnlocks_NumFragments": 1,
+            "SandboxUnlocks_RequiredItems": [],
+            "SandboxUnlocks_RequiredConstructions": [],
+            "SandboxUnlocks_RequiredFragments": [],
+            "SandboxRequiredMaterials": [],
+            "SandboxRequiredConstructions": [],
+            "EnabledState": "ERowEnabledState::Live",
+        }
 
-        self._add_section_label(frame, "Construction Details")
+        self._create_section_header("Construction Recipe", ("#E65100", "#FF9800"))
 
-        self.user_name_var = ctk.StringVar(value="")
-        self._add_field(frame, "User Name:", self.user_name_var,
-                        placeholder="Your mod username (e.g. Tobi)")
-
-        self.name_var = ctk.StringVar(value="")
-        self._add_field(frame, "Display Name:", self.name_var,
-                        placeholder="Construction display name")
-
-        self.description_var = ctk.StringVar(value="")
-        self._add_field(frame, "Description:", self.description_var,
-                        placeholder="Short description")
-
-        self.asset_path_var = ctk.StringVar(value="")
-        self._add_field(frame, "Blueprint Path:", self.asset_path_var,
-                        placeholder="/Game/Mods/YourPack/BP_MyConstruction")
-
-        # Icon picker with searchable dropdown
-        self._load_icon_paths()
-        self.icon_path_var = ctk.StringVar(value="")
-        icon_row = ctk.CTkFrame(frame, fg_color="transparent")
-        icon_row.pack(fill="x", padx=15, pady=(0, 5))
-
-        ctk.CTkLabel(
-            icon_row, text="Icon:", width=160, anchor="w",
-            font=ctk.CTkFont(size=12),
-        ).pack(side="left")
-
-        if self._icon_paths:
-            FilterableComboBox(
-                icon_row, variable=self.icon_path_var,
-                values=self._icon_paths, width=400,
-            ).pack(side="left", fill="x", expand=True)
+        if row_name_var is not None:
+            self.form_vars["Name"] = row_name_var
         else:
-            ctk.CTkEntry(
-                icon_row, textvariable=self.icon_path_var,
-                placeholder_text="/Game/Mods/YourPack/Icons/T_UI_BuildIcon_Name",
-            ).pack(side="left", fill="x", expand=True)
+            self._create_text_field("Name", recipe["Name"], label="Row Name")
 
-        self._add_section_label(frame, "Category & Placement")
-
-        categories = sorted(self._category_flags.keys())
-        main_cats = sorted({c.split(".")[0] for c in categories})
-
-        self.main_category_var = ctk.StringVar(value="")
-        cat_frame = ctk.CTkFrame(frame, fg_color="transparent")
-        cat_frame.pack(fill="x", padx=15, pady=(0, 5))
-
-        ctk.CTkLabel(
-            cat_frame, text="Category:", width=160, anchor="w",
-            font=ctk.CTkFont(size=12),
-        ).pack(side="left")
-
-        self.category_combo = ctk.CTkComboBox(
-            cat_frame, values=main_cats, variable=self.main_category_var, width=250,
-        )
-        self.category_combo.pack(side="left", padx=(0, 10))
-        self.category_combo.set("")
-
-        self._add_section_label(frame, "Required Materials")
-        self._materials_container = ctk.CTkFrame(frame, fg_color="transparent")
-        self._materials_container.pack(fill="x", padx=15, pady=(0, 5))
-        self._add_material_row()
-
-        ctk.CTkButton(
-            frame, text="+ Add Material", width=130,
-            fg_color="#2196F3", hover_color="#1976D2",
-            command=self._add_material_row,
-        ).pack(padx=15, pady=(0, 10), anchor="w")
-
-        self._add_section_label(frame, "Unlock Condition")
-        self._render_unlock_section(frame)
-
-    # ------------------------------------------------------------------
-    # Item Recipe form (for "New" Item Recipe)
-    # ------------------------------------------------------------------
-
-    def _render_item_recipe_form(self):
-        frame = self.form_scroll
-
-        self._add_section_label(frame, "Item Recipe Details")
-
-        self.item_tag_var = ctk.StringVar(value=self.current_selected_name or "")
-        self._add_field(frame, "Item Tag:", self.item_tag_var,
-                        placeholder="e.g. MyArmor_Helmet")
-
-        self.item_prefix_var = ctk.StringVar(value="Armor")
-        prefix_frame = ctk.CTkFrame(frame, fg_color="transparent")
-        prefix_frame.pack(fill="x", padx=15, pady=(0, 5))
-
-        ctk.CTkLabel(
-            prefix_frame, text="Item Type:", width=160, anchor="w",
-            font=ctk.CTkFont(size=12),
-        ).pack(side="left")
-
-        ctk.CTkSegmentedButton(
-            prefix_frame,
-            values=["Armor", "Weapon", "Tool", "Item"],
-            variable=self.item_prefix_var,
-        ).pack(side="left")
-
-        self.craft_time_var = ctk.StringVar(value="5.0")
-        self._add_field(frame, "Craft Time (sec):", self.craft_time_var)
-
-        self._add_section_label(frame, "Crafting Stations")
-        stations_frame = ctk.CTkFrame(frame, fg_color="transparent")
-        stations_frame.pack(fill="x", padx=15, pady=(0, 10))
-        stations_frame.grid_columnconfigure(0, weight=1)
-        stations_frame.grid_columnconfigure(1, weight=1)
-
-        self._station_vars.clear()
-        for i, (tag, display) in enumerate(CRAFTING_STATIONS.items()):
-            var = ctk.BooleanVar(value=False)
-            self._station_vars[tag] = var
-            ctk.CTkCheckBox(
-                stations_frame, text=display, variable=var,
-                font=ctk.CTkFont(size=12),
-            ).grid(row=i // 2, column=i % 2, sticky="w", padx=5, pady=2)
-
-        self._add_section_label(frame, "Required Materials")
-        self._materials_container = ctk.CTkFrame(frame, fg_color="transparent")
-        self._materials_container.pack(fill="x", padx=15, pady=(0, 5))
-        self._add_material_row()
-
-        ctk.CTkButton(
-            frame, text="+ Add Material", width=130,
-            fg_color="#2196F3", hover_color="#1976D2",
-            command=self._add_material_row,
-        ).pack(padx=15, pady=(0, 10), anchor="w")
-
-        self._add_section_label(frame, "Unlock Condition")
-        self._render_unlock_section(frame)
-
-    # ------------------------------------------------------------------
-    # Shared form helpers
-    # ------------------------------------------------------------------
-
-    def _add_section_label(self, parent, text: str):
-        ctk.CTkLabel(
-            parent, text=text,
-            font=ctk.CTkFont(size=14, weight="bold"),
-        ).pack(fill="x", padx=15, pady=(15, 5), anchor="w")
-
-        ctk.CTkFrame(parent, height=2, fg_color=("gray70", "gray30")).pack(
-            fill="x", padx=15, pady=(0, 8)
+        self._create_text_field(
+            "ResultConstructionHandle", recipe["ResultConstructionHandle"],
+            label="Result Construction", autocomplete_key="ResultConstructions"
         )
 
-    def _add_field(self, parent, label: str, variable, placeholder: str = ""):
-        row = ctk.CTkFrame(parent, fg_color="transparent")
-        row.pack(fill="x", padx=15, pady=(0, 5))
+        row1 = ctk.CTkFrame(self.form_content, fg_color="transparent")
+        row1.pack(fill="x", pady=3)
+        self._create_dropdown_field_inline(
+            row1, "BuildProcess", recipe["BuildProcess"],
+            self._get_options("Enum_BuildProcess", DEFAULT_BUILD_PROCESS)
+        )
+        self._create_dropdown_field_inline(
+            row1, "PlacementType", recipe["PlacementType"],
+            self._get_options("Enum_PlacementType", DEFAULT_PLACEMENT)
+        )
 
-        ctk.CTkLabel(
-            row, text=label, width=160, anchor="w",
-            font=ctk.CTkFont(size=12),
-        ).pack(side="left")
+        row2 = ctk.CTkFrame(self.form_content, fg_color="transparent")
+        row2.pack(fill="x", pady=3)
+        self._create_dropdown_field_inline(
+            row2, "LocationRequirement", recipe["LocationRequirement"],
+            self._get_options("Enum_LocationRequirement", DEFAULT_LOCATION)
+        )
+        self._create_dropdown_field_inline(
+            row2, "FoundationRule", recipe["FoundationRule"],
+            self._get_options("Enum_FoundationRule", DEFAULT_FOUNDATION_RULE)
+        )
 
-        ctk.CTkEntry(
-            row, textvariable=variable, placeholder_text=placeholder,
-        ).pack(side="left", fill="x", expand=True)
+        row3 = ctk.CTkFrame(self.form_content, fg_color="transparent")
+        row3.pack(fill="x", pady=3)
+        self._create_dropdown_field_inline(
+            row3, "MonumentType", recipe["MonumentType"],
+            self._get_options("Enum_MonumentType", DEFAULT_MONUMENT_TYPE)
+        )
 
-    def _add_material_row(self):
-        row_frame = ctk.CTkFrame(self._materials_container, fg_color="transparent")
-        row_frame.pack(fill="x", pady=2)
+        self._create_subsection_header("Placement Options")
+        bool_row1 = ctk.CTkFrame(self.form_content, fg_color="transparent")
+        bool_row1.pack(fill="x", pady=4)
+        for bf in ["bOnWall", "bOnFloor", "bPlaceOnWater", "bOverrideRotation"]:
+            self._create_checkbox_field(bool_row1, bf, recipe[bf])
 
-        item_var = ctk.StringVar(value="")
-        count_var = ctk.StringVar(value="1")
+        bool_row2 = ctk.CTkFrame(self.form_content, fg_color="transparent")
+        bool_row2.pack(fill="x", pady=4)
+        for bf in ["bAllowRefunds", "bAutoFoundation", "bInheritAutoFoundationStability", "bOnlyOnVoxel"]:
+            self._create_checkbox_field(bool_row2, bf, recipe[bf])
 
-        ctk.CTkLabel(
-            row_frame, text=f"Material {len(self._material_rows) + 1}:",
-            width=100, anchor="w", font=ctk.CTkFont(size=12),
-        ).pack(side="left")
+        bool_row3 = ctk.CTkFrame(self.form_content, fg_color="transparent")
+        bool_row3.pack(fill="x", pady=4)
+        for bf in ["bIsBlockedByNearbySettlementStones", "bIsBlockedByNearbyRavenConstructions"]:
+            self._create_checkbox_field(bool_row3, bf, recipe[bf])
 
-        if self._material_items:
-            FilterableComboBox(
-                row_frame, variable=item_var,
-                values=self._material_items, width=200,
-            ).pack(side="left", padx=(0, 5))
+        self._create_subsection_header("Numeric Properties")
+        self._create_text_field(
+            "MaxAllowedPenetrationDepth", str(recipe["MaxAllowedPenetrationDepth"]),
+            label="Max Penetration Depth", width=200
+        )
+        self._create_text_field(
+            "RequireNearbyRadius", str(recipe["RequireNearbyRadius"]),
+            label="Require Nearby Radius", width=200
+        )
+        self._create_text_field(
+            "CameraStateOverridePriority", str(recipe["CameraStateOverridePriority"]),
+            label="Camera Priority", width=200
+        )
+
+        self._render_materials_section(recipe)
+        self._render_unlocks_section(recipe)
+        self._render_sandbox_section(recipe)
+
+        self._create_dropdown_field(
+            "Recipe_EnabledState", recipe["EnabledState"],
+            DEFAULT_ENABLED_STATE, label="Recipe Enabled State"
+        )
+
+    def _render_new_construction_definition(self, row_name_var=None):
+        """Render blank construction definition form."""
+        construction = {
+            "Name": "", "DisplayName": "", "Description": "",
+            "Actor": "", "Icon": "", "Tags": [],
+            "BackwardCompatibilityActors": [],
+            "EnabledState": "ERowEnabledState::Live",
+        }
+
+        self._create_section_header("Construction Definition", "#4CAF50")
+
+        if row_name_var is not None:
+            self.form_vars["Construction_Name"] = row_name_var
         else:
-            ctk.CTkEntry(
-                row_frame, textvariable=item_var,
-                placeholder_text="Item.Stone", width=200,
-            ).pack(side="left", padx=(0, 5))
+            self._create_text_field("Construction_Name", construction["Name"], label="Row Name")
 
-        ctk.CTkLabel(row_frame, text="x", font=ctk.CTkFont(size=12)).pack(
-            side="left", padx=2
+        self._create_text_field("DisplayName", construction["DisplayName"], label="Display Name")
+        self._create_text_field("Description", construction["Description"])
+        self._create_text_field("Actor", construction["Actor"],
+                                label="Actor Path", autocomplete_key="Actors")
+        self._create_text_field("Icon", "", label="Icon (Import Index)")
+        self._create_dropdown_field(
+            "Tags", "", self._get_options("Tags", []), label="Category Tag"
+        )
+        self._create_text_field(
+            "BackwardCompatibilityActors", "",
+            label="Backward Compat Actors", autocomplete_key="Actors"
+        )
+        self._create_dropdown_field(
+            "Construction_EnabledState", construction["EnabledState"],
+            DEFAULT_ENABLED_STATE, label="Construction Enabled State"
         )
 
-        ctk.CTkEntry(
-            row_frame, textvariable=count_var, width=60,
-        ).pack(side="left", padx=(2, 5))
+    def _render_new_item_recipe(self, row_name_var=None):
+        """Render blank item recipe form (weapons, armor, tools)."""
+        recipe = {
+            "Name": "", "ResultItemHandle": "", "ResultItemCount": 1,
+            "CraftTimeSeconds": 0.0, "bCanBePinned": True,
+            "bNpcOnlyRecipe": False,
+            "Materials": [], "DefaultRequiredConstructions": [],
+            "DefaultUnlocks_UnlockType": "EMorRecipeUnlockType::Manual",
+            "DefaultUnlocks_NumFragments": 1,
+            "DefaultUnlocks_RequiredItems": [],
+            "DefaultUnlocks_RequiredConstructions": [],
+            "DefaultUnlocks_RequiredFragments": [],
+            "bHasSandboxRequirementsOverride": False,
+            "bHasSandboxUnlockOverride": False,
+            "SandboxUnlocks_UnlockType": "EMorRecipeUnlockType::Manual",
+            "SandboxUnlocks_NumFragments": 1,
+            "SandboxUnlocks_RequiredItems": [],
+            "SandboxUnlocks_RequiredConstructions": [],
+            "SandboxUnlocks_RequiredFragments": [],
+            "SandboxRequiredMaterials": [],
+            "SandboxRequiredConstructions": [],
+            "EnabledState": "ERowEnabledState::Live",
+        }
 
-        row_data = {"frame": row_frame, "item": item_var, "count": count_var}
+        self._create_section_header("Item Recipe", ("#E65100", "#FF9800"))
 
-        ctk.CTkButton(
-            row_frame, text="✕", width=28, height=28,
-            fg_color="#E53935", hover_color="#C62828",
-            command=lambda: self._remove_material_row(row_frame, row_data),
-        ).pack(side="left")
+        if row_name_var is not None:
+            self.form_vars["Name"] = row_name_var
+        else:
+            self._create_text_field("Name", recipe["Name"], label="Row Name")
 
-        self._material_rows.append(row_data)
+        self._create_text_field(
+            "ResultItemHandle", recipe["ResultItemHandle"],
+            label="Result Item", autocomplete_key="AllValues"
+        )
+        self._create_text_field(
+            "ResultItemCount", str(recipe["ResultItemCount"]),
+            label="Result Count", width=200
+        )
+        self._create_text_field(
+            "CraftTimeSeconds", str(recipe["CraftTimeSeconds"]),
+            label="Craft Time (s)", width=200
+        )
 
-    def _remove_material_row(self, frame, row_data):
-        if len(self._material_rows) <= 1:
-            return
-        frame.destroy()
-        self._material_rows.remove(row_data)
+        bool_frame = ctk.CTkFrame(self.form_content, fg_color="transparent")
+        bool_frame.pack(fill="x", pady=4)
+        self._create_checkbox_field(bool_frame, "bCanBePinned", recipe["bCanBePinned"])
+        self._create_checkbox_field(bool_frame, "bNpcOnlyRecipe", recipe["bNpcOnlyRecipe"])
 
-    def _render_unlock_section(self, parent):
-        unlock_frame = ctk.CTkFrame(parent, fg_color="transparent")
-        unlock_frame.pack(fill="x", padx=15, pady=(0, 10))
+        self._render_materials_section(recipe)
+        self._render_unlocks_section(recipe)
+        self._render_sandbox_section(recipe)
 
-        self.unlock_type_var = ctk.StringVar(value="UnlockRequiredItems")
+        self._create_dropdown_field(
+            "Recipe_EnabledState", recipe["EnabledState"],
+            DEFAULT_ENABLED_STATE, label="Recipe Enabled State"
+        )
 
-        ctk.CTkRadioButton(
-            unlock_frame, text="Discover Item",
-            variable=self.unlock_type_var, value="UnlockRequiredItems",
-            font=ctk.CTkFont(size=12),
-        ).pack(side="left", padx=(0, 15))
+    def _render_new_both(self):
+        """Render construction recipe + definition with a single shared Row Name field."""
+        shared_row_var = ctk.StringVar(value="")
+        self.form_vars["_shared_row_name"] = shared_row_var
 
-        ctk.CTkRadioButton(
-            unlock_frame, text="Discover Construction",
-            variable=self.unlock_type_var, value="UnlockRequiredConstructions",
-            font=ctk.CTkFont(size=12),
-        ).pack(side="left")
+        self._create_subsection_header("Row Name (shared by both sections)")
+        self._create_text_field("Name", "", label="Row Name")
+        shared_row_var = self.form_vars["Name"]
 
-        req_frame = ctk.CTkFrame(parent, fg_color="transparent")
-        req_frame.pack(fill="x", padx=15, pady=(0, 15))
+        self._render_new_construction_recipe(row_name_var=shared_row_var)
+        self._render_new_construction_definition(row_name_var=shared_row_var)
 
-        ctk.CTkLabel(
-            req_frame, text="Unlock Requirement:", width=160, anchor="w",
-            font=ctk.CTkFont(size=12),
-        ).pack(side="left")
-
-        self.unlock_req_var = ctk.StringVar(value="")
-        ctk.CTkEntry(
-            req_frame, textvariable=self.unlock_req_var,
-            placeholder_text="e.g. Item.Hide or CraftingStation_BasicForge",
-        ).pack(side="left", fill="x", expand=True)
-
-    # ------------------------------------------------------------------
-    # Right-pane search / replace (mirrors Secrets tab)
-    # ------------------------------------------------------------------
+    # ---- Search/replace across form fields ----
 
     def _get_form_property_pairs(self) -> list[tuple[str, object, object]]:
         """Collect (property_name, label_widget, value_entry) triples from the form."""
@@ -2034,9 +1971,7 @@ class ObjectEditorView(ctk.CTkFrame):
                     count += 1
         self._set_status(f"Replaced {count} matches" if count else "No matches found")
 
-    # ------------------------------------------------------------------
-    # Data loading
-    # ------------------------------------------------------------------
+    # ---- Initial data loading and category switching ----
 
     def _initial_load(self):
         self._load_string_table()
@@ -2053,6 +1988,7 @@ class ObjectEditorView(ctk.CTkFrame):
         ]
 
     def _load_category(self, category: str):
+        """Switch to a category: refresh cache, load row names, filter out base-game rows."""
         self.view_mode = category
         self._set_status(f"Loading {category}...")
         self._refresh_cache()
@@ -2060,6 +1996,7 @@ class ObjectEditorView(ctk.CTkFrame):
         recipe_names = self._get_names_from_file(self._get_cache_recipes_path())
         def_names = self._get_names_from_file(self._get_cache_defs_path())
 
+        # Categories with recipes need matching names; flora/loot have definitions only
         if self.view_mode in ("buildings", "weapons", "armor", "tools", "items"):
             if recipe_names and def_names:
                 matching = recipe_names & def_names
@@ -2070,7 +2007,7 @@ class ObjectEditorView(ctk.CTkFrame):
         else:
             matching = def_names
 
-        # Strip rows that also exist in the base game data
+        # Remove rows present in base-game output so only mod-added rows remain
         game_def_names = self._get_names_from_file(self._get_game_defs_path())
         game_recipe_names = self._get_names_from_file(self._get_game_recipes_path())
         game_names = game_def_names | game_recipe_names
@@ -2092,6 +2029,7 @@ class ObjectEditorView(ctk.CTkFrame):
         )
 
     def _refresh_cache(self):
+        """Copy Secrets Source JSON to cache dir for the active category."""
         self._json_row_cache.clear()
         cache_dir = self._get_cache_dir()
 
@@ -2115,9 +2053,7 @@ class ObjectEditorView(ctk.CTkFrame):
     def _on_refresh_click(self):
         self._load_category(self.view_mode)
 
-    # ------------------------------------------------------------------
-    # Path helpers
-    # ------------------------------------------------------------------
+    # ---- Path helpers: cache, secrets source, and base-game locations ----
 
     def _get_cache_dir(self) -> Path:
         return get_appdata_dir() / "cache" / "secrets" / (self.view_mode or "buildings")
@@ -2184,17 +2120,14 @@ class ObjectEditorView(ctk.CTkFrame):
         return base / defs_map.get(self.view_mode, "Tech/Data/Building/DT_Constructions.json")
 
     def _get_string_tables_dirs(self) -> list[Path]:
+        """Return existing string table directories (base-game + mod)."""
         candidates = [
-            # Base game string tables from import (output/jsondata)
             get_output_dir() / "jsondata" / "Moria" / "Content" / "Tech" / "Data" / "StringTables",
-            # Mod string tables from Secrets Source (Mods path)
             get_appdata_dir() / "Secrets Source" / "jsondata" / "Moria" / "Content" / "Mods" / "Tech" / "Data" / "StringTables",
         ]
         return [d for d in candidates if d.exists()]
 
-    # ------------------------------------------------------------------
-    # Data helpers
-    # ------------------------------------------------------------------
+    # ---- Data helpers: string table, name lookup, list population ----
 
     def _get_names_from_file(self, json_path: Path | None) -> set:
         if not json_path or not json_path.exists():
@@ -2213,6 +2146,7 @@ class ObjectEditorView(ctk.CTkFrame):
             return set()
 
     def _load_string_table(self):
+        """Parse string table JSONs to build tag -> display name mapping."""
         self.string_table = {}
         for st_dir in self._get_string_tables_dirs():
             for st_path in st_dir.glob("*.json"):
@@ -2263,9 +2197,7 @@ class ObjectEditorView(ctk.CTkFrame):
             return entry["name"]
         return internal_name
 
-    # ------------------------------------------------------------------
-    # Left pane list
-    # ------------------------------------------------------------------
+    # ---- Left pane list population and filtering ----
 
     def _populate_list(self, items: dict):
         self.construction_check_vars.clear()
@@ -2313,29 +2245,26 @@ class ObjectEditorView(ctk.CTkFrame):
     def _on_checkbox_toggle(self, key: str):
         pass
 
-    # ------------------------------------------------------------------
-    # Save operations
-    # ------------------------------------------------------------------
+    # ---- Save operations ----
+    # Existing items: read form_vars + _property_widgets, write back to JSON.
+    # New items: collect form_vars + material_rows, create rows via object_templates.
 
     def _on_save(self):
-        # If editing an existing item, save property edits back to JSON
+        """Route save to either existing-item update or new-object creation."""
         if self.current_selected_name and not self._showing_new_form:
             self._save_existing_item()
             return
-
-        # Otherwise save a new object from the template form
         template_type = self.template_type_var.get()
-        if template_type == "Construction":
+        if template_type in ("Construction", "Both"):
             self._save_construction()
-        else:
+        elif template_type == "Recipe":
             self._save_item_recipe()
 
     def _save_existing_item(self):
-        """Write edited property values back to the secrets JSON files."""
+        """Find the row in definition and recipe files, apply edits, and write back."""
         row_name = self.current_selected_name
         saved_to = []
 
-        # Save to both files (definition and recipe) if the row exists in each
         for path in [self._get_secrets_defs_path(), self._get_secrets_recipes_path()]:
             if not path or not path.exists():
                 continue
@@ -2347,7 +2276,6 @@ class ObjectEditorView(ctk.CTkFrame):
                 logger.warning("Failed to read %s: %s", path, e)
                 continue
 
-            # Find the row
             row_found = False
             for export in data.get("Exports", []):
                 table = export.get("Table", {})
@@ -2373,14 +2301,11 @@ class ObjectEditorView(ctk.CTkFrame):
             self._set_status(f"Could not find {row_name} in secrets files")
 
     def _apply_property_edits(self, row: dict):
-        """Apply edited widget values back to a JSON row's Value array."""
-        values = row.get("Value", [])
+        """Write each _property_widgets entry back, converting to original type."""
         for pw in self._property_widgets:
             prop = pw["prop"]
             new_val = pw["var"].get()
             orig_type = pw["type"]
-
-            # Convert back to original type
             if orig_type == "int":
                 try:
                     prop["Value"] = int(new_val)
@@ -2396,69 +2321,55 @@ class ObjectEditorView(ctk.CTkFrame):
             else:
                 prop["Value"] = new_val
 
-    def _validate_new_object(self, fields: dict, materials: list, tag_name: str = "") -> str | None:
-        """Validate fields for a new object. Returns error message or None if valid."""
-        # Check required fields
-        missing = [label for label, val in fields.items() if not val]
-        if missing:
-            return f"Required: {', '.join(missing)}"
+    @staticmethod
+    def _parse_material_name(display_text: str) -> str:
+        """Extract internal name from 'Display Name (InternalName)' format."""
+        if "(" in display_text and display_text.endswith(")"):
+            return display_text[display_text.rindex("(") + 1:-1].strip()
+        return display_text.strip()
 
-        # Check materials
-        if not materials:
-            return "Add at least one material"
-        for item_tag, count in materials:
-            if not item_tag:
-                return "Material name cannot be empty"
-            if count < 1:
-                return f"Material count must be >= 1 (got {count})"
+    def _collect_materials(self) -> list[tuple[str, int]]:
+        """Collect materials from structured form rows."""
+        materials = []
+        for row in self.material_rows:
+            if row.get("removed"):
+                continue
+            mat_name = self._parse_material_name(row["material_var"].get())
+            try:
+                count = int(row["amount_var"].get())
+            except ValueError:
+                count = 1
+            if mat_name and count > 0:
+                materials.append((mat_name, count))
+        return materials
 
-        # Validate tag uniqueness if we have a tag to check
-        if tag_name:
-            secrets_base = (
-                get_appdata_dir() / "Secrets Source" / "jsondata" / "Moria" / "Content"
-            )
-            constructions_path = secrets_base / "Tech" / "Data" / "Building" / "DT_Constructions.json"
-            if constructions_path.exists():
-                existing = self._get_names_from_file(constructions_path)
-                if tag_name in existing:
-                    return f"Tag '{tag_name}' already exists — choose a different name"
-
-        return None
+    def _get_form_var(self, key: str, default: str = "") -> str:
+        """Get a stripped string value from form_vars."""
+        var = self.form_vars.get(key)
+        if var is None:
+            return default
+        return var.get().strip()
 
     def _save_construction(self):
-        if not hasattr(self, "user_name_var"):
+        """Create new construction rows in Architecture, Constructions, and Recipes JSON."""
+        if not self._showing_new_form:
             self._set_status("Click 'New' first to create a construction")
             return
 
-        user_name = self.user_name_var.get().strip()
-        name = self.name_var.get().strip()
-        description = self.description_var.get().strip()
-        asset_path = self.asset_path_var.get().strip()
-        category = self.main_category_var.get().strip()
+        row_name = self._get_form_var("Name")
+        display_name = self._get_form_var("DisplayName")
+        description = self._get_form_var("Description")
+        actor = self._get_form_var("Actor")
+        icon = self._get_form_var("Icon")
+
+        if not row_name:
+            self._set_status("Row Name is required")
+            return
 
         materials = self._collect_materials()
-        unlock_option = self.unlock_type_var.get()
-        unlock_req = self.unlock_req_var.get().strip()
-
-        # Validate
-        error = self._validate_new_object(
-            {"User Name": user_name, "Display Name": name,
-             "Blueprint Path": asset_path, "Category": category,
-             "Unlock Requirement": unlock_req},
-            materials,
+        unlock_type = self._get_form_var(
+            "DefaultUnlocks_UnlockType", "EMorRecipeUnlockType::Manual"
         )
-        if error:
-            self._set_status(error)
-            return
-
-        # Validate icon path format
-        icon_path = self.icon_path_var.get().strip()
-        if icon_path and not icon_path.startswith("/Game/"):
-            self._set_status("Icon path must start with /Game/")
-            return
-
-        title_name = name.replace(" ", "_").title()
-        base_tag = f"{user_name}Pack_{title_name}"
 
         try:
             secrets_base = (
@@ -2469,7 +2380,11 @@ class ObjectEditorView(ctk.CTkFrame):
             constructions_path = secrets_base / "Tech" / "Data" / "Building" / "DT_Constructions.json"
             recipes_path = secrets_base / "Tech" / "Data" / "Building" / "DT_ConstructionRecipes.json"
 
-            for p, n in [(arch_path, "Architecture.json"), (constructions_path, "DT_Constructions.json"), (recipes_path, "DT_ConstructionRecipes.json")]:
+            for p, n in [
+                (arch_path, "Architecture.json"),
+                (constructions_path, "DT_Constructions.json"),
+                (recipes_path, "DT_ConstructionRecipes.json"),
+            ]:
                 if not p.exists():
                     self._set_status(f"{n} not found in Secrets Source")
                     return
@@ -2479,49 +2394,48 @@ class ObjectEditorView(ctk.CTkFrame):
             recipes_data = load_json(recipes_path)
 
             existing = get_existing_row_names(constructions_data)
-            unique_tag = gen_unique_tag(base_tag, existing)
-            if not icon_path:
-                icon_path = f"/Game/Mods/{user_name}Pack/Constructions/Icons/T_UI_BuildIcon_{unique_tag}"
+            unique_tag = gen_unique_tag(row_name, existing)
 
-            add_string_table_entry(arch_data, unique_tag, name, description)
-            create_construction_row(unique_tag, asset_path, category, icon_path, constructions_data)
-            create_construction_recipe_row(unique_tag, category, materials, unlock_option, unlock_req, recipes_data)
+            category = self._get_form_var("Tags")
+            if not icon:
+                icon = f"/Game/Mods/Constructions/Icons/T_UI_BuildIcon_{unique_tag}"
+
+            if display_name:
+                add_string_table_entry(arch_data, unique_tag, display_name, description)
+            create_construction_row(unique_tag, actor, category, icon, constructions_data)
+            create_construction_recipe_row(
+                unique_tag, category, materials, unlock_type, "", recipes_data
+            )
 
             save_json(arch_path, arch_data)
             save_json(constructions_path, constructions_data)
             save_json(recipes_path, recipes_data)
 
             self._set_status(f"Saved construction: {unique_tag}")
+            self._json_row_cache.clear()
             self._load_category("buildings")
 
-        except Exception as e:
+        except (OSError, json.JSONDecodeError) as e:
             logger.exception("Failed to save construction")
             self._set_status(f"Error saving: {e}")
 
     def _save_item_recipe(self):
-        if not hasattr(self, "item_tag_var"):
+        """Create a new item recipe row in DT_ItemRecipes.json."""
+        if not self._showing_new_form:
             self._set_status("Click 'New' first to create an item recipe")
             return
 
-        item_tag = self.item_tag_var.get().strip()
-        item_prefix = self.item_prefix_var.get().strip()
+        row_name = self._get_form_var("Name")
+        result_item = self._get_form_var("ResultItemHandle")
 
-        stations = [tag for tag, var in self._station_vars.items() if var.get()]
+        if not row_name:
+            self._set_status("Row Name is required")
+            return
+        if not result_item:
+            self._set_status("Result Item is required")
+            return
+
         materials = self._collect_materials()
-        unlock_option = self.unlock_type_var.get()
-        unlock_req = self.unlock_req_var.get().strip()
-
-        # Validate
-        error = self._validate_new_object(
-            {"Item Tag": item_tag, "Unlock Requirement": unlock_req},
-            materials,
-        )
-        if error:
-            self._set_status(error)
-            return
-        if not stations:
-            self._set_status("Select at least one crafting station")
-            return
 
         try:
             secrets_base = (
@@ -2534,35 +2448,40 @@ class ObjectEditorView(ctk.CTkFrame):
                 return
 
             recipes_data = load_json(recipes_path)
-            create_item_recipe_row(item_tag, item_prefix, stations, materials, unlock_option, unlock_req, recipes_data)
+
+            item_prefix = result_item.split(".")[0] if "." in result_item else "Item"
+            stations = []
+            for key, var in self.form_vars.items():
+                if key.startswith("CraftingStation_") and hasattr(var, 'get'):
+                    try:
+                        if var.get():
+                            stations.append(key)
+                    except (ValueError, TypeError):
+                        pass
+
+            unlock_type = self._get_form_var(
+                "DefaultUnlocks_UnlockType", "EMorRecipeUnlockType::Manual"
+            )
+
+            create_item_recipe_row(
+                row_name, item_prefix, stations, materials,
+                unlock_type, "", recipes_data,
+            )
             save_json(recipes_path, recipes_data)
 
-            self._set_status(f"Saved item recipe: {item_tag}")
-            cat_map = {"Armor": "armor", "Weapon": "weapons", "Tool": "tools", "Item": "items"}
+            self._set_status(f"Saved item recipe: {row_name}")
+            self._json_row_cache.clear()
+            cat_map = {"Armor": "armor", "Weapon": "weapons", "Tool": "tools"}
             self._load_category(cat_map.get(item_prefix, "items"))
 
-        except Exception as e:
+        except (OSError, json.JSONDecodeError) as e:
             logger.exception("Failed to save item recipe")
             self._set_status(f"Error saving: {e}")
 
-    def _collect_materials(self) -> list[tuple[str, int]]:
-        materials = []
-        for row in self._material_rows:
-            item = row["item"].get().strip()
-            try:
-                count = int(row["count"].get().strip())
-            except ValueError:
-                count = 1
-            if item and count > 0:
-                materials.append((item, count))
-        return materials
-
-    # ------------------------------------------------------------------
-    # Delete
-    # ------------------------------------------------------------------
+    # ---- Delete ----
 
     def _on_delete(self):
-        """Delete the currently selected row from all secrets JSON files."""
+        """Remove the selected row from definition and recipe JSONs after confirmation."""
         if not self.current_selected_name:
             self._set_status("Select an item to delete")
             return
@@ -2570,7 +2489,6 @@ class ObjectEditorView(ctk.CTkFrame):
         row_name = self.current_selected_name
         display = self._lookup_game_name(row_name)
 
-        # Confirm deletion
         confirm = ctk.CTkInputDialog(
             text=f"Type DELETE to confirm removal of:\n{display} ({row_name})",
             title="Confirm Delete",
@@ -2618,9 +2536,7 @@ class ObjectEditorView(ctk.CTkFrame):
         else:
             self._set_status(f"Could not find {row_name} in secrets files")
 
-    # ------------------------------------------------------------------
-    # Status
-    # ------------------------------------------------------------------
+    # ---- Status bar ----
 
     def _set_status(self, message: str):
         if self.on_status_message:
