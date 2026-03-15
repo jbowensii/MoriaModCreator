@@ -340,6 +340,21 @@ def merge_secrets_rows(
                 game_table["Data"].append(row)
                 total_merged += 1
 
+    # Merge secrets NameMap entries into game NameMap
+    if total_merged > 0:
+        game_namemap = game_data.get("NameMap")
+        secrets_namemap = secrets_data.get("NameMap")
+        if isinstance(game_namemap, list) and isinstance(secrets_namemap, list):
+            existing = set(game_namemap)
+            for name in secrets_namemap:
+                if name not in existing:
+                    game_namemap.append(name)
+                    existing.add(name)
+
+        # Also sync any FNames from the merged row data itself
+        from src.build_manager import BuildManager  # noqa: C0415
+        BuildManager._sync_namemap(game_data)
+
     # Write merged result (game data with appended secrets rows)
     dest_json_path.parent.mkdir(parents=True, exist_ok=True)
     with open(dest_json_path, 'w', encoding='utf-8') as f:

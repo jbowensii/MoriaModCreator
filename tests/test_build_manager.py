@@ -972,6 +972,26 @@ class TestSyncNamemap:
         json_data = {"NameMap": "not_a_list", "Exports": []}
         BuildManager._sync_namemap(json_data)
 
+    def test_adds_missing_text_property_data(self):
+        """Test syncs TextPropertyData TableId and Value FNames."""
+        json_data = {
+            "NameMap": ["ExistingName"],
+            "Exports": [{
+                "Data": [{
+                    "$type": "UAssetAPI.PropertyTypes.Objects.TextPropertyData, UAssetAPI",
+                    "Name": "DisplayName",
+                    "HistoryType": "StringTableEntry",
+                    "TableId": "/Game/Mods/Tech/Data/StringTables/ST_Mod_Items.ST_Mod_Items",
+                    "Value": "Armor.BearGuild.Gloves.Name"
+                }]
+            }]
+        }
+        BuildManager._sync_namemap(json_data)
+        nm = json_data["NameMap"]
+        assert "DisplayName" in nm
+        assert "/Game/Mods/Tech/Data/StringTables/ST_Mod_Items.ST_Mod_Items" in nm
+        assert "Armor.BearGuild.Gloves.Name" in nm
+
 
 class TestCleanBuildDirectories:
     """Tests for _clean_build_directories method."""

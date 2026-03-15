@@ -238,10 +238,19 @@ class VirtualScrollList(ctk.CTkFrame):
         self._redraw()
 
     def _on_mousewheel(self, event):
-        self._canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+        # Scroll by 3 rows per wheel tick for smooth, predictable scrolling
+        delta = int(-1 * (event.delta / 120))
+        total_height = len(self._filtered_indices) * self.ROW_HEIGHT
+        if total_height <= 0:
+            return
+        fraction = (3 * self.ROW_HEIGHT * delta) / total_height
+        current = self._canvas.yview()[0]
+        self._canvas.yview_moveto(max(0.0, min(1.0, current + fraction)))
+        # Redraw immediately for smooth scrolling, cancel any pending
         if self._scroll_after_id:
             self.after_cancel(self._scroll_after_id)
-        self._scroll_after_id = self.after(10, self._redraw)
+            self._scroll_after_id = None
+        self._redraw()
 
     def _rebuild_pool(self, count: int):
         while len(self._row_pool) > count:
@@ -286,12 +295,18 @@ class VirtualScrollList(ctk.CTkFrame):
         if canvas_height <= 1:
             return
 
+        total_items = len(self._filtered_indices)
         y_top = self._canvas.canvasy(0)
         first_visible = max(0, int(y_top // self.ROW_HEIGHT))
+
+        # Clamp so we don't start past the last screenful of items
+        max_first = max(0, total_items - (canvas_height // self.ROW_HEIGHT))
+        first_visible = min(first_visible, max_first)
+
         visible_count = (canvas_height // self.ROW_HEIGHT) + 3
         last_visible = min(
             first_visible + visible_count,
-            len(self._filtered_indices)
+            total_items
         )
 
         viewport_y = first_visible * self.ROW_HEIGHT

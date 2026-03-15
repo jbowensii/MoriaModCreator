@@ -970,6 +970,7 @@ class BuildManager:  # pylint: disable=too-few-public-methods
         - StructPropertyData StructType fields
         - ArrayPropertyData/SetPropertyData ArrayType fields
         - MapPropertyData KeyType/ValueType fields
+        - TextPropertyData TableId and Value fields (StringTableEntry)
         """
         name_map = json_data.get('NameMap')
         if not isinstance(name_map, list):
@@ -1004,6 +1005,9 @@ class BuildManager:  # pylint: disable=too-few-public-methods
                 elif 'MapPropertyData' in dtype:
                     _add_if_missing(obj.get('KeyType'))
                     _add_if_missing(obj.get('ValueType'))
+                elif 'TextPropertyData' in dtype:
+                    _add_if_missing(obj.get('TableId'))
+                    _add_if_missing(obj.get('Value'))
                 for v in obj.values():
                     _scan(v)
             elif isinstance(obj, list):

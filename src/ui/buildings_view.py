@@ -2721,7 +2721,7 @@ class BuildingsView(ctk.CTkFrame):
     def _on_refresh_cache_click(self):
         """Handle Refresh button - delete cache and re-copy from Secrets Source."""
         logger.debug("Refresh cache button clicked, view_mode=%s", self.view_mode)
-        self._refresh_cache()
+        self._refresh_cache(force=True)
         self._set_status("Cache refreshed from Secrets Source")
 
         # Reload the current view if one is active
@@ -5663,37 +5663,52 @@ class BuildingsView(ctk.CTkFrame):
         }
         return self._get_cache_dir() / defs_map.get(self.view_mode, 'DT_Constructions.json')
 
-    def _refresh_cache(self):
-        """Force-refresh cache by deleting old cache and re-copying from Secrets Source.
+    def _refresh_cache(self, force: bool = False):
+        """Refresh cache from Secrets Source, skipping copies when unchanged.
 
         Preserves .ini files (e.g. checked_items.ini) across refreshes.
         Invalidates the JSON row cache so rows are re-read from fresh files.
+
+        Args:
+            force: If True, always delete and re-copy (used by Refresh button).
         """
         self._json_row_cache.clear()
-        logger.info("Force-refreshing cache for view_mode=%s", self.view_mode)
         cache_dir = self._get_cache_dir()
-
-        # Delete non-INI files from cache directory to start fresh
-        if cache_dir.exists():
-            for item in cache_dir.iterdir():
-                if item.is_file() and item.suffix.lower() != '.ini':
-                    item.unlink()
-            logger.info("Cleared cache directory (preserved .ini): %s", cache_dir)
-
         cache_dir.mkdir(parents=True, exist_ok=True)
+
+        if force:
+            logger.info("Force-refreshing cache for view_mode=%s", self.view_mode)
+            # Delete non-INI files from cache directory to start fresh
+            if cache_dir.exists():
+                for item in cache_dir.iterdir():
+                    if item.is_file() and item.suffix.lower() != '.ini':
+                        item.unlink()
+                logger.info("Cleared cache directory (preserved .ini): %s", cache_dir)
+
+        def _copy_if_needed(src: Path, dst: Path):
+            """Copy src to dst only if dst is missing or src is newer."""
+            if not src.exists():
+                return
+            if force or not dst.exists():
+                shutil.copy2(src, dst)
+                logger.info("Refreshed cache: %s", src.name)
+                return
+            # Skip copy if cache is already up-to-date
+            if src.stat().st_mtime <= dst.stat().st_mtime:
+                logger.debug("Cache up-to-date, skipping: %s", src.name)
+                return
+            shutil.copy2(src, dst)
+            logger.info("Refreshed cache (source newer): %s", src.name)
 
         # Refresh recipes (if this mode has them)
         src_recipes = self._get_secrets_recipes_path()
         cache_recipes = self._get_cache_recipes_path()
-        if src_recipes and cache_recipes and src_recipes.exists():
-            shutil.copy2(src_recipes, cache_recipes)
-            logger.info("Refreshed cache: %s", src_recipes.name)
+        if src_recipes and cache_recipes:
+            _copy_if_needed(src_recipes, cache_recipes)
 
         # Refresh definitions
         src_defs = self._get_secrets_constructions_path()
-        if src_defs.exists():
-            shutil.copy2(src_defs, self._get_cache_constructions_path())
-            logger.info("Refreshed cache: %s", src_defs.name)
+        _copy_if_needed(src_defs, self._get_cache_constructions_path())
 
     def _save_secrets_prefix(self):
         """Save the current secrets prefix to changesecrets config."""
