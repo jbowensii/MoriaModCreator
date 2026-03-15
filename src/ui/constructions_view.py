@@ -3096,10 +3096,16 @@ class ConstructionsView(ctk.CTkFrame):
     ) -> list[tuple[str, str, str]]:
         """Diff inner properties of a struct, returning dot-path changes."""
         changes = []
-        # Guard: if list contains non-dict items (e.g. strings), skip struct diff
+        # If list contains non-dict items (e.g. tag strings), compare as whole value
         if not all(isinstance(p, dict) for p in orig_props) or \
            not all(isinstance(p, dict) for p in cache_props):
+            if orig_props != cache_props:
+                if all(isinstance(v, str) for v in cache_props):
+                    changes.append((row_name, parent_path, ",".join(cache_props)))
+                else:
+                    changes.append((row_name, parent_path, str(cache_props)))
             return changes
+
         orig_map = {p.get('Name'): p for p in orig_props if p.get('Name')}
         cache_map = {p.get('Name'): p for p in cache_props if p.get('Name')}
 
@@ -3117,10 +3123,17 @@ class ConstructionsView(ctk.CTkFrame):
             if not isinstance(inner_val, (list, dict)):
                 if inner_val != orig_inner_val:
                     changes.append((row_name, f"{parent_path}.{inner_name}", str(inner_val)))
-            # Nested struct
+            # Value is a list
             elif isinstance(inner_val, list) and isinstance(orig_inner_val, list):
-                changes.extend(self._diff_struct_properties(
-                    row_name, f"{parent_path}.{inner_name}", orig_inner_val, inner_val))
+                # List of simple strings (e.g. GameplayTags)
+                if inner_val and all(isinstance(v, str) for v in inner_val):
+                    if inner_val != orig_inner_val:
+                        changes.append((row_name, f"{parent_path}.{inner_name}",
+                                        ",".join(inner_val)))
+                else:
+                    # List of dicts — recurse as struct properties
+                    changes.extend(self._diff_struct_properties(
+                        row_name, f"{parent_path}.{inner_name}", orig_inner_val, inner_val))
 
         return changes
 
@@ -3128,11 +3141,45 @@ class ConstructionsView(ctk.CTkFrame):
         self, row_name: str, prop_name: str,
         orig_arr: list, cache_arr: list
     ) -> list[tuple[str, str, str]]:
-        """Diff array elements, returning indexed changes where possible."""
+        """Diff array elements, returning indexed changes where possible.
+
+        Handles element-level changes for matching indices, plus added/removed
+        elements when array sizes differ.
+        """
         changes = []
 
-        # Compare element by element for matching indices
-        for i in range(min(len(orig_arr), len(cache_arr))):
+        max_len = max(len(orig_arr), len(cache_arr))
+        for i in range(max_len):
+            if i >= len(cache_arr):
+                continue
+            if i >= len(orig_arr):
+                cache_elem = cache_arr[i]
+                if isinstance(cache_elem, dict) and 'Value' in cache_elem:
+                    if isinstance(cache_elem['Value'], list):
+                        for inner in cache_elem['Value']:
+                            if isinstance(inner, dict):
+                                inner_name = inner.get('Name', '')
+                                inner_val = inner.get('Value')
+                                if inner_name and inner_val is not None:
+                                    if isinstance(inner_val, list):
+                                        for sub in inner_val:
+                                            if isinstance(sub, dict):
+                                                sub_name = sub.get('Name', '')
+                                                sub_val = sub.get('Value')
+                                                if sub_name and sub_val is not None:
+                                                    changes.append((
+                                                        row_name,
+                                                        f"{prop_name}[{i}].{inner_name}.{sub_name}",
+                                                        str(sub_val)
+                                                    ))
+                                    else:
+                                        changes.append((
+                                            row_name,
+                                            f"{prop_name}[{i}].{inner_name}",
+                                            str(inner_val)
+                                        ))
+                continue
+
             orig_elem = orig_arr[i]
             cache_elem = cache_arr[i]
 
@@ -3148,7 +3195,6 @@ class ConstructionsView(ctk.CTkFrame):
                     orig_elem['Value'], cache_elem['Value'])
                 changes.extend(inner)
             elif isinstance(orig_elem, dict) and isinstance(cache_elem, dict):
-                # Simple dict element - compare Value field
                 orig_v = orig_elem.get('Value', '')
                 cache_v = cache_elem.get('Value', '')
                 if orig_v != cache_v:
