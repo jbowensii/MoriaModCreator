@@ -173,11 +173,11 @@ class FilterableComboBox(ctk.CTkFrame):
         self.dropdown_window.attributes("-topmost", True)
 
         # Scrollable frame holds the option buttons
-        popup_height = min(len(self.current_matches) * 28 + 4, 300)
+        popup_height = min(len(self.current_matches) * 30 + 10, 350)
         self.scroll_frame = ctk.CTkScrollableFrame(
             self.dropdown_window,
             fg_color=("gray95", "gray20"),
-            height=popup_height - 4
+            height=popup_height - 6
         )
         self.scroll_frame.pack(fill="both", expand=True, padx=1, pady=1)
 
@@ -232,7 +232,7 @@ class FilterableComboBox(ctk.CTkFrame):
              + self.entry.winfo_height()
              + self.DROPDOWN_GAP)
         width = max(self.winfo_width(), 300)
-        height = min(len(self.current_matches) * 28 + 4, 300)
+        height = min(len(self.current_matches) * 30 + 10, 350)
 
         # Flip above the entry if popup would go off-screen
         screen_height = self.winfo_screenheight()

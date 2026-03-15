@@ -5212,6 +5212,11 @@ class BuildingsView(ctk.CTkFrame):
         with open(json_path, 'w', encoding='utf-8') as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
 
+        # Invalidate the row cache for this file so next read gets fresh data
+        cache_key = str(json_path)
+        if cache_key in self._json_row_cache:
+            del self._json_row_cache[cache_key]
+
     # -------------------------------------------------------------------------
     # JSON DATA UPDATE METHODS
     # -------------------------------------------------------------------------
