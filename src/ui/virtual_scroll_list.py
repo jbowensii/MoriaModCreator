@@ -256,8 +256,10 @@ class VirtualScrollList(ctk.CTkFrame):
         eye_label.pack(side="right", padx=(0, 5))
 
         # Place off-screen initially; create_window gives us an id to move later
+        canvas_width = self._canvas.winfo_width() or 300
         win_id = self._canvas.create_window(
-            0, -100, window=frame, anchor="nw", width=1
+            0, -100, window=frame, anchor="nw",
+            width=canvas_width, height=self.ROW_HEIGHT
         )
 
         # Bind mousewheel on all child widgets
@@ -315,7 +317,9 @@ class VirtualScrollList(ctk.CTkFrame):
             # Position directly on canvas at the item's absolute Y
             y = fi * self.ROW_HEIGHT
             self._canvas.coords(row['win_id'], 0, y)
-            self._canvas.itemconfigure(row['win_id'], width=canvas_width)
+            self._canvas.itemconfigure(row['win_id'],
+                                       width=canvas_width,
+                                       height=self.ROW_HEIGHT)
 
             pool_idx += 1
 
