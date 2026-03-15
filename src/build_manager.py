@@ -13,13 +13,13 @@ import logging
 import re
 import shutil
 import subprocess
+import tempfile
 import xml.etree.ElementTree as ET
 import zipfile
 from pathlib import Path
 from typing import Callable
 
-from src.config import get_appdata_dir, get_output_dir, get_default_mymodfiles_dir, get_utilities_dir, get_final_destination_dir
-from src.ui.import_dialog import merge_secrets_rows
+from src.config import get_appdata_dir, get_output_dir, get_default_mymodfiles_dir, get_utilities_dir, get_final_destination_dir, get_game_install_path
 from src.constants import (
     UE_VERSION,
     RETOC_UE_VERSION,
@@ -253,76 +253,144 @@ class BuildManager:  # pylint: disable=too-few-public-methods
         return uses_secrets
 
     def _phase_b_overlay_secrets(self, mod_name: str):
-        """Phase B: Overlay secrets manifest files onto jsonfiles/.
+        """Phase B: Extract secrets pak and overwrite game files in staging.
 
-        Reads the secrets manifest.def and copies ALL listed files from
-        Secrets Source/jsondata/ to the build jsonfiles/ directory,
-        overwriting any existing files.
+        Runs retoc to-legacy on RtoMSecretsOfKhazaddum_NoFatStacks_P to
+        extract uasset files, converts them to JSON with UAssetGUI, then
+        copies the resulting JSON into jsonfiles/ — overwriting the base
+        game versions.  This preserves correct Import indices because the
+        secrets pak already contains both game and secrets data merged
+        together.
 
         Args:
             mod_name: Name of the mod.
         """
-        manifest_path = get_appdata_dir() / 'Secrets Source' / 'secrets manifest.def'
-        logger.info("Phase B: manifest_path=%s, exists=%s", manifest_path, manifest_path.exists())
-        if not manifest_path.exists():
-            logger.info("Phase B: Secrets manifest not found at %s, skipping", manifest_path)
+        secrets_dir = get_appdata_dir() / 'Secrets Source'
+        secrets_stem = "RtoMSecretsOfKhazaddum_NoFatStacks_P"
+
+        # Locate the three pak files
+        utoc_matches = list(secrets_dir.rglob(f"{secrets_stem}.utoc"))
+        if not utoc_matches:
+            logger.warning("Phase B: %s.utoc not found in Secrets Source, skipping", secrets_stem)
+            return
+        pak_dir = utoc_matches[0].parent
+        logger.info("Phase B: Found secrets pak in %s", pak_dir)
+
+        # Verify all three files exist
+        for ext in (".pak", ".ucas", ".utoc"):
+            if not (pak_dir / f"{secrets_stem}{ext}").exists():
+                logger.error("Phase B: Missing %s%s", secrets_stem, ext)
+                return
+
+        # Need global.ucas/global.utoc for retoc name resolution
+        game_path = get_game_install_path()
+        paks_path = Path(game_path) / "Moria" / "Content" / "Paks" if game_path else None
+        if not paks_path or not paks_path.exists():
+            logger.error("Phase B: Game Paks directory not found: %s", paks_path)
+            return
+        global_ucas = paks_path / "global.ucas"
+        global_utoc = paks_path / "global.utoc"
+        if not global_ucas.exists() or not global_utoc.exists():
+            logger.error("Phase B: global.ucas/global.utoc not found in %s", paks_path)
             return
 
-        secrets_jsondata = get_appdata_dir() / 'Secrets Source' / JSONDATA_DIR
+        utilities_dir = get_utilities_dir()
+        retoc_path = utilities_dir / RETOC_EXE
+        uassetgui_path = utilities_dir / UASSETGUI_EXE
+        if not retoc_path.exists() or not uassetgui_path.exists():
+            logger.error("Phase B: retoc or UAssetGUI not found in %s", utilities_dir)
+            return
+
         mymodfiles_dir = get_default_mymodfiles_dir() / mod_name / JSONFILES_DIR
-        logger.info("Phase B: secrets_jsondata=%s, exists=%s", secrets_jsondata, secrets_jsondata.exists())
-        logger.info("Phase B: mymodfiles_dir=%s, exists=%s", mymodfiles_dir, mymodfiles_dir.exists())
 
+        # Use a temp directory for retoc extraction and JSON conversion
+        temp_retoc = tempfile.mkdtemp(prefix="secrets_build_retoc_")
+        temp_json = tempfile.mkdtemp(prefix="secrets_build_json_")
+        temp_paks = tempfile.mkdtemp(prefix="secrets_build_paks_")
         try:
-            tree = ET.parse(manifest_path)
-            root = tree.getroot()
+            # Copy pak files + global files into temp paks dir
+            for ext in (".pak", ".ucas", ".utoc"):
+                shutil.copy2(str(pak_dir / f"{secrets_stem}{ext}"), temp_paks)
+            shutil.copy2(str(global_ucas), temp_paks)
+            shutil.copy2(str(global_utoc), temp_paks)
 
-            mod_elements = root.findall('mod')
-            logger.info("Phase B: Found %d <mod> elements in manifest", len(mod_elements))
+            # Step B1: retoc to-legacy → extract uassets
+            self._report_progress("Extracting secrets pak files...", 0.15)
+            cmd = [
+                str(retoc_path), 'to-legacy',
+                '--version', RETOC_UE_VERSION,
+                temp_paks, temp_retoc
+            ]
+            logger.info("Phase B1: Running retoc: %s", ' '.join(cmd))
+            result = subprocess.run(
+                cmd, capture_output=True, text=True,
+                encoding='utf-8', errors='replace', timeout=300,
+                creationflags=subprocess.CREATE_NO_WINDOW
+                if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0,
+                check=False,
+            )
+            if result.returncode != 0:
+                logger.error("Phase B1: retoc failed: %s", result.stderr.strip() if result.stderr else "Unknown")
+                return
+            logger.info("Phase B1: retoc extraction complete")
 
-            # Parse manifest - look for <mod file="..."> elements
-            file_count = 0
-            merge_count = 0
-            copy_count = 0
-            for mod_element in mod_elements:
-                file_path = mod_element.get('file', '')
-                if not file_path:
-                    continue
+            # Step B2: UAssetGUI tojson on each extracted uasset
+            self._report_progress("Converting secrets to JSON...", 0.17)
+            uasset_files = []
+            for ext in (".uasset", ".umap"):
+                uasset_files.extend(Path(temp_retoc).rglob(f"*{ext}"))
 
-                normalized_path = file_path.lstrip('\\').lstrip('/').replace('\\', '/')
-                source_file = secrets_jsondata / normalized_path
+            if not uasset_files:
+                logger.warning("Phase B2: No uasset files found after retoc extraction")
+                return
 
-                if not source_file.exists():
-                    logger.warning("Phase B: Manifest file not found: %s", source_file)
-                    continue
+            logger.info("Phase B2: Converting %d uasset files to JSON", len(uasset_files))
+            converted = 0
+            for uasset_file in uasset_files:
+                rel_path = uasset_file.relative_to(temp_retoc)
+                json_file = Path(temp_json) / rel_path.with_suffix('.json')
+                json_file.parent.mkdir(parents=True, exist_ok=True)
 
-                dest_file = mymodfiles_dir / normalized_path
+                cmd = [
+                    str(uassetgui_path), 'tojson',
+                    str(uasset_file), str(json_file), UE_VERSION
+                ]
+                try:
+                    result = subprocess.run(
+                        cmd, capture_output=True, text=True,
+                        encoding='utf-8', errors='replace', timeout=BUILD_TIMEOUT,
+                        creationflags=subprocess.CREATE_NO_WINDOW
+                        if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0,
+                        check=False,
+                    )
+                    if result.returncode == 0 and json_file.exists():
+                        converted += 1
+                    else:
+                        logger.warning("Phase B2: Failed to convert %s", uasset_file.name)
+                except (subprocess.TimeoutExpired, OSError) as e:
+                    logger.warning("Phase B2: Error converting %s: %s", uasset_file.name, e)
+
+            logger.info("Phase B2: Converted %d/%d files", converted, len(uasset_files))
+
+            # Step B3: Copy JSON files into jsonfiles/, overwriting game versions
+            self._report_progress("Overlaying secrets data...", 0.19)
+            copied = 0
+            for json_file in Path(temp_json).rglob("*.json"):
+                rel_path = json_file.relative_to(temp_json)
+                dest_file = mymodfiles_dir / rel_path
                 dest_file.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(str(json_file), str(dest_file))
+                copied += 1
+                logger.debug("Phase B3: Overwrote %s", rel_path)
 
-                if dest_file.exists():
-                    # Merge new secrets rows into the existing game file
-                    logger.info("Phase B: Merging %s (src=%s, dst=%s)",
-                                normalized_path, source_file.exists(), dest_file.exists())
-                    try:
-                        merged = merge_secrets_rows(dest_file, source_file, dest_file)
-                        merge_count += 1
-                        logger.info("Phase B: Merged %d new rows into: %s", merged, normalized_path)
-                    except Exception as e:
-                        logger.error("Phase B: CRASH during merge of %s: %s", normalized_path, e,
-                                     exc_info=True)
-                        raise
-                else:
-                    # No game file — just copy the secrets file
-                    shutil.copy2(source_file, dest_file)
-                    copy_count += 1
-                    logger.info("Phase B: Copied new secrets file: %s", normalized_path)
-                file_count += 1
+            logger.info("Phase B: Done — %d JSON files overlaid into staging", copied)
 
-            logger.info("Phase B: Done — %d files processed (%d merged, %d copied)",
-                         file_count, merge_count, copy_count)
-
-        except (ET.ParseError, OSError) as e:
-            logger.error("Phase B: Error processing secrets manifest: %s", e, exc_info=True)
+        except Exception as e:
+            logger.error("Phase B: Error during secrets extraction: %s", e, exc_info=True)
+        finally:
+            shutil.rmtree(temp_retoc, ignore_errors=True)
+            shutil.rmtree(temp_json, ignore_errors=True)
+            shutil.rmtree(temp_paks, ignore_errors=True)
 
     @staticmethod
     def _normalize_secrets_path(mod_file_path: str) -> str:
