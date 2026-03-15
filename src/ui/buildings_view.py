@@ -3191,12 +3191,19 @@ class BuildingsView(ctk.CTkFrame):
                 if cache_val != orig_val:
                     changes.append((row_name, prop_name, str(cache_val)))
 
-            # Text property - compare CultureInvariantString
+            # Text property - compare Value (string table key) and CultureInvariantString
             elif 'TextPropertyData' in prop_type:
-                orig_text = orig_prop.get('CultureInvariantString', '')
-                cache_text = cache_prop.get('CultureInvariantString', '')
-                if orig_text != cache_text:
-                    changes.append((row_name, f"{prop_name}.CultureInvariantString", cache_text))
+                # StringTableEntry: Value is the key, TableId is the table path
+                orig_val_str = orig_prop.get('Value', '') or ''
+                cache_val_str = cache_prop.get('Value', '') or ''
+                if orig_val_str != cache_val_str:
+                    changes.append((row_name, prop_name, str(cache_val_str)))
+                # Also check CultureInvariantString (used by non-StringTableEntry texts)
+                orig_culture = orig_prop.get('CultureInvariantString', '') or ''
+                cache_culture = cache_prop.get('CultureInvariantString', '') or ''
+                if orig_culture != cache_culture:
+                    changes.append((row_name, f"{prop_name}.CultureInvariantString",
+                                    cache_culture))
 
             # SoftObject property (Actor paths)
             elif 'SoftObjectPropertyData' in prop_type:
