@@ -4677,6 +4677,10 @@ class BuildingsView(ctk.CTkFrame):
         # Always save to cache files
         recipes_path = self._get_cache_recipes_path()
         constructions_path = self._get_cache_constructions_path()
+        logger.info("Save: recipes_path=%s (exists=%s)", recipes_path,
+                     recipes_path.exists() if recipes_path else False)
+        logger.info("Save: constructions_path=%s (exists=%s)", constructions_path,
+                     constructions_path.exists() if constructions_path else False)
 
         try:
             saved_files = []
@@ -4684,14 +4688,18 @@ class BuildingsView(ctk.CTkFrame):
             # Update recipe row in cached JSON
             if recipe_json:
                 recipe_name = recipe_json.get("Name", "")
-                if recipe_name and recipes_path.exists():
+                logger.info("Save: recipe_name=%s, path_exists=%s",
+                             recipe_name, recipes_path.exists() if recipes_path else False)
+                if recipe_name and recipes_path and recipes_path.exists():
                     self._update_row_in_json(recipes_path, recipe_name, recipe_json)
                     saved_files.append("recipes")
 
             # Update construction row in cached JSON
             if construction_json:
                 construction_name = construction_json.get("Name", "")
-                if construction_name and constructions_path.exists():
+                logger.info("Save: construction_name=%s, path_exists=%s",
+                             construction_name, constructions_path.exists() if constructions_path else False)
+                if construction_name and constructions_path and constructions_path.exists():
                     self._update_row_in_json(constructions_path, construction_name,
                                              construction_json)
                     saved_files.append("constructions")
@@ -5131,24 +5139,33 @@ class BuildingsView(ctk.CTkFrame):
             row_name: Name of the row to replace
             updated_row: The updated row dict
         """
-        logger.debug("Updating row '%s' in %s", row_name, json_path.name)
+        logger.info("_update_row_in_json: row='%s' file='%s'", row_name, json_path)
         with open(json_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
 
         exports = data.get('Exports', [])
         if not exports:
+            logger.warning("_update_row_in_json: no exports in %s", json_path.name)
             return
 
         table = exports[0].get('Table', {})
         rows = table.get('Data', [])
 
+        found = False
         for i, row in enumerate(rows):
             if row.get('Name') == row_name:
                 rows[i] = updated_row
+                found = True
+                logger.info("_update_row_in_json: replaced row %d '%s'", i, row_name)
                 break
+
+        if not found:
+            logger.warning("_update_row_in_json: row '%s' NOT FOUND in %s (%d rows)",
+                            row_name, json_path.name, len(rows))
 
         with open(json_path, 'w', encoding='utf-8') as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
+        logger.info("_update_row_in_json: wrote %s", json_path)
 
     # -------------------------------------------------------------------------
     # JSON DATA UPDATE METHODS
@@ -5674,6 +5691,7 @@ class BuildingsView(ctk.CTkFrame):
         """
         self._json_row_cache.clear()
         cache_dir = self._get_cache_dir()
+        logger.info("_refresh_cache: force=%s, cache_dir=%s", force, cache_dir)
         cache_dir.mkdir(parents=True, exist_ok=True)
 
         if force:
