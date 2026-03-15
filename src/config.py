@@ -86,6 +86,21 @@ def get_default_changeconstructions_dir() -> Path:
     return get_appdata_dir() / 'changeconstructions'
 
 
+def get_new_secrets_dir() -> Path:
+    """Get the New Secrets directory for Object Editor edits."""
+    return get_appdata_dir() / 'New Secrets'
+
+
+def get_new_secrets_jsondata_dir() -> Path:
+    """Get the jsondata subdirectory inside New Secrets."""
+    return get_new_secrets_dir() / 'jsondata'
+
+
+def get_new_secrets_raw_json_dir() -> Path:
+    """Get the Raw JSON subdirectory inside New Secrets."""
+    return get_new_secrets_dir() / 'Raw JSON'
+
+
 def get_config_path() -> Path:
     """Get the path to the config.ini file."""
     return get_appdata_dir() / 'config.ini'

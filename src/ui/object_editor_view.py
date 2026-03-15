@@ -26,7 +26,10 @@ from typing import Callable, Optional
 
 import customtkinter as ctk
 
-from src.config import get_appdata_dir, get_output_dir
+from src.config import (
+    get_appdata_dir, get_output_dir,
+    get_new_secrets_jsondata_dir, get_new_secrets_raw_json_dir,
+)
 from src.object_templates import (
     add_string_table_entry,
     create_construction_recipe_row,
@@ -185,7 +188,7 @@ class ObjectEditorView(ctk.CTkFrame):
             return  # Already loaded
 
         items_path = (
-            get_appdata_dir() / "Secrets Source" / "jsondata" / "Moria" / "Content"
+            get_new_secrets_jsondata_dir() / "Moria" / "Content"
             / "Tech" / "Data" / "Items" / "DT_Items.json"
         )
         if not items_path.exists():
@@ -2099,7 +2102,7 @@ class ObjectEditorView(ctk.CTkFrame):
         return None
 
     def _get_secrets_recipes_path(self) -> Path | None:
-        base = get_appdata_dir() / "Secrets Source" / "jsondata" / "Moria" / "Content"
+        base = get_new_secrets_jsondata_dir() / "Moria" / "Content"
         if self.view_mode in ("weapons", "armor", "tools", "items"):
             return base / "Tech" / "Data" / "Items" / "DT_ItemRecipes.json"
         if self.view_mode == "buildings":
@@ -2107,7 +2110,7 @@ class ObjectEditorView(ctk.CTkFrame):
         return None
 
     def _get_secrets_defs_path(self) -> Path:
-        base = get_appdata_dir() / "Secrets Source" / "jsondata" / "Moria" / "Content"
+        base = get_new_secrets_jsondata_dir() / "Moria" / "Content"
         defs_map = {
             "buildings": "Tech/Data/Building/DT_Constructions.json",
             "weapons": "Tech/Data/Items/DT_Weapons.json",
@@ -2120,9 +2123,11 @@ class ObjectEditorView(ctk.CTkFrame):
         return base / defs_map.get(self.view_mode, "Tech/Data/Building/DT_Constructions.json")
 
     def _get_string_tables_dirs(self) -> list[Path]:
-        """Return existing string table directories (base-game + mod)."""
+        """Return existing string table directories (base-game + New Secrets mod)."""
         candidates = [
             get_output_dir() / "jsondata" / "Moria" / "Content" / "Tech" / "Data" / "StringTables",
+            get_new_secrets_jsondata_dir() / "Moria" / "Content" / "Mods" / "Tech" / "Data" / "StringTables",
+            # Fallback to Secrets Source if New Secrets doesn't have string tables yet
             get_appdata_dir() / "Secrets Source" / "jsondata" / "Moria" / "Content" / "Mods" / "Tech" / "Data" / "StringTables",
         ]
         return [d for d in candidates if d.exists()]
@@ -2296,9 +2301,19 @@ class ObjectEditorView(ctk.CTkFrame):
 
         if saved_to:
             self._json_row_cache.clear()
+            # Save individual row to Raw JSON directory
+            for path in [self._get_secrets_defs_path(), self._get_secrets_recipes_path()]:
+                if not path or not path.exists():
+                    continue
+                try:
+                    row_data = self._get_row_by_name(path, row_name)
+                    if row_data:
+                        self._save_raw_json(row_name, row_data)
+                except (json.JSONDecodeError, OSError):
+                    pass
             self._set_status(f"Saved {row_name} to {', '.join(saved_to)}")
         else:
-            self._set_status(f"Could not find {row_name} in secrets files")
+            self._set_status(f"Could not find {row_name} in New Secrets files")
 
     def _apply_property_edits(self, row: dict):
         """Write each _property_widgets entry back, converting to original type."""
@@ -2320,6 +2335,19 @@ class ObjectEditorView(ctk.CTkFrame):
                 prop["Value"] = new_val.lower() in ("true", "1", "yes")
             else:
                 prop["Value"] = new_val
+
+    @staticmethod
+    def _save_raw_json(row_name: str, row: dict):
+        """Save a single row's JSON to the Raw JSON directory."""
+        raw_dir = get_new_secrets_raw_json_dir()
+        raw_dir.mkdir(parents=True, exist_ok=True)
+        raw_path = raw_dir / f"{row_name}.json"
+        try:
+            with open(raw_path, 'w', encoding='utf-8') as f:
+                json.dump(row, f, indent=2, ensure_ascii=False)
+            logger.info("Saved raw JSON: %s", raw_path.name)
+        except OSError as e:
+            logger.warning("Failed to save raw JSON for %s: %s", row_name, e)
 
     @staticmethod
     def _parse_material_name(display_text: str) -> str:
@@ -2372,9 +2400,7 @@ class ObjectEditorView(ctk.CTkFrame):
         )
 
         try:
-            secrets_base = (
-                get_appdata_dir() / "Secrets Source" / "jsondata" / "Moria" / "Content"
-            )
+            secrets_base = get_new_secrets_jsondata_dir() / "Moria" / "Content"
 
             arch_path = secrets_base / "Tech" / "Data" / "StringTables" / "Architecture.json"
             constructions_path = secrets_base / "Tech" / "Data" / "Building" / "DT_Constructions.json"
@@ -2411,6 +2437,14 @@ class ObjectEditorView(ctk.CTkFrame):
             save_json(constructions_path, constructions_data)
             save_json(recipes_path, recipes_data)
 
+            # Save raw JSON for the new construction and recipe rows
+            constr_row = self._get_row_by_name(constructions_path, unique_tag)
+            if constr_row:
+                self._save_raw_json(unique_tag, constr_row)
+            recipe_row = self._get_row_by_name(recipes_path, unique_tag)
+            if recipe_row:
+                self._save_raw_json(f"{unique_tag}_Recipe", recipe_row)
+
             self._set_status(f"Saved construction: {unique_tag}")
             self._json_row_cache.clear()
             self._load_category("buildings")
@@ -2438,13 +2472,11 @@ class ObjectEditorView(ctk.CTkFrame):
         materials = self._collect_materials()
 
         try:
-            secrets_base = (
-                get_appdata_dir() / "Secrets Source" / "jsondata" / "Moria" / "Content"
-            )
+            secrets_base = get_new_secrets_jsondata_dir() / "Moria" / "Content"
             recipes_path = secrets_base / "Tech" / "Data" / "Items" / "DT_ItemRecipes.json"
 
             if not recipes_path.exists():
-                self._set_status("DT_ItemRecipes.json not found in Secrets Source")
+                self._set_status("DT_ItemRecipes.json not found in New Secrets")
                 return
 
             recipes_data = load_json(recipes_path)
@@ -2468,6 +2500,11 @@ class ObjectEditorView(ctk.CTkFrame):
                 unlock_type, "", recipes_data,
             )
             save_json(recipes_path, recipes_data)
+
+            # Save raw JSON for the new recipe row
+            recipe_row = self._get_row_by_name(recipes_path, row_name)
+            if recipe_row:
+                self._save_raw_json(row_name, recipe_row)
 
             self._set_status(f"Saved item recipe: {row_name}")
             self._json_row_cache.clear()

@@ -774,6 +774,38 @@ class CombinedImportDialog(ctk.CTkToplevel):
             _cancel_cleanup()
             return
 
+        # --- Step 3c: Copy jsondata to New Secrets ---
+        logger.info("Secrets pipeline step 3c: Copying to New Secrets")
+        q.put(("status", "Copying to New Secrets..."))
+        try:
+            from src.config import get_new_secrets_jsondata_dir, get_new_secrets_raw_json_dir
+            new_secrets_jsondata = get_new_secrets_jsondata_dir()
+            new_secrets_raw = get_new_secrets_raw_json_dir()
+            # Clean and recreate
+            if new_secrets_jsondata.exists():
+                shutil.rmtree(new_secrets_jsondata)
+            new_secrets_jsondata.mkdir(parents=True, exist_ok=True)
+            new_secrets_raw.mkdir(parents=True, exist_ok=True)
+            # Copy all jsondata files preserving directory structure
+            copied = 0
+            if secrets_jsondata_dir.exists():
+                for src_file in secrets_jsondata_dir.rglob("*.json"):
+                    rel = src_file.relative_to(secrets_jsondata_dir)
+                    dst = new_secrets_jsondata / rel
+                    dst.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(src_file, dst)
+                    copied += 1
+            logger.info("Copied %d JSON files to New Secrets", copied)
+            q.put(("file", f"Copied {copied} files to New Secrets"))
+        except OSError as e:
+            logger.error("Error copying to New Secrets: %s", e)
+            q.put(("file", f"Error copying to New Secrets: {e}"))
+        q.put(("progress", 0.93))
+
+        if self.cancelled:
+            _cancel_cleanup()
+            return
+
         # --- Step 4: Generate manifest ---
         logger.info("Secrets pipeline step 4: Generating secrets manifest")
         q.put(("status", "Generating secrets manifest..."))
