@@ -320,7 +320,7 @@ class FilterableComboBox(ctk.CTkFrame):
         """Hide dropdown if focus has moved outside this widget tree.
 
         Keeps the dropdown open if focus is on the entry, the arrow button,
-        or the entry's internal tk widget (CTkEntry wraps a tk.Entry).
+        the entry's internal tk widget, or anywhere inside the dropdown popup.
         """
         if not self.dropdown_visible:
             return
@@ -332,6 +332,18 @@ class FilterableComboBox(ctk.CTkFrame):
             # CTkEntry wraps an inner tk Entry widget
             if hasattr(self.entry, '_entry') and focused is self.entry._entry:
                 return
+            # Keep open if focus is inside the dropdown popup window
+            if self.dropdown_window and focused:
+                try:
+                    # Walk up the widget tree from focused to see if it's
+                    # a child of our dropdown window
+                    widget = focused
+                    while widget is not None:
+                        if widget is self.dropdown_window:
+                            return
+                        widget = widget.master
+                except (AttributeError, TypeError):
+                    pass
         except (AttributeError, KeyError):
             pass
         self._hide_dropdown()

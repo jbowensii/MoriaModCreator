@@ -251,10 +251,11 @@ class VirtualScrollList(ctk.CTkFrame):
         fraction = (3 * self.ROW_HEIGHT * delta) / total_height
         current = self._canvas.yview()[0]
         self._canvas.yview_moveto(max(0.0, min(1.0, current + fraction)))
-        # Throttle redraws: cancel pending and schedule a short delay
+        # Redraw immediately — _bind_row skips unchanged rows so this is fast
         if self._scroll_after_id:
             self.after_cancel(self._scroll_after_id)
-        self._scroll_after_id = self.after(16, self._redraw)
+            self._scroll_after_id = None
+        self._redraw()
 
     def _rebuild_pool(self, count: int):
         while len(self._row_pool) > count:
