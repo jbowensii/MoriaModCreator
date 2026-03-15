@@ -28,9 +28,10 @@ class VirtualScrollList(ctk.CTkFrame):
         on_checkbox_toggle(key)   – user toggled a checkbox
     """
 
-    ROW_HEIGHT = 32
+    ROW_HEIGHT = 38
     CHECKBOX_WIDTH = 28
     EYE_WIDTH = 24
+    FONT = ("", 13)
 
     def __init__(
         self,
@@ -253,13 +254,14 @@ class VirtualScrollList(ctk.CTkFrame):
         frame.pack_propagate(False)
 
         checkbox = ctk.CTkCheckBox(frame, text="", width=self.CHECKBOX_WIDTH)
-        checkbox.pack(side="left")
+        checkbox.pack(side="left", padx=(4, 0))
 
         label = ctk.CTkLabel(
             frame, text="", anchor="w", cursor="hand2",
             text_color=("gray10", "#E8E8E8"),
+            font=ctk.CTkFont(size=self.FONT[1]),
         )
-        label.pack(side="left", fill="x", expand=True, padx=5)
+        label.pack(side="left", fill="x", expand=True, padx=5, pady=4)
 
         eye_label = ctk.CTkLabel(frame, text="", width=self.EYE_WIDTH)
         eye_label.pack(side="right", padx=(0, 5))
