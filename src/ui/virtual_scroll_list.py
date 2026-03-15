@@ -28,7 +28,7 @@ class VirtualScrollList(ctk.CTkFrame):
         on_checkbox_toggle(key)   – user toggled a checkbox
     """
 
-    ROW_HEIGHT = 28
+    ROW_HEIGHT = 32
     CHECKBOX_WIDTH = 28
     EYE_WIDTH = 24
 
@@ -63,8 +63,8 @@ class VirtualScrollList(ctk.CTkFrame):
 
         # Tk canvas + scrollbar
         self._canvas = tk.Canvas(self, highlightthickness=0, bd=0)
-        self._scrollbar = ctk.CTkScrollbar(self, command=self._canvas.yview)
-        self._canvas.configure(yscrollcommand=self._scrollbar.set)
+        self._scrollbar = ctk.CTkScrollbar(self, command=self._on_scrollbar)
+        self._canvas.configure(yscrollcommand=self._on_canvas_scroll)
 
         self._scrollbar.pack(side="right", fill="y")
         self._canvas.pack(side="left", fill="both", expand=True)
@@ -98,13 +98,22 @@ class VirtualScrollList(ctk.CTkFrame):
         """Bind mousewheel to a widget."""
         widget.bind("<MouseWheel>", self._on_mousewheel)
 
+    def _on_scrollbar(self, *args):
+        """Handle scrollbar drag — scroll canvas and redraw."""
+        self._canvas.yview(*args)
+        self._redraw()
+
+    def _on_canvas_scroll(self, first, last):
+        """Called by canvas when scroll position changes — update scrollbar."""
+        self._scrollbar.set(first, last)
+
     def _on_mousewheel(self, event):
-        """Scroll by 3 rows per wheel tick and redraw."""
+        """Scroll by 2 rows per wheel tick and redraw."""
         total_height = len(self._filtered_indices) * self.ROW_HEIGHT
         if total_height <= 0:
             return "break"
         delta = int(-1 * (event.delta / 120))
-        fraction = (3 * self.ROW_HEIGHT * delta) / total_height
+        fraction = (2 * self.ROW_HEIGHT * delta) / total_height
         current = self._canvas.yview()[0]
         new_pos = max(0.0, min(1.0, current + fraction))
         self._canvas.yview_moveto(new_pos)

@@ -17,6 +17,8 @@ Layout:
     +---------------------------------+
 """
 
+import tkinter as tk
+
 import customtkinter as ctk
 
 
@@ -80,11 +82,13 @@ class FilterableComboBox(ctk.CTkFrame):
 
         # --- Bind keyboard/focus events to the entry ---
         self.entry.bind("<KeyRelease>", self._on_key_release)
-        self.entry.bind("<FocusOut>", self._on_focus_out)
         self.entry.bind("<Down>", self._on_down_arrow)
         self.entry.bind("<Up>", self._on_up_arrow)
         self.entry.bind("<Return>", self._on_enter)
         self.entry.bind("<Escape>", self._on_escape)
+
+        # Close dropdown when user clicks elsewhere in the app
+        self._click_bind_id = None
 
     # -----------------------------------------------------------------------
     #  Public API
@@ -184,6 +188,11 @@ class FilterableComboBox(ctk.CTkFrame):
         self.dropdown_visible = True
         self.selected_index = -1
 
+        # Bind a global click handler to close when clicking outside
+        root = self.winfo_toplevel()
+        self._click_bind_id = root.bind("<Button-1>", self._on_global_click, add="+")
+        self.dropdown_window.bind("<Button-1>", lambda e: "break")
+
     def _update_listbox(self):
         """Rebuild option buttons inside the scrollable frame.
 
@@ -242,6 +251,13 @@ class FilterableComboBox(ctk.CTkFrame):
             return
         self._closing = True
         try:
+            # Remove global click binding
+            if self._click_bind_id:
+                try:
+                    self.winfo_toplevel().unbind("<Button-1>", self._click_bind_id)
+                except (tk.TclError, ValueError):
+                    pass
+                self._click_bind_id = None
             if self.dropdown_window:
                 self.dropdown_window.destroy()
                 self.dropdown_window = None
@@ -308,56 +324,22 @@ class FilterableComboBox(ctk.CTkFrame):
     #  Focus management
     # -----------------------------------------------------------------------
 
-    def _on_focus_out(self, _event):
-        """Schedule a delayed focus check when entry loses focus.
-
-        The delay allows the user to click a dropdown item without the
-        popup disappearing first (the click needs time to register).
-        Uses a longer delay to handle CTkScrollableFrame stealing focus.
-        """
-        self.after(350, self._check_focus_and_hide)
-
-    def _check_focus_and_hide(self):
-        """Hide dropdown if focus has moved outside this widget tree.
-
-        Keeps the dropdown open if focus is on the entry, the arrow button,
-        the entry's internal tk widget, or anywhere inside the dropdown popup.
-        Also checks if the mouse pointer is over the dropdown (covers cases
-        where focus tracking misses the popup).
-        """
+    def _on_global_click(self, event):
+        """Close dropdown when user clicks outside the combobox and popup."""
         if not self.dropdown_visible:
             return
+
+        # Check if click is on our entry or arrow button
         try:
-            focused = self.focus_get()
-            # Keep open if focus is still on our entry or arrow button
-            if focused is self.entry or focused is self.arrow_btn:
-                return
-            # CTkEntry wraps an inner tk Entry widget
-            if hasattr(self.entry, '_entry') and focused is self.entry._entry:
-                return
-            # Keep open if focus is inside the dropdown popup window
-            if self.dropdown_window and focused:
-                try:
-                    widget = focused
-                    while widget is not None:
-                        if widget is self.dropdown_window:
-                            return
-                        widget = widget.master
-                except (AttributeError, TypeError):
-                    pass
-            # Keep open if mouse pointer is over the dropdown popup
-            if self.dropdown_window:
-                try:
-                    mx = self.dropdown_window.winfo_pointerx()
-                    my = self.dropdown_window.winfo_pointery()
-                    wx = self.dropdown_window.winfo_rootx()
-                    wy = self.dropdown_window.winfo_rooty()
-                    ww = self.dropdown_window.winfo_width()
-                    wh = self.dropdown_window.winfo_height()
-                    if wx <= mx <= wx + ww and wy <= my <= wy + wh:
-                        return
-                except tk.TclError:
-                    pass
-        except (AttributeError, KeyError):
+            clicked = event.widget
+            # Walk up from clicked widget to see if it's part of us
+            widget = clicked
+            while widget is not None:
+                if widget is self or widget is self.dropdown_window:
+                    return  # Click is inside our widget tree — keep open
+                widget = widget.master
+        except (AttributeError, TypeError):
             pass
+
+        # Click was outside — close
         self._hide_dropdown()
