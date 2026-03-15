@@ -2262,7 +2262,7 @@ class BuildingsView(ctk.CTkFrame):
         )
         change_secrets_btn.pack(side="left")
 
-        self.secrets_prefix_var = ctk.StringVar(value="")
+        self.secrets_prefix_var = ctk.StringVar(value=self._load_saved_prefix())
         self.secrets_prefix_entry = ctk.CTkEntry(
             left_bottom,
             textvariable=self.secrets_prefix_var,
@@ -5709,6 +5709,23 @@ class BuildingsView(ctk.CTkFrame):
         # Refresh definitions
         src_defs = self._get_secrets_constructions_path()
         _copy_if_needed(src_defs, self._get_cache_constructions_path())
+
+    @staticmethod
+    def _load_saved_prefix() -> str:
+        """Load the previously saved secrets prefix from changesecrets config."""
+        config_file = get_default_changesecrets_dir() / 'current_prefix.ini'
+        if not config_file.exists():
+            return ""
+        try:
+            config = configparser.ConfigParser()
+            config.read(config_file, encoding='utf-8')
+            prefix = config.get('ChangeSecrets', 'current_prefix', fallback='')
+            if prefix:
+                logger.info("Restored secrets prefix: %s", prefix)
+            return prefix
+        except (configparser.Error, OSError) as e:
+            logger.warning("Could not load secrets prefix: %s", e)
+            return ""
 
     def _save_secrets_prefix(self):
         """Save the current secrets prefix to changesecrets config."""

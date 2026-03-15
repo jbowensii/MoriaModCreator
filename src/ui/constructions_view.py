@@ -2263,7 +2263,7 @@ class ConstructionsView(ctk.CTkFrame):
         )
         change_constructions_btn.pack(side="left")
 
-        self.constructions_prefix_var = ctk.StringVar(value="")
+        self.constructions_prefix_var = ctk.StringVar(value=self._load_saved_prefix())
         self.constructions_prefix_entry = ctk.CTkEntry(
             left_bottom,
             textvariable=self.constructions_prefix_var,
@@ -5572,6 +5572,23 @@ class ConstructionsView(ctk.CTkFrame):
         # Refresh definitions from game output
         src_defs = self._get_game_constructions_path()
         _copy_if_needed(src_defs, self._get_cache_constructions_path())
+
+    @staticmethod
+    def _load_saved_prefix() -> str:
+        """Load the previously saved constructions prefix from config."""
+        config_file = get_default_changeconstructions_dir() / 'current_prefix.ini'
+        if not config_file.exists():
+            return ""
+        try:
+            config = configparser.ConfigParser()
+            config.read(config_file, encoding='utf-8')
+            prefix = config.get('ChangeConstructions', 'current_prefix', fallback='')
+            if prefix:
+                logger.info("Restored constructions prefix: %s", prefix)
+            return prefix
+        except (configparser.Error, OSError) as e:
+            logger.warning("Could not load constructions prefix: %s", e)
+            return ""
 
     def _save_constructions_prefix(self):
         """Save the current constructions prefix to changeconstructions config."""
