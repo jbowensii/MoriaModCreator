@@ -93,28 +93,36 @@ class BuildManager:  # pylint: disable=too-few-public-methods
             logger.warning("Build called with no definition files")
             return False, "No definition files selected"
 
-        logger.info("Build started for mod '%s' with %d definition file(s)", mod_name, len(def_files))
+        logger.info("Build started for mod '%s' with %d definition file(s), include_secrets=%s",
+                     mod_name, len(def_files), include_secrets)
         try:
             # Step 0: Clear previous build files
             self._report_progress("Cleaning previous build files...", 0.0)
             self._clean_build_directories(mod_name)
+            logger.info("Step 0 complete: build directories cleaned")
 
             # Step 1 Phase A: Copy non-secrets source files (5-15%)
             self._report_progress("Copying source files...", 0.05)
             uses_secrets = self._phase_a_copy_sources(mod_name, def_files)
+            logger.info("Phase A complete: uses_secrets=%s", uses_secrets)
 
             # Also enable secrets if the checkbox was checked
             if include_secrets:
                 uses_secrets = True
+                logger.info("Secrets enabled via checkbox, uses_secrets=%s", uses_secrets)
 
             # Step 1 Phase B: Overlay secrets manifest (15-20%)
             if uses_secrets:
                 self._report_progress("Overlaying secrets manifest...", 0.15)
+                logger.info("Phase B starting: overlaying secrets manifest")
                 self._phase_b_overlay_secrets(mod_name)
+                logger.info("Phase B complete")
 
             # Step 1 Phase C: Apply all .def changes (20-40%)
+            logger.info("Phase C starting: applying %d def files", len(def_files))
             self._report_progress("Applying definition changes...", 0.20)
             success_count, error_count = self._phase_c_apply_changes(mod_name, def_files)
+            logger.info("Phase C complete: %d success, %d errors", success_count, error_count)
 
             if error_count > 0:
                 logger.error("Definition apply failed: %d succeeded, %d failed", success_count, error_count)
@@ -125,24 +133,28 @@ class BuildManager:  # pylint: disable=too-few-public-methods
                 return False, "No files were processed"
 
             # Step 2: Convert JSON to uasset (40-70%)
-            logger.info("Step 2: Converting JSON to uasset format")
+            logger.info("Step 2 starting: Converting JSON to uasset format")
             self._report_progress("Converting to uasset format...", 0.4)
             convert_ok, convert_error = self._convert_json_to_uasset(mod_name)
             if not convert_ok:
-                logger.error("JSON to uasset conversion failed: %s", convert_error)
+                logger.error("Step 2 FAILED: JSON to uasset conversion: %s", convert_error)
                 return False, convert_error or "JSON to uasset conversion failed"
+            logger.info("Step 2 complete: JSON to uasset conversion succeeded")
 
             # Step 3: Run retoc (70-90%)
-            logger.info("Step 3: Running retoc to package mod files")
+            logger.info("Step 3 starting: Running retoc to package mod files")
             self._report_progress("Packaging mod files...", 0.7)
             if not self._run_retoc(mod_name):
-                logger.error("retoc packaging failed for mod '%s'", mod_name)
+                logger.error("Step 3 FAILED: retoc packaging failed for mod '%s'", mod_name)
                 return False, "retoc packaging failed"
+            logger.info("Step 3 complete: retoc packaging succeeded")
 
             # Step 3.5: Copy secrets pak files if applicable (85-90%)
             if uses_secrets:
+                logger.info("Step 3.5 starting: copying secrets pak files")
                 self._report_progress("Copying secrets pak files...", 0.85)
                 self._copy_secrets_pak_files(mod_name)
+                logger.info("Step 3.5 complete")
 
             # Step 4: Create zip (90-100%)
             logger.info("Step 4: Creating zip file")
@@ -156,8 +168,8 @@ class BuildManager:  # pylint: disable=too-few-public-methods
             logger.error("Could not create zip file for mod '%s'", mod_name)
             return False, "Could not create zip file"
 
-        except (OSError, ValueError, KeyError) as e:
-            logger.exception("Build failed with exception")
+        except Exception as e:
+            logger.exception("Build CRASHED with exception: %s", e)
             return False, str(e)
 
     def _clean_build_directories(self, mod_name: str):
@@ -251,20 +263,28 @@ class BuildManager:  # pylint: disable=too-few-public-methods
             mod_name: Name of the mod.
         """
         manifest_path = get_appdata_dir() / 'Secrets Source' / 'secrets manifest.def'
+        logger.info("Phase B: manifest_path=%s, exists=%s", manifest_path, manifest_path.exists())
         if not manifest_path.exists():
             logger.info("Phase B: Secrets manifest not found at %s, skipping", manifest_path)
             return
 
         secrets_jsondata = get_appdata_dir() / 'Secrets Source' / JSONDATA_DIR
         mymodfiles_dir = get_default_mymodfiles_dir() / mod_name / JSONFILES_DIR
+        logger.info("Phase B: secrets_jsondata=%s, exists=%s", secrets_jsondata, secrets_jsondata.exists())
+        logger.info("Phase B: mymodfiles_dir=%s, exists=%s", mymodfiles_dir, mymodfiles_dir.exists())
 
         try:
             tree = ET.parse(manifest_path)
             root = tree.getroot()
 
+            mod_elements = root.findall('mod')
+            logger.info("Phase B: Found %d <mod> elements in manifest", len(mod_elements))
+
             # Parse manifest - look for <mod file="..."> elements
             file_count = 0
-            for mod_element in root.findall('mod'):
+            merge_count = 0
+            copy_count = 0
+            for mod_element in mod_elements:
                 file_path = mod_element.get('file', '')
                 if not file_path:
                     continue
@@ -281,18 +301,28 @@ class BuildManager:  # pylint: disable=too-few-public-methods
 
                 if dest_file.exists():
                     # Merge new secrets rows into the existing game file
-                    merged = merge_secrets_rows(dest_file, source_file, dest_file)
-                    logger.info("Phase B: Merged %d new rows into: %s", merged, normalized_path)
+                    logger.info("Phase B: Merging %s (src=%s, dst=%s)",
+                                normalized_path, source_file.exists(), dest_file.exists())
+                    try:
+                        merged = merge_secrets_rows(dest_file, source_file, dest_file)
+                        merge_count += 1
+                        logger.info("Phase B: Merged %d new rows into: %s", merged, normalized_path)
+                    except Exception as e:
+                        logger.error("Phase B: CRASH during merge of %s: %s", normalized_path, e,
+                                     exc_info=True)
+                        raise
                 else:
                     # No game file — just copy the secrets file
                     shutil.copy2(source_file, dest_file)
+                    copy_count += 1
                     logger.info("Phase B: Copied new secrets file: %s", normalized_path)
                 file_count += 1
 
-            logger.info("Phase B: Copied %d files from secrets manifest", file_count)
+            logger.info("Phase B: Done — %d files processed (%d merged, %d copied)",
+                         file_count, merge_count, copy_count)
 
         except (ET.ParseError, OSError) as e:
-            logger.error("Phase B: Error processing secrets manifest: %s", e)
+            logger.error("Phase B: Error processing secrets manifest: %s", e, exc_info=True)
 
     @staticmethod
     def _normalize_secrets_path(mod_file_path: str) -> str:
