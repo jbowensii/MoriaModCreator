@@ -2824,10 +2824,11 @@ class BuildingsView(ctk.CTkFrame):
         self._set_status("Building definition files from all changes...")
 
         # Define the configuration for each mode
+        # All secrets .def files go to a single 'Secrets' output directory
         mode_configs = [
             {
                 'mode': 'buildings',
-                'output_subdir': 'Building',
+                'output_subdir': 'Secrets',
                 'recipes_name': 'DT_ConstructionRecipes',
                 'defs_name': 'DT_Constructions',
                 'recipes_def_path': r'Moria\Content\Tech\Data\Building\DT_ConstructionRecipes.json',
@@ -2835,7 +2836,7 @@ class BuildingsView(ctk.CTkFrame):
             },
             {
                 'mode': 'weapons',
-                'output_subdir': 'Items',
+                'output_subdir': 'Secrets',
                 'recipes_name': 'DT_ItemRecipes',
                 'defs_name': 'DT_Weapons',
                 'recipes_def_path': r'Moria\Content\Tech\Data\Items\DT_ItemRecipes.json',
@@ -2843,7 +2844,7 @@ class BuildingsView(ctk.CTkFrame):
             },
             {
                 'mode': 'armor',
-                'output_subdir': 'Items',
+                'output_subdir': 'Secrets',
                 'recipes_name': 'DT_ItemRecipes',
                 'defs_name': 'DT_Armor',
                 'recipes_def_path': r'Moria\Content\Tech\Data\Items\DT_ItemRecipes.json',
@@ -2851,7 +2852,7 @@ class BuildingsView(ctk.CTkFrame):
             },
             {
                 'mode': 'tools',
-                'output_subdir': 'Items',
+                'output_subdir': 'Secrets',
                 'recipes_name': 'DT_ItemRecipes',
                 'defs_name': 'DT_Tools',
                 'recipes_def_path': r'Moria\Content\Tech\Data\Items\DT_ItemRecipes.json',
@@ -2859,7 +2860,7 @@ class BuildingsView(ctk.CTkFrame):
             },
             {
                 'mode': 'items',
-                'output_subdir': 'Items',
+                'output_subdir': 'Secrets',
                 'recipes_name': 'DT_ItemRecipes',
                 'defs_name': 'DT_Items',
                 'recipes_def_path': r'Moria\Content\Tech\Data\Items\DT_ItemRecipes.json',
@@ -2867,7 +2868,7 @@ class BuildingsView(ctk.CTkFrame):
             },
             {
                 'mode': 'flora',
-                'output_subdir': 'Flora',
+                'output_subdir': 'Secrets',
                 'recipes_name': None,
                 'defs_name': 'DT_Moria_Flora',
                 'recipes_def_path': None,
@@ -2875,7 +2876,7 @@ class BuildingsView(ctk.CTkFrame):
             },
             {
                 'mode': 'loot',
-                'output_subdir': 'Loot',
+                'output_subdir': 'Secrets',
                 'recipes_name': None,
                 'defs_name': 'DT_Loot',
                 'recipes_def_path': None,
