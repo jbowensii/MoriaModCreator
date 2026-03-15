@@ -1827,6 +1827,8 @@ class BuildingsView(ctk.CTkFrame):
         self.def_files: list[Path] = []
         self.material_rows: list[dict] = []
         self.sandbox_material_rows: list[dict] = []
+        self.repair_cost_rows: list[dict] = []
+        self.repair_cost_frame = None
 
         # Cached dropdown options (populated from file scans)
         self.cached_options: dict = {}
@@ -3624,6 +3626,10 @@ class BuildingsView(ctk.CTkFrame):
         self.form_vars.clear()
         self.material_rows.clear()
         self.sandbox_material_rows.clear()
+        self.repair_cost_rows.clear()
+        self.repair_cost_frame = None
+        self.repair_cost_rows.clear()
+        self.repair_cost_frame = None
 
         recipe_json = self.current_def_data.get("recipe_json")
         construction_json = self.current_def_data.get("construction_json")
@@ -4026,13 +4032,18 @@ class BuildingsView(ctk.CTkFrame):
                 self.form_vars[key] = var
                 ctk.CTkEntry(frame, textvariable=var, width=70).pack(side="left", padx=2)
 
-            # Repair cost
-            if w["InitialRepairCost"]:
-                self._create_subsection_header("Repair Cost")
-                self.materials_frame = ctk.CTkFrame(self.form_content, fg_color="transparent")
-                self.materials_frame.pack(fill="x", pady=5)
-                for mat in w["InitialRepairCost"]:
-                    self._add_material_row(mat["Material"], mat["Amount"])
+            # Repair cost (separate from recipe materials)
+            self._create_subsection_header("Repair Cost")
+            add_repair_btn = ctk.CTkButton(
+                self.form_content, text="+ Add Repair Material", width=160, height=28,
+                fg_color="#4CAF50", hover_color="#45a049",
+                command=self._add_new_repair_cost_row
+            )
+            add_repair_btn.pack(anchor="w", pady=(0, 5))
+            self.repair_cost_frame = ctk.CTkFrame(self.form_content, fg_color="transparent")
+            self.repair_cost_frame.pack(fill="x", pady=5)
+            for mat in w["InitialRepairCost"]:
+                self._add_repair_cost_row(mat["Material"], mat["Amount"])
 
             # Display
             self._create_subsection_header("Display")
@@ -4113,13 +4124,18 @@ class BuildingsView(ctk.CTkFrame):
                 self.form_vars[key] = var
                 ctk.CTkEntry(frame, textvariable=var, width=80).pack(side="left", padx=2)
 
-            # Repair cost
-            if a["InitialRepairCost"]:
-                self._create_subsection_header("Repair Cost")
-                self.materials_frame = ctk.CTkFrame(self.form_content, fg_color="transparent")
-                self.materials_frame.pack(fill="x", pady=5)
-                for mat in a["InitialRepairCost"]:
-                    self._add_material_row(mat["Material"], mat["Amount"])
+            # Repair cost (separate from recipe materials)
+            self._create_subsection_header("Repair Cost")
+            add_repair_btn = ctk.CTkButton(
+                self.form_content, text="+ Add Repair Material", width=160, height=28,
+                fg_color="#4CAF50", hover_color="#45a049",
+                command=self._add_new_repair_cost_row
+            )
+            add_repair_btn.pack(anchor="w", pady=(0, 5))
+            self.repair_cost_frame = ctk.CTkFrame(self.form_content, fg_color="transparent")
+            self.repair_cost_frame.pack(fill="x", pady=5)
+            for mat in a["InitialRepairCost"]:
+                self._add_repair_cost_row(mat["Material"], mat["Amount"])
 
             # Display & common
             self._create_subsection_header("Display")
@@ -4216,13 +4232,18 @@ class BuildingsView(ctk.CTkFrame):
                 self.form_vars[key] = var
                 ctk.CTkEntry(frame, textvariable=var, width=80).pack(side="left", padx=2)
 
-            # Repair cost
-            if t["InitialRepairCost"]:
-                self._create_subsection_header("Repair Cost")
-                self.materials_frame = ctk.CTkFrame(self.form_content, fg_color="transparent")
-                self.materials_frame.pack(fill="x", pady=5)
-                for mat in t["InitialRepairCost"]:
-                    self._add_material_row(mat["Material"], mat["Amount"])
+            # Repair cost (separate from recipe materials)
+            self._create_subsection_header("Repair Cost")
+            add_repair_btn = ctk.CTkButton(
+                self.form_content, text="+ Add Repair Material", width=160, height=28,
+                fg_color="#4CAF50", hover_color="#45a049",
+                command=self._add_new_repair_cost_row
+            )
+            add_repair_btn.pack(anchor="w", pady=(0, 5))
+            self.repair_cost_frame = ctk.CTkFrame(self.form_content, fg_color="transparent")
+            self.repair_cost_frame.pack(fill="x", pady=5)
+            for mat in t["InitialRepairCost"]:
+                self._add_repair_cost_row(mat["Material"], mat["Amount"])
 
             # Display & common
             self._create_subsection_header("Display")
@@ -4652,6 +4673,52 @@ class BuildingsView(ctk.CTkFrame):
         row_frame.destroy()
         # Mark as removed (don't reindex to avoid issues)
         for row in self.material_rows:
+            if row.get("frame") == row_frame:
+                row["removed"] = True
+                break
+
+    def _add_repair_cost_row(self, material: str = "Item.Scrap", amount: int = 1):
+        """Add a repair cost material row (separate from recipe materials)."""
+        if not self.repair_cost_frame:
+            return
+        row_id = len(self.repair_cost_rows)
+        row_frame = ctk.CTkFrame(self.repair_cost_frame, fg_color=("gray85", "gray20"))
+        row_frame.pack(fill="x", pady=2)
+
+        material_options = list(self._cached_material_display)
+        if material and material not in self._cached_material_raw:
+            material_options.insert(0, self._format_material_display(material))
+
+        mat_var = ctk.StringVar(value=self._format_material_display(material))
+        mat_combo = FilterableComboBox(
+            row_frame, variable=mat_var, values=material_options, width=350
+        )
+        mat_combo.pack(side="left", padx=5, pady=5)
+
+        ctk.CTkLabel(row_frame, text="x", width=20).pack(side="left")
+        amount_var = ctk.StringVar(value=str(amount))
+        ctk.CTkEntry(row_frame, textvariable=amount_var, width=60,
+                     placeholder_text="qty").pack(side="left", padx=5)
+
+        remove_btn = ctk.CTkButton(
+            row_frame, text="\u2715", width=28, height=28,
+            fg_color="#f44336", hover_color="#d32f2f",
+            command=lambda rf=row_frame, rid=row_id: self._remove_repair_cost_row(rf, rid)
+        )
+        remove_btn.pack(side="right", padx=5, pady=5)
+
+        self.repair_cost_rows.append({
+            "frame": row_frame, "material_var": mat_var, "amount_var": amount_var
+        })
+
+    def _add_new_repair_cost_row(self):
+        """Add a new empty repair cost row."""
+        self._add_repair_cost_row("Item.Scrap", 1)
+
+    def _remove_repair_cost_row(self, row_frame, _row_id):
+        """Remove a repair cost row."""
+        row_frame.destroy()
+        for row in self.repair_cost_rows:
             if row.get("frame") == row_frame:
                 row["removed"] = True
                 break
@@ -5561,10 +5628,10 @@ class BuildingsView(ctk.CTkFrame):
                         if tag_prop.get("Name") in ("Tags", "RequiredTags"):
                             tag_prop["Value"] = tag_list
 
-            # InitialRepairCost (material rows)
+            # InitialRepairCost (separate repair cost rows)
             elif prop_name == "InitialRepairCost":
                 new_materials = []
-                for row in self.material_rows:
+                for row in self.repair_cost_rows:
                     if row.get("removed"):
                         continue
                     mat_name = self._parse_material_name(row["material_var"].get())
@@ -6606,6 +6673,10 @@ class BuildingsView(ctk.CTkFrame):
         self.form_vars.clear()
         self.material_rows.clear()
         self.sandbox_material_rows.clear()
+        self.repair_cost_rows.clear()
+        self.repair_cost_frame = None
+        self.repair_cost_rows.clear()
+        self.repair_cost_frame = None
         self.form_content.pack_forget()
         for widget in self.form_content.winfo_children():
             widget.destroy()
@@ -6834,6 +6905,8 @@ class BuildingsView(ctk.CTkFrame):
         self.form_vars.clear()
         self.material_rows.clear()
         self.sandbox_material_rows.clear()
+        self.repair_cost_rows.clear()
+        self.repair_cost_frame = None
 
         # === NEW BUILDING HEADER ===
         header_frame = ctk.CTkFrame(self.form_content, fg_color=("#2196F3", "#1565C0"))
@@ -6954,6 +7027,8 @@ class BuildingsView(ctk.CTkFrame):
         self.form_vars.clear()
         self.material_rows.clear()
         self.sandbox_material_rows.clear()
+        self.repair_cost_rows.clear()
+        self.repair_cost_frame = None
 
     def _create_new_building(self):
         """Create a new .def file from the form data."""
