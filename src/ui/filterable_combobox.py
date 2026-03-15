@@ -313,14 +313,17 @@ class FilterableComboBox(ctk.CTkFrame):
 
         The delay allows the user to click a dropdown item without the
         popup disappearing first (the click needs time to register).
+        Uses a longer delay to handle CTkScrollableFrame stealing focus.
         """
-        self.after(200, self._check_focus_and_hide)
+        self.after(350, self._check_focus_and_hide)
 
     def _check_focus_and_hide(self):
         """Hide dropdown if focus has moved outside this widget tree.
 
         Keeps the dropdown open if focus is on the entry, the arrow button,
         the entry's internal tk widget, or anywhere inside the dropdown popup.
+        Also checks if the mouse pointer is over the dropdown (covers cases
+        where focus tracking misses the popup).
         """
         if not self.dropdown_visible:
             return
@@ -335,14 +338,25 @@ class FilterableComboBox(ctk.CTkFrame):
             # Keep open if focus is inside the dropdown popup window
             if self.dropdown_window and focused:
                 try:
-                    # Walk up the widget tree from focused to see if it's
-                    # a child of our dropdown window
                     widget = focused
                     while widget is not None:
                         if widget is self.dropdown_window:
                             return
                         widget = widget.master
                 except (AttributeError, TypeError):
+                    pass
+            # Keep open if mouse pointer is over the dropdown popup
+            if self.dropdown_window:
+                try:
+                    mx = self.dropdown_window.winfo_pointerx()
+                    my = self.dropdown_window.winfo_pointery()
+                    wx = self.dropdown_window.winfo_rootx()
+                    wy = self.dropdown_window.winfo_rooty()
+                    ww = self.dropdown_window.winfo_width()
+                    wh = self.dropdown_window.winfo_height()
+                    if wx <= mx <= wx + ww and wy <= my <= wy + wh:
+                        return
+                except tk.TclError:
                     pass
         except (AttributeError, KeyError):
             pass
