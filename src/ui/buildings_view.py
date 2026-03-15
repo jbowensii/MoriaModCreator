@@ -6536,6 +6536,20 @@ class BuildingsView(ctk.CTkFrame):
         self.construction_checkboxes.clear()
         self.construction_check_vars.clear()
 
+        # Clear right pane form when switching categories
+        self.current_def_data = None
+        self.current_secrets_recipe_name = None
+        self.form_vars.clear()
+        self.material_rows.clear()
+        self.sandbox_material_rows.clear()
+        self.form_content.pack_forget()
+        for widget in self.form_content.winfo_children():
+            widget.destroy()
+        self.form_header.grid_remove()
+        self._search_bar.grid_remove()
+        self.form_footer.grid_remove()
+        self.placeholder_label.pack(pady=50)
+
         self.count_label.configure(text=f"{len(recipes)} Secrets items")
 
         if not recipes:
