@@ -1207,6 +1207,9 @@ class BuildManager:  # pylint: disable=too-few-public-methods
 
         target_files = {
             'SecretsOfKhazadDum_Localization_P.pak',
+            'TobiModsAddons_P.pak',
+            'TobiModsAddons_P.ucas',
+            'TobiModsAddons_P.utoc',
         }
 
         mymodfiles_base = get_default_mymodfiles_dir() / mod_name

@@ -555,10 +555,18 @@ class CombinedImportDialog(ctk.CTkToplevel):
             return
 
         # Find all IoStore mods in extracted subdirectories
+        # Only process RtoMSecretsOfKhazaddum_NoFatStacks_P; skip
+        # SecretsOfKhazadDum_Localization_P and TobiModsAddons_P as
+        # those are copied as-is into the final mod during build.
+        _SKIP_STEMS = {"SecretsOfKhazadDum_Localization_P", "TobiModsAddons_P"}
         utoc_files = []
         for subdir in secrets_dir.iterdir():
             if subdir.is_dir() and subdir.name not in ("retoc", "jsondata"):
-                utoc_files.extend(subdir.glob("*.utoc"))
+                for utoc in subdir.glob("*.utoc"):
+                    if utoc.stem in _SKIP_STEMS:
+                        logger.info("Skipping non-processable IoStore mod: %s", utoc.stem)
+                        continue
+                    utoc_files.append(utoc)
 
         if not utoc_files:
             logger.warning("No IoStore mod files (.utoc) found in extracted directories")
