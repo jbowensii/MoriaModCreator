@@ -3400,7 +3400,6 @@ class ConstructionsView(ctk.CTkFrame):
         # Clear existing form content
         for widget in self.form_content.winfo_children():
             widget.destroy()
-        self.form_content.pack(fill="both", expand=True)
 
         # Update header with def file metadata
         title = self.current_def_data.get("title", "")
@@ -3457,6 +3456,9 @@ class ConstructionsView(ctk.CTkFrame):
                 self.form_content, text="No data found for this item.",
                 text_color="gray"
             ).pack(anchor="center", pady=40)
+
+        # Show form content now that all widgets are built (single repaint)
+        self.form_content.pack(fill="both", expand=True)
 
         # Update header eye button to reflect current item's visibility
         self._update_header_eye_icon()

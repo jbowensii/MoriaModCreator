@@ -129,6 +129,10 @@ class VirtualScrollList(ctk.CTkFrame):
             self._all_items.append(entry)
             self._key_to_index[item['key']] = i
 
+        # Reset all bound keys so rows get fully rebound
+        for row in self._row_pool:
+            row['bound_key'] = None
+
         self._apply_filter_internal(self._filter_text)
         self._canvas.yview_moveto(0)
 
@@ -141,6 +145,7 @@ class VirtualScrollList(ctk.CTkFrame):
         self._filter_text = ""
         for row in self._row_pool:
             row['frame'].place_forget()
+            row['bound_key'] = None
         self._update_scroll_region()
 
     def get_item_count(self) -> int:
@@ -238,7 +243,7 @@ class VirtualScrollList(ctk.CTkFrame):
         self._redraw()
 
     def _on_mousewheel(self, event):
-        # Scroll by 3 rows per wheel tick for smooth, predictable scrolling
+        # Scroll by 3 rows per wheel tick
         delta = int(-1 * (event.delta / 120))
         total_height = len(self._filtered_indices) * self.ROW_HEIGHT
         if total_height <= 0:
@@ -246,11 +251,10 @@ class VirtualScrollList(ctk.CTkFrame):
         fraction = (3 * self.ROW_HEIGHT * delta) / total_height
         current = self._canvas.yview()[0]
         self._canvas.yview_moveto(max(0.0, min(1.0, current + fraction)))
-        # Redraw immediately for smooth scrolling, cancel any pending
+        # Throttle redraws: cancel pending and schedule a short delay
         if self._scroll_after_id:
             self.after_cancel(self._scroll_after_id)
-            self._scroll_after_id = None
-        self._redraw()
+        self._scroll_after_id = self.after(16, self._redraw)
 
     def _rebuild_pool(self, count: int):
         while len(self._row_pool) > count:
@@ -283,9 +287,14 @@ class VirtualScrollList(ctk.CTkFrame):
             'label': label,
             'eye_label': eye_label,
             'bound_key': None,
+            '_prev_selected': None,
+            '_prev_checked': None,
+            '_prev_eye': None,
         }
 
     def _redraw(self):
+        self._scroll_after_id = None
+
         if not self._filtered_indices:
             for row in self._row_pool:
                 row['frame'].place_forget()
@@ -335,21 +344,33 @@ class VirtualScrollList(ctk.CTkFrame):
         key = item['key']
         is_selected = (key == self._selected_key)
 
-        # Background
-        if is_selected:
-            row['frame'].configure(fg_color=("#d0e8ff", "#1a4a6e"))
-        else:
-            row['frame'].configure(fg_color="transparent")
+        # Skip all widget updates if this row already shows the right item
+        # and its dynamic state (selected, checked, eye) hasn't changed
+        check_var = self._check_vars.get(key)
+        checked = check_var.get() if check_var else False
+        eye_vis = item['eye_visible']
 
-        # Label
-        row['label'].configure(text=item['label_text'])
-        if is_selected:
-            row['label'].configure(text_color=("#0066cc", "#66b3ff"))
-        else:
-            row['label'].configure(text_color=("gray10", "#E8E8E8"))
+        key_changed = (row['bound_key'] != key)
+        sel_changed = (row['_prev_selected'] != is_selected)
+        chk_changed = (row['_prev_checked'] != checked)
+        eye_changed = (row['_prev_eye'] != eye_vis)
+
+        if not (key_changed or sel_changed or chk_changed or eye_changed):
+            return  # Nothing to update — skip all widget calls
+
+        # Update label text and selection colors only when needed
+        if key_changed or sel_changed:
+            if key_changed:
+                row['label'].configure(text=item['label_text'])
+            if is_selected:
+                row['frame'].configure(fg_color=("#d0e8ff", "#1a4a6e"))
+                row['label'].configure(text_color=("#0066cc", "#66b3ff"))
+            else:
+                row['frame'].configure(fg_color="transparent")
+                row['label'].configure(text_color=("gray10", "#E8E8E8"))
 
         # Rebind events only when the row is reused for a different item
-        if row['bound_key'] != key:
+        if key_changed:
             cb = row['checkbox']
             cb.configure(command=lambda k=key: self._handle_checkbox(k))
 
@@ -362,25 +383,29 @@ class VirtualScrollList(ctk.CTkFrame):
             for w in (row['frame'], row['label'], row['eye_label'], cb):
                 w.bind("<MouseWheel>", self._on_mousewheel)
 
-            row['bound_key'] = key
-
         # Checkbox state from external BooleanVar
-        check_var = self._check_vars.get(key)
-        checked = check_var.get() if check_var else False
-        cb = row['checkbox']
-        if checked:
-            if not cb.get():
-                cb.select()
-        else:
-            if cb.get():
-                cb.deselect()
+        if key_changed or chk_changed:
+            cb = row['checkbox']
+            if checked:
+                if not cb.get():
+                    cb.select()
+            else:
+                if cb.get():
+                    cb.deselect()
 
         # Eye icon
-        if self._show_eyes and self._eye_visible_icon and self._eye_hidden_icon:
-            icon = self._eye_visible_icon if item['eye_visible'] else self._eye_hidden_icon
-            row['eye_label'].configure(image=icon)
-        else:
-            row['eye_label'].configure(image="", text="")
+        if key_changed or eye_changed:
+            if self._show_eyes and self._eye_visible_icon and self._eye_hidden_icon:
+                icon = self._eye_visible_icon if eye_vis else self._eye_hidden_icon
+                row['eye_label'].configure(image=icon)
+            else:
+                row['eye_label'].configure(image="", text="")
+
+        # Track state for next comparison
+        row['bound_key'] = key
+        row['_prev_selected'] = is_selected
+        row['_prev_checked'] = checked
+        row['_prev_eye'] = eye_vis
 
     def _handle_click(self, key):
         self._selected_key = key
