@@ -1558,7 +1558,7 @@ class MainWindow(ctk.CTk, TkinterDnD.DnDWrapper if HAS_TKDND else object):
 
         # Checkbox colors from constants
         default_color = (COLOR_CHECKBOX_DEFAULT, COLOR_CHECKBOX_DEFAULT)
-        mixed_color = (COLOR_CHECKBOX_MIXED, COLOR_CHECKBOX_MIXED)
+        mixed_color = COLOR_CHECKBOX_MIXED
 
         if checked_count == 0:
             # None checked
@@ -1631,7 +1631,7 @@ class MainWindow(ctk.CTk, TkinterDnD.DnDWrapper if HAS_TKDND else object):
 
         # Checkbox colors from constants
         default_color = (COLOR_CHECKBOX_DEFAULT, COLOR_CHECKBOX_DEFAULT)
-        mixed_color = (COLOR_CHECKBOX_MIXED, COLOR_CHECKBOX_MIXED)
+        mixed_color = COLOR_CHECKBOX_MIXED
 
         if state == "none":
             checkbox.deselect()
@@ -3861,7 +3861,7 @@ class MainWindow(ctk.CTk, TkinterDnD.DnDWrapper if HAS_TKDND else object):
 
         # Checkbox colors from constants
         default_color = (COLOR_CHECKBOX_DEFAULT, COLOR_CHECKBOX_DEFAULT)
-        mixed_color = (COLOR_CHECKBOX_MIXED, COLOR_CHECKBOX_MIXED)
+        mixed_color = COLOR_CHECKBOX_MIXED
 
         if checked_count == 0:
             # None checked

@@ -27,6 +27,7 @@
     <change item="Jade" property="MaxStackSize" value="9999" />
     <change item="Mithril" property="MaxStackSize" value="9999" />
     <change item="Onyx" property="MaxStackSize" value="9999" />
+    <change item="PinkOpal" property="MaxStackSize" value="9999" />
     <change item="RedhornPumice" property="MaxStackSize" value="9999" />
     <change item="Quartz" property="MaxStackSize" value="9999" />
     <change item="RedBeryl" property="MaxStackSize" value="9999" />

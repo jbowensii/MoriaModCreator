@@ -2142,11 +2142,11 @@ class ConstructionsView(ctk.CTkFrame):
         )
         self.flora_btn.grid(row=0, column=1, sticky="ew", padx=2)
 
-        # Row 3: Loot, Items
+        # Row 3: Loot, Items, Ores
         btn_row3 = ctk.CTkFrame(btn_container, fg_color="transparent")
         btn_row3.pack(fill="x", pady=(2, 0))
-        btn_row3.grid_columnconfigure(0, weight=1)
-        btn_row3.grid_columnconfigure(1, weight=1)
+        for col in range(3):
+            btn_row3.grid_columnconfigure(col, weight=1)
 
         self.loot_btn = ctk.CTkButton(
             btn_row3, text="Loot", height=28,
@@ -2163,6 +2163,14 @@ class ConstructionsView(ctk.CTkFrame):
             command=self._load_secrets_items
         )
         self.items_btn.grid(row=0, column=1, sticky="ew", padx=2)
+
+        self.ores_btn = ctk.CTkButton(
+            btn_row3, text="Ores", height=28,
+            fg_color="#795548", hover_color="#5D4037",
+            font=ctk.CTkFont(weight="bold"),
+            command=self._load_secrets_ores
+        )
+        self.ores_btn.grid(row=0, column=2, sticky="ew", padx=(2, 0))
 
         # "Include Construction Modifications" checkbox + Refresh button
         top_row = ctk.CTkFrame(list_frame, fg_color="transparent")
@@ -2641,7 +2649,7 @@ class ConstructionsView(ctk.CTkFrame):
             return
 
         # If in secrets mode, use the secrets filter
-        if self.view_mode in ('buildings', 'weapons', 'armor', 'tools', 'flora', 'loot', 'items'):
+        if self.view_mode in ('buildings', 'weapons', 'armor', 'tools', 'flora', 'loot', 'items', 'ores'):
             self._filter_secrets_list()
             return
 
@@ -2728,6 +2736,7 @@ class ConstructionsView(ctk.CTkFrame):
             'flora': self._load_secrets_flora,
             'loot': self._load_secrets_loot,
             'items': self._load_secrets_items,
+            'ores': self._load_secrets_ores,
         }
         loader = loader_map.get(self.view_mode)
         if loader:
@@ -2737,9 +2746,13 @@ class ConstructionsView(ctk.CTkFrame):
         if self.current_secrets_recipe_name:
             self._load_secrets_recipe(self.current_secrets_recipe_name)
 
-    def _on_secrets_checkbox_toggle(self, _recipe_name: str):
+    def _on_secrets_checkbox_toggle(self, recipe_name: str):
         """Handle secrets item checkbox toggle - saves to INI in real-time."""
         self._save_checked_states_to_ini()
+        # If unchecked, remove this item's edits from the manifest
+        check_var = self.construction_check_vars.get(recipe_name)
+        if check_var and not check_var.get():
+            self._remove_edit_manifest_entry(recipe_name)
 
     def _on_construction_checkbox_toggle(self, _file_path: Path):
         """Handle individual construction checkbox toggle - saves to INI in real-time."""
@@ -2800,6 +2813,7 @@ class ConstructionsView(ctk.CTkFrame):
             'flora': self._load_secrets_flora,
             'loot': self._load_secrets_loot,
             'items': self._load_secrets_items,
+            'ores': self._load_secrets_ores,
         }
         loader = mode_loaders.get(self.view_mode)
         if loader:
@@ -2875,6 +2889,14 @@ class ConstructionsView(ctk.CTkFrame):
                 'defs_name': 'DT_Loot',
                 'recipes_def_path': None,
                 'defs_def_path': r'Moria\Content\Character\AI\DT_Loot.json',
+            },
+            {
+                'mode': 'ores',
+                'output_subdir': 'Items',
+                'recipes_name': None,
+                'defs_name': 'DT_Ores',
+                'recipes_def_path': None,
+                'defs_def_path': r'Moria\Content\Tech\Data\Items\DT_Ores.json',
             },
         ]
 
@@ -3078,7 +3100,23 @@ class ConstructionsView(ctk.CTkFrame):
 
             # Struct property (e.g. ResultConstructionHandle) - diff inner properties
             elif 'StructPropertyData' in prop_type:
-                if isinstance(orig_val, list) and isinstance(cache_val, list):
+                # GameplayTagContainer: emit change with just the property name
+                # so build_manager._is_gameplay_tag_container() can recognise it
+                if cache_prop.get('StructType') == 'GameplayTagContainer':
+                    # Extract the inner tag list from cache and original
+                    cache_tags = []
+                    orig_tags = []
+                    for inner in (cache_val if isinstance(cache_val, list) else []):
+                        if isinstance(inner, dict) and 'GameplayTagContainer' in inner.get('$type', ''):
+                            v = inner.get('Value', [])
+                            cache_tags = v if isinstance(v, list) else []
+                    for inner in (orig_val if isinstance(orig_val, list) else []):
+                        if isinstance(inner, dict) and 'GameplayTagContainer' in inner.get('$type', ''):
+                            v = inner.get('Value', [])
+                            orig_tags = v if isinstance(v, list) else []
+                    if cache_tags != orig_tags:
+                        changes.append((row_name, prop_name, ",".join(cache_tags)))
+                elif isinstance(orig_val, list) and isinstance(cache_val, list):
                     inner_changes = self._diff_struct_properties(
                         row_name, prop_name, orig_val, cache_val)
                     changes.extend(inner_changes)
@@ -3503,6 +3541,8 @@ class ConstructionsView(ctk.CTkFrame):
             has_data = self._show_flora_form(construction_json)
         elif mode == 'loot':
             has_data = self._show_loot_form(construction_json)
+        elif mode == 'ores':
+            has_data = self._show_ores_form(construction_json)
 
         if not has_data:
             ctk.CTkLabel(
@@ -4287,6 +4327,15 @@ class ConstructionsView(ctk.CTkFrame):
 
         return True
 
+    def _show_ores_form(self, definition_json):
+        """Render ores form (no recipe, same fields as items)."""
+        if not definition_json or not isinstance(definition_json, dict):
+            return False
+
+        ore = extract_item_fields(definition_json)
+        self._render_common_item_fields(ore, "Ore Definition", "#795548")
+        return True
+
     def _create_action_buttons(self):
         """Create Save and other action buttons at the bottom of the form."""
         # Separator
@@ -4590,7 +4639,7 @@ class ConstructionsView(ctk.CTkFrame):
                 self._update_item_recipe_json(recipe_json)
             if construction_json:
                 self._update_generic_definition_json(construction_json)
-        elif mode in ('flora', 'loot'):
+        elif mode in ('flora', 'loot', 'ores'):
             if construction_json:
                 self._update_generic_definition_json(construction_json)
 
@@ -4606,6 +4655,8 @@ class ConstructionsView(ctk.CTkFrame):
                 recipe_name = recipe_json.get("Name", "")
                 if recipe_name and recipes_path.exists():
                     self._update_row_in_json(recipes_path, recipe_name, recipe_json)
+                    self._save_edit_manifest_entry(
+                        recipes_path.name, recipe_name, recipe_json)
                     saved_files.append("recipes")
 
             # Update construction row in cached JSON
@@ -4614,6 +4665,9 @@ class ConstructionsView(ctk.CTkFrame):
                 if construction_name and constructions_path.exists():
                     self._update_row_in_json(constructions_path, construction_name,
                                              construction_json)
+                    self._save_edit_manifest_entry(
+                        constructions_path.name, construction_name,
+                        construction_json)
                     saved_files.append("constructions")
 
             if saved_files:
@@ -4665,7 +4719,7 @@ class ConstructionsView(ctk.CTkFrame):
             both_manual = (default_ut == 'EMorRecipeUnlockType::Manual'
                            and sandbox_ut == 'EMorRecipeUnlockType::Manual')
             return not both_manual
-        elif mode in ('flora', 'loot'):
+        elif mode in ('flora', 'loot', 'ores'):
             enabled_var = self.form_vars.get('Def_EnabledState')
             if enabled_var:
                 return enabled_var.get() != 'ERowEnabledState::Disabled'
@@ -4748,7 +4802,7 @@ class ConstructionsView(ctk.CTkFrame):
                     var = self.form_vars.get(key)
                     if var:
                         var.set('ERowEnabledState::Disabled')
-            elif mode in ('flora', 'loot'):
+            elif mode in ('flora', 'loot', 'ores'):
                 enabled_var = self.form_vars.get('Def_EnabledState')
                 if enabled_var:
                     enabled_var.set('ERowEnabledState::Disabled')
@@ -4793,7 +4847,7 @@ class ConstructionsView(ctk.CTkFrame):
                     var = self.form_vars.get(key)
                     if var:
                         var.set(orig_def_state)
-        elif mode in ('flora', 'loot'):
+        elif mode in ('flora', 'loot', 'ores'):
             src_path = self._get_secrets_constructions_path()
             if src_path.exists():
                 orig_row = self._get_row_by_name(src_path, name)
@@ -4825,7 +4879,7 @@ class ConstructionsView(ctk.CTkFrame):
 
         if mode in ('buildings', 'weapons', 'armor', 'tools', 'items'):
             self._bulk_set_recipe_visibility(item_names, make_hidden)
-        elif mode in ('flora', 'loot'):
+        elif mode in ('flora', 'loot', 'ores'):
             self._bulk_set_definition_visibility(item_names, make_hidden)
 
         # Update all eye icons and check all checkboxes in the list
@@ -5390,10 +5444,11 @@ class ConstructionsView(ctk.CTkFrame):
             # Tags (GameplayTagContainer)
             elif prop_name == "Tags" and "StructPropertyData" in prop_type:
                 if "Tags" in self.form_vars:
-                    tag_val = self.form_vars["Tags"].get()
+                    tags_str = self.form_vars["Tags"].get().strip()
+                    tag_list = [t.strip() for t in tags_str.split(",") if t.strip()] if tags_str else []
                     for tag_prop in prop.get("Value", []):
                         if tag_prop.get("Name") == "Tags":
-                            tag_prop["Value"] = [tag_val] if tag_val else []
+                            tag_prop["Value"] = tag_list
 
             # DamageType tag (weapon-specific)
             elif prop_name == "DamageType" and "StructPropertyData" in prop_type:
@@ -5572,7 +5627,7 @@ class ConstructionsView(ctk.CTkFrame):
             return self._get_cache_dir() / 'DT_ItemRecipes.json'
         if self.view_mode == 'buildings':
             return self._get_cache_dir() / 'DT_ConstructionRecipes.json'
-        return None  # flora, loot have no recipes
+        return None  # flora, loot, ores have no recipes
 
     def _get_cache_constructions_path(self) -> Path:
         """Get path to cached definitions JSON for the current view mode."""
@@ -5584,6 +5639,7 @@ class ConstructionsView(ctk.CTkFrame):
             'items': 'DT_Items.json',
             'flora': 'DT_Moria_Flora.json',
             'loot': 'DT_Loot.json',
+            'ores': 'DT_Ores.json',
         }
         return self._get_cache_dir() / defs_map.get(self.view_mode, 'DT_Constructions.json')
 
@@ -5605,9 +5661,12 @@ class ConstructionsView(ctk.CTkFrame):
             # Delete non-INI files from cache directory to start fresh
             if cache_dir.exists():
                 for item in cache_dir.iterdir():
-                    if item.is_file() and item.suffix.lower() != '.ini':
+                    if (item.is_file()
+                            and item.suffix.lower() != '.ini'
+                            and item.name != 'edits.json'):
                         item.unlink()
-                logger.info("Cleared cache directory (preserved .ini): %s", cache_dir)
+                logger.info("Cleared cache directory (preserved .ini, edits.json): %s",
+                            cache_dir)
 
         def _copy_if_needed(src: Path, dst: Path):
             """Copy src to dst only if dst is missing or src is newer."""
@@ -5632,6 +5691,9 @@ class ConstructionsView(ctk.CTkFrame):
         # Refresh definitions from game output
         src_defs = self._get_game_constructions_path()
         _copy_if_needed(src_defs, self._get_cache_constructions_path())
+
+        # Re-apply any saved edits from the manifest
+        self._reapply_edits_from_manifest()
 
     @staticmethod
     def _load_saved_prefix() -> str:
@@ -5707,6 +5769,101 @@ class ConstructionsView(ctk.CTkFrame):
 
         return set()
 
+    # ------------------------------------------------------------------
+    # Edit manifest persistence (edits.json)
+    # ------------------------------------------------------------------
+
+    def _get_edit_manifest_path(self) -> Path:
+        """Get path to edits.json in the current cache directory."""
+        return self._get_cache_dir() / 'edits.json'
+
+    def _save_edit_manifest_entry(self, json_filename: str, row_name: str,
+                                  updated_row: dict):
+        """Record an edited row in the edit manifest.
+
+        Args:
+            json_filename: Name of the JSON file (e.g. 'DT_Weapons.json')
+            row_name: The row name (e.g. 'Weapon_Sword_Iron')
+            updated_row: The full updated row dict
+        """
+        manifest_path = self._get_edit_manifest_path()
+        manifest = self._load_edit_manifest()
+        manifest.setdefault(json_filename, {})[row_name] = updated_row
+
+        manifest_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(manifest_path, 'w', encoding='utf-8') as f:
+            json.dump(manifest, f, indent=2, ensure_ascii=False)
+        logger.debug("Saved edit manifest entry: %s / %s", json_filename, row_name)
+
+    def _load_edit_manifest(self) -> dict:
+        """Load the edit manifest from disk.
+
+        Returns:
+            Dict keyed by json_filename -> row_name -> full row dict.
+        """
+        manifest_path = self._get_edit_manifest_path()
+        if not manifest_path.exists():
+            return {}
+        try:
+            with open(manifest_path, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except (OSError, json.JSONDecodeError) as e:
+            logger.error("Error loading edit manifest: %s", e)
+            return {}
+
+    def _remove_edit_manifest_entry(self, row_name: str):
+        """Remove a row from the edit manifest (all JSON files).
+
+        Called when a user unchecks an item to discard that edit.
+
+        Args:
+            row_name: The row name to remove.
+        """
+        manifest_path = self._get_edit_manifest_path()
+        manifest = self._load_edit_manifest()
+        if not manifest:
+            return
+
+        changed = False
+        for json_filename in list(manifest.keys()):
+            if row_name in manifest[json_filename]:
+                del manifest[json_filename][row_name]
+                changed = True
+                # Remove empty file entries
+                if not manifest[json_filename]:
+                    del manifest[json_filename]
+
+        if changed:
+            if manifest:
+                with open(manifest_path, 'w', encoding='utf-8') as f:
+                    json.dump(manifest, f, indent=2, ensure_ascii=False)
+            elif manifest_path.exists():
+                manifest_path.unlink()
+            logger.debug("Removed edit manifest entry for: %s", row_name)
+
+    def _reapply_edits_from_manifest(self):
+        """Re-apply saved edits from the manifest to the current cache JSONs.
+
+        Called after _refresh_cache() copies fresh source files so that
+        user edits are not lost.
+        """
+        manifest = self._load_edit_manifest()
+        if not manifest:
+            return
+
+        cache_dir = self._get_cache_dir()
+        reapplied = 0
+        for json_filename, rows in manifest.items():
+            json_path = cache_dir / json_filename
+            if not json_path.exists():
+                continue
+            for row_name, updated_row in rows.items():
+                self._update_row_in_json(json_path, row_name, updated_row)
+                reapplied += 1
+
+        if reapplied:
+            logger.info("Re-applied %d edits from manifest", reapplied)
+
     def _get_secrets_recipes_path(self) -> Path | None:
         """Get path to recipes JSON in game output for the current view mode.
 
@@ -5730,7 +5887,7 @@ class ConstructionsView(ctk.CTkFrame):
             return base / 'Tech' / 'Data' / 'Items' / 'DT_ItemRecipes.json'
         if self.view_mode == 'buildings':
             return base / 'Tech' / 'Data' / 'Building' / 'DT_ConstructionRecipes.json'
-        return None  # flora, loot have no recipes
+        return None  # flora, loot, ores have no recipes
 
     def _get_game_constructions_path(self) -> Path:
         """Get path to definitions JSON in game output for the current view mode."""
@@ -5743,6 +5900,7 @@ class ConstructionsView(ctk.CTkFrame):
             'items': 'Tech/Data/Items/DT_Items.json',
             'flora': 'Tech/Data/Gameworld/DT_Moria_Flora.json',
             'loot': 'Character/AI/DT_Loot.json',
+            'ores': 'Tech/Data/Items/DT_Ores.json',
         }
         return base / defs_map.get(self.view_mode, 'Tech/Data/Building/DT_Constructions.json')
 
@@ -5857,23 +6015,20 @@ class ConstructionsView(ctk.CTkFrame):
         mappings to self.string_table.
         """
         # Definition tables that may have DisplayName properties.
-        # Use explicit paths (not _get_cache_constructions_path) because
-        # view_mode may be 'definitions' at init time.
-        cache_base = get_appdata_dir() / 'cache' / 'constructions'
-        def_table_specs = [
-            ('buildings', 'DT_Constructions.json'),
-            ('weapons', 'DT_Weapons.json'),
-            ('armor', 'DT_Armor.json'),
-            ('tools', 'DT_Tools.json'),
-            ('items', 'DT_Items.json'),
-            ('flora', 'DT_Moria_Flora.json'),
-            ('loot', 'DT_Loot.json'),
+        # Read from game output directly (not cache dirs) because cache
+        # subdirectories only exist after the user visits each mode tab.
+        base = get_appdata_dir() / 'output' / 'jsondata' / 'Moria' / 'Content'
+        def_table_paths = [
+            base / 'Tech' / 'Data' / 'Building' / 'DT_Constructions.json',
+            base / 'Tech' / 'Data' / 'Items' / 'DT_Weapons.json',
+            base / 'Tech' / 'Data' / 'Items' / 'DT_Armor.json',
+            base / 'Tech' / 'Data' / 'Items' / 'DT_Tools.json',
+            base / 'Tech' / 'Data' / 'Items' / 'DT_Items.json',
+            base / 'Tech' / 'Data' / 'Gameworld' / 'DT_Moria_Flora.json',
+            base / 'Character' / 'AI' / 'DT_Loot.json',
+            base / 'Tech' / 'Data' / 'Items' / 'DT_Ores.json',
         ]
-        def_tables = []
-        for mode, filename in def_table_specs:
-            path = cache_base / mode / filename
-            if path.exists():
-                def_tables.append(path)
+        def_tables = [p for p in def_table_paths if p.exists()]
 
         resolved = 0
         for table_path in def_tables:
@@ -6195,7 +6350,7 @@ class ConstructionsView(ctk.CTkFrame):
                 definition_row = definition_rows.get(name, {})
                 visibility[name] = self._is_item_visible(recipe_row, definition_row)
 
-        elif self.view_mode in ('flora', 'loot'):
+        elif self.view_mode in ('flora', 'loot', 'ores'):
             constructions_path = self._get_cache_constructions_path()
             all_rows = self._load_all_rows(constructions_path)
             for name in item_names:
@@ -6400,29 +6555,52 @@ class ConstructionsView(ctk.CTkFrame):
         self._populate_secrets_list(self.secrets_recipes)
 
     def _load_secrets_items(self):
-        """Load items from game data, showing all game items."""
+        """Load items from game data, showing all DT_Items entries.
+
+        Items are shown regardless of whether they have a matching recipe.
+        The right pane will show recipe fields only if a recipe exists.
+        """
         logger.debug("Switching to items view mode")
         self.view_mode = 'items'
         self._set_status("Loading game items...")
 
         self._refresh_cache()
 
-        game_recipe_names = self._get_names_from_table_data(self._get_cache_recipes_path())
         game_item_names = self._get_names_from_table_data(self._get_cache_constructions_path())
 
-        matching_items = game_recipe_names & game_item_names
+        logger.info("Game items: %s", len(game_item_names))
 
-        logger.info("Game recipes: %s, Game items: %s, Matching: %s",
-                     len(game_recipe_names), len(game_item_names), len(matching_items))
-
-        self.secrets_recipes = {name: {'Name': name} for name in matching_items}
-        self.game_recipe_names = game_recipe_names
-        self.secrets_constructions = {name: {'Name': name} for name in matching_items}
+        self.secrets_recipes = {name: {'Name': name} for name in game_item_names}
+        self.game_recipe_names = set()
+        self.secrets_constructions = {name: {'Name': name} for name in game_item_names}
 
         if not self.secrets_recipes:
             self._set_status("No items found in game data")
         else:
             self._set_status(f"Found {len(self.secrets_recipes)} game items")
+
+        self._populate_secrets_list(self.secrets_recipes)
+
+    def _load_secrets_ores(self):
+        """Load ores from game data, showing all DT_Ores entries."""
+        logger.debug("Switching to ores view mode")
+        self.view_mode = 'ores'
+        self._set_status("Loading game ores...")
+
+        self._refresh_cache()
+
+        game_ore_names = self._get_names_from_table_data(self._get_cache_constructions_path())
+
+        logger.info("Game ores: %s", len(game_ore_names))
+
+        self.secrets_recipes = {name: {'Name': name} for name in game_ore_names}
+        self.game_recipe_names = set()
+        self.secrets_constructions = {name: {'Name': name} for name in game_ore_names}
+
+        if not self.secrets_recipes:
+            self._set_status("No ores found in game data")
+        else:
+            self._set_status(f"Found {len(self.secrets_recipes)} game ores")
 
         self._populate_secrets_list(self.secrets_recipes)
 
