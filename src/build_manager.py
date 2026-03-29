@@ -330,9 +330,66 @@ class BuildManager:  # pylint: disable=too-few-public-methods
                 check=False,
             )
             if result.returncode != 0:
-                logger.error("Phase B1: retoc failed: %s", result.stderr.strip() if result.stderr else "Unknown")
-                return
-            logger.info("Phase B1: retoc extraction complete")
+                logger.warning(
+                    "Phase B1: retoc to-legacy failed (partial extraction may exist): %s",
+                    result.stderr.strip() if result.stderr else "Unknown",
+                )
+                # Check if any files were extracted before the crash
+                partial_files = list(Path(temp_retoc).rglob("*.uasset")) + list(Path(temp_retoc).rglob("*.umap"))
+                if partial_files:
+                    logger.info("Phase B1: %d files extracted before failure, continuing with partial data", len(partial_files))
+                else:
+                    # No files at all — try unpack-raw fallback to get manifest,
+                    # then per-file to-legacy --filter for each needed asset
+                    logger.info("Phase B1: No files from to-legacy, trying per-file extraction fallback")
+                    utoc_file = Path(temp_paks) / f"{secrets_stem}.utoc"
+                    manifest_dir = tempfile.mkdtemp(prefix="secrets_manifest_")
+                    try:
+                        manifest_cmd = [str(retoc_path), 'manifest', str(utoc_file), str(Path(manifest_dir) / 'manifest.json')]
+                        manifest_result = subprocess.run(
+                            manifest_cmd, capture_output=True, text=True,
+                            encoding='utf-8', errors='replace', timeout=60,
+                            creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0,
+                            check=False,
+                        )
+                        if manifest_result.returncode == 0:
+                            manifest_data = json.loads((Path(manifest_dir) / 'manifest.json').read_text(encoding='utf-8'))
+                            # Get unique file stems from manifest
+                            stems = set()
+                            for _cid, path in manifest_data.get('chunk_paths', {}).items():
+                                stem = Path(path).stem
+                                if stem not in stems:
+                                    stems.add(stem)
+                            logger.info("Phase B1 fallback: found %d assets in manifest, extracting individually", len(stems))
+                            extracted = 0
+                            for stem in stems:
+                                filter_cmd = [
+                                    str(retoc_path), 'to-legacy',
+                                    '--version', RETOC_UE_VERSION,
+                                    '--filter', stem,
+                                    temp_paks, temp_retoc,
+                                ]
+                                try:
+                                    fr = subprocess.run(
+                                        filter_cmd, capture_output=True, text=True,
+                                        encoding='utf-8', errors='replace', timeout=30,
+                                        creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0,
+                                        check=False,
+                                    )
+                                    if fr.returncode == 0:
+                                        extracted += 1
+                                    else:
+                                        logger.debug("Phase B1 fallback: skipped %s (retoc error)", stem)
+                                except (subprocess.TimeoutExpired, OSError):
+                                    logger.debug("Phase B1 fallback: skipped %s (timeout/error)", stem)
+                            logger.info("Phase B1 fallback: extracted %d/%d assets", extracted, len(stems))
+                        else:
+                            logger.error("Phase B1: manifest extraction also failed, cannot extract secrets")
+                            return
+                    finally:
+                        shutil.rmtree(manifest_dir, ignore_errors=True)
+            else:
+                logger.info("Phase B1: retoc extraction complete")
 
             # Step B2: UAssetGUI tojson on each extracted uasset
             self._report_progress("Converting secrets to JSON...", 0.17)

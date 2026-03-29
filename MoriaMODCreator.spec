@@ -5,7 +5,7 @@ a = Analysis(
     ['main.py'],
     pathex=[],
     binaries=[],
-    datas=[('assets', 'assets')],
+    datas=[('assets', 'assets'), ('docs/templates', 'docs/templates')],
     hiddenimports=['tkhtmlview'],
     hookspath=[],
     hooksconfig={},
