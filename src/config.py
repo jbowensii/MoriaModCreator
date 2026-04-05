@@ -86,6 +86,11 @@ def get_default_changeconstructions_dir() -> Path:
     return get_appdata_dir() / 'changeconstructions'
 
 
+def get_secrets_jsondata_full_dir() -> Path:
+    """Get the Secrets Source/jsondata_full directory for merged (game+secrets) JSON."""
+    return get_appdata_dir() / 'Secrets Source' / 'jsondata_full'
+
+
 def get_new_secrets_dir() -> Path:
     """Get the New Secrets directory for Object Editor edits."""
     return get_appdata_dir() / 'New Secrets'

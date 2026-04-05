@@ -265,6 +265,11 @@ class CombinedImportDialog(ctk.CTkToplevel):
             if secrets_jsondata.exists():
                 shutil.rmtree(secrets_jsondata, ignore_errors=True)
                 logger.info("Cleared Secrets Source/jsondata")
+            # Clear jsondata_full (merged game+secrets from previous import)
+            secrets_jsondata_full = secrets_dir / "jsondata_full"
+            if secrets_jsondata_full.exists():
+                shutil.rmtree(secrets_jsondata_full, ignore_errors=True)
+                logger.info("Cleared Secrets Source/jsondata_full")
             # Clear subdirectories (extracted mod files)
             cleaned = clear_all_directories_in_secrets_source()
             logger.info("Cleared Secrets Source: %d items", cleaned)
@@ -558,15 +563,31 @@ class CombinedImportDialog(ctk.CTkToplevel):
         # Only process RtoMSecretsOfKhazaddum_NoFatStacks_P; skip
         # SecretsOfKhazadDum_Localization_P and TobiModsAddons_P as
         # those are copied as-is into the final mod during build.
+        _SKIP_DIRS = {"retoc", "jsondata", "jsondata_full"}
         _SKIP_STEMS = {"SecretsOfKhazadDum_Localization_P", "TobiModsAddons_P"}
         utoc_files = []
         for subdir in secrets_dir.iterdir():
-            if subdir.is_dir() and subdir.name not in ("retoc", "jsondata"):
+            if subdir.is_dir() and subdir.name not in _SKIP_DIRS:
                 for utoc in subdir.glob("*.utoc"):
                     if utoc.stem in _SKIP_STEMS:
                         logger.info("Skipping non-processable IoStore mod: %s", utoc.stem)
                         continue
                     utoc_files.append(utoc)
+
+        # Verify main game pak exists for merged extraction
+        game_pak_stem = "Moria-WindowsNoEditor"
+        game_pak_ok = all(
+            (paks_path / f"{game_pak_stem}{ext}").exists()
+            for ext in (".pak", ".ucas", ".utoc")
+        )
+        if not game_pak_ok:
+            logger.error("Main game pak %s not found in %s", game_pak_stem, paks_path)
+            q.put(("error", f"Main game pak not found in {paks_path}"))
+            q.put(("done", False))
+            return
+
+        # Track secrets file stems via retoc manifest for filtering Step 3
+        secrets_manifest_stems = set()
 
         if not utoc_files:
             logger.warning("No IoStore mod files (.utoc) found in extracted directories")
@@ -586,7 +607,41 @@ class CombinedImportDialog(ctk.CTkToplevel):
                 mod_dir = utoc_file.parent
                 q.put(("file", f"Extracting {stem} ({i + 1}/{total_mods})..."))
 
-                # Create temp dir with mod files + global files
+                # Get secrets file list from manifest before merged extraction.
+                # retoc manifest writes pakstore.json to the current working dir.
+                q.put(("status", "Reading secrets manifest..."))
+                manifest_cmd = (
+                    f'"{retoc_exe}" manifest "{utoc_file}"'
+                )
+                # Run from mod_dir so pakstore.json lands there
+                manifest_result = subprocess.run(
+                    manifest_cmd, shell=True, capture_output=True, text=True,
+                    encoding='utf-8', errors='replace', timeout=60,
+                    cwd=str(mod_dir),
+                    creationflags=subprocess.CREATE_NO_WINDOW
+                    if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0,
+                )
+                pakstore_json = mod_dir / "pakstore.json"
+                if manifest_result.returncode == 0 and pakstore_json.exists():
+                    try:
+                        import json as _json
+                        pakstore = _json.load(open(pakstore_json, encoding='utf-8'))
+                        # Format: {"oplog": {"entries": [{"packagedata": [{"filename": "..."}]}]}}
+                        entries = pakstore.get("oplog", {}).get("entries", [])
+                        for entry in entries:
+                            for pd in entry.get("packagedata", []):
+                                fn = pd.get("filename", "")
+                                if fn:
+                                    secrets_manifest_stems.add(Path(fn).stem)
+                        logger.info("Manifest: %d secrets file stems identified", len(secrets_manifest_stems))
+                    except Exception as e:
+                        logger.warning("Failed to parse pakstore.json: %s", e)
+                    finally:
+                        pakstore_json.unlink(missing_ok=True)
+                else:
+                    logger.warning("retoc manifest failed, will use path-based filtering")
+
+                # Create temp dir with mod files + global files + game pak
                 temp_paks = tempfile.mkdtemp(prefix="secrets_paks_")
                 try:
                     # Copy matching mod files (.pak, .ucas, .utoc with same stem)
@@ -600,25 +655,45 @@ class CombinedImportDialog(ctk.CTkToplevel):
                     shutil.copy2(str(global_ucas), temp_paks)
                     shutil.copy2(str(global_utoc), temp_paks)
 
-                    # Run retoc to-legacy (no filter — extract ALL)
+                    # Copy main game pak for merged extraction
+                    q.put(("status", "Copying game files for merged extraction..."))
+                    for ext in (".pak", ".ucas", ".utoc"):
+                        shutil.copy2(
+                            str(paks_path / f"{game_pak_stem}{ext}"),
+                            temp_paks,
+                        )
+                    logger.info("Game pak copied for merged extraction")
+
+                    # Run retoc to-legacy with BOTH paks for merged output
+                    q.put(("status", f"Extracting merged data for {stem}..."))
                     cmd = (
                         f'"{retoc_exe}" to-legacy --version {RETOC_UE_VERSION} '
                         f'"{temp_paks}" "{secrets_retoc_dir}"'
                     )
-                    logger.info("Running retoc: %s", cmd)
+                    logger.info("Running retoc (merged): %s", cmd)
                     result = subprocess.run(
                         cmd, shell=True, capture_output=True, text=True,
-                        encoding='utf-8', errors='replace', timeout=300,
+                        encoding='utf-8', errors='replace', timeout=600,
                         creationflags=subprocess.CREATE_NO_WINDOW
                         if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0,
                     )
                     if result.returncode == 0:
                         extracted_count += 1
-                        logger.info("Successfully extracted IoStore mod: %s", stem)
+                        logger.info("Successfully extracted merged mod: %s", stem)
                     else:
-                        logger.error("retoc failed for %s: %s", stem,
-                                     result.stderr.strip() if result.stderr else "Unknown error")
-                        q.put(("file", f"Failed to extract {stem}"))
+                        # retoc may crash but still extract files
+                        partial = list(secrets_retoc_dir.rglob("*.uasset"))
+                        if partial:
+                            extracted_count += 1
+                            logger.warning(
+                                "retoc crashed for %s but extracted %d files: %s",
+                                stem, len(partial),
+                                result.stderr.strip() if result.stderr else "Unknown",
+                            )
+                        else:
+                            logger.error("retoc failed for %s: %s", stem,
+                                         result.stderr.strip() if result.stderr else "Unknown error")
+                            q.put(("file", f"Failed to extract {stem}"))
 
                 except subprocess.TimeoutExpired:
                     logger.error("retoc timed out for %s", stem)
@@ -638,11 +713,16 @@ class CombinedImportDialog(ctk.CTkToplevel):
             _cancel_cleanup()
             return
 
-        # --- Step 3: Convert extracted .uasset files to JSON ---
+        # --- Step 3: Convert secrets uasset files to JSON ---
+        # The merged retoc output has ~58,000 files (entire game + secrets).
+        # Filter to only convert the ~232 secrets-relevant files using the
+        # manifest stems collected in Step 2.
         logger.info("Secrets pipeline step 3: Converting to JSON")
         q.put(("title", "Converting Secrets to JSON"))
         q.put(("status", "Scanning for extracted files..."))
 
+        secrets_jsondata_full_dir = secrets_dir / "jsondata_full"
+        secrets_jsondata_full_dir.mkdir(parents=True, exist_ok=True)
         secrets_jsondata_dir = secrets_dir / "jsondata"
         secrets_jsondata_dir.mkdir(parents=True, exist_ok=True)
 
@@ -653,15 +733,35 @@ class CombinedImportDialog(ctk.CTkToplevel):
             q.put(("done", False))
             return
 
-        # Find all .uasset files in secrets retoc output
-        uasset_files = []
+        # Find all .uasset files in secrets retoc output, filtered to secrets files only
+        all_uasset_files = []
         if secrets_retoc_dir.exists():
             for ext in UASSET_EXTENSIONS:
-                uasset_files.extend(secrets_retoc_dir.rglob(f"*{ext}"))
+                all_uasset_files.extend(secrets_retoc_dir.rglob(f"*{ext}"))
+
+        # Filter: keep only files whose stem is in the secrets manifest,
+        # or that are under Mods/ or Tech/Data/ (fallback if manifest failed)
+        if secrets_manifest_stems:
+            uasset_files = [
+                f for f in all_uasset_files
+                if f.stem in secrets_manifest_stems
+            ]
+            logger.info("Filtered %d -> %d files using manifest",
+                        len(all_uasset_files), len(uasset_files))
+        else:
+            # Fallback: use path-based heuristic
+            uasset_files = [
+                f for f in all_uasset_files
+                if '/Content/Mods/' in f.as_posix()
+                or '/Content/Tech/Data/' in f.as_posix()
+                or '/Content/Character/AI/' in f.as_posix()
+            ]
+            logger.info("Filtered %d -> %d files using path heuristic",
+                        len(all_uasset_files), len(uasset_files))
 
         total_c = len(uasset_files)
         if total_c == 0:
-            logger.warning("No .uasset files found in Secrets Source/retoc/")
+            logger.warning("No secrets .uasset files found after filtering")
             q.put(("status", "No files to convert"))
             q.put(("progress", 0.70))
         else:
@@ -671,6 +771,7 @@ class CombinedImportDialog(ctk.CTkToplevel):
             converted = 0
             errors = 0
 
+            # Convert to jsondata_full/ (merged game+secrets rows)
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
                 futures = {
                     executor.submit(
@@ -678,7 +779,7 @@ class CombinedImportDialog(ctk.CTkToplevel):
                         uassetgui_exe,
                         f,
                         secrets_retoc_dir,
-                        secrets_jsondata_dir,
+                        secrets_jsondata_full_dir,
                     ): f
                     for f in uasset_files
                 }
@@ -702,7 +803,19 @@ class CombinedImportDialog(ctk.CTkToplevel):
             _cancel_cleanup()
             return
 
-        # --- Step 3a: Cross-reference secrets retoc against game files ---
+        # --- Step 3 (cont): Copy jsondata_full/ -> jsondata/ for filtering ---
+        # jsondata_full/ has merged (game+secrets) rows — used by build.
+        # jsondata/ will be filtered to secrets-only rows — used by UI.
+        logger.info("Copying jsondata_full to jsondata for filtering")
+        q.put(("status", "Preparing filtered copy..."))
+        for src_file in secrets_jsondata_full_dir.rglob("*.json"):
+            rel = src_file.relative_to(secrets_jsondata_full_dir)
+            dst = secrets_jsondata_dir / rel
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(str(src_file), str(dst))
+
+        # --- Step 3a: Cross-reference secrets against game files ---
+        # Only check files in the secrets manifest, not 58,000+ retoc files.
         logger.info("Secrets pipeline step 3a: Cross-referencing with game files")
         q.put(("title", "Cross-Referencing Game Files"))
         q.put(("status", "Checking for missing game JSON files..."))
@@ -711,22 +824,21 @@ class CombinedImportDialog(ctk.CTkToplevel):
         game_jsondata_dir = get_jsondata_dir()
         crossref_converted = 0
 
-        if secrets_retoc_dir.exists() and game_retoc_dir.exists():
-            for secrets_uasset in secrets_retoc_dir.rglob("*.uasset"):
-                rel_path = secrets_uasset.relative_to(secrets_retoc_dir)
-                game_retoc_file = game_retoc_dir / rel_path
-                game_json_file = game_jsondata_dir / rel_path.with_suffix(".json")
+        for secrets_json in secrets_jsondata_dir.rglob("*.json"):
+            rel_path = secrets_json.relative_to(secrets_jsondata_dir)
+            game_json_file = game_jsondata_dir / rel_path
+            game_retoc_file = game_retoc_dir / rel_path.with_suffix(".uasset")
 
-                if game_retoc_file.exists() and not game_json_file.exists():
-                    success, msg = convert_file_to_json(
-                        uassetgui_exe, game_retoc_file,
-                        game_retoc_dir, game_jsondata_dir,
-                    )
-                    if success:
-                        crossref_converted += 1
-                        logger.info("Cross-ref converted: %s", rel_path)
-                    else:
-                        logger.warning("Cross-ref failed: %s", msg)
+            if not game_json_file.exists() and game_retoc_file.exists():
+                success, msg = convert_file_to_json(
+                    uassetgui_exe, game_retoc_file,
+                    game_retoc_dir, game_jsondata_dir,
+                )
+                if success:
+                    crossref_converted += 1
+                    logger.info("Cross-ref converted: %s", rel_path)
+                else:
+                    logger.warning("Cross-ref failed: %s", msg)
 
         if crossref_converted > 0:
             q.put(("file", f"Converted {crossref_converted} missing game file(s)"))
