@@ -408,17 +408,42 @@ class BuildManager:  # pylint: disable=too-few-public-methods
             else:
                 logger.info("Phase B1: retoc extraction complete")
 
-            # Step B2: UAssetGUI tojson on each extracted uasset
+            # Step B2: UAssetGUI tojson — only convert files we actually need:
+            #  1) Files already in jsonfiles/ (Phase A base game files that need
+            #     the merged secrets version to overwrite them)
+            #  2) Files under Moria/Content/Mods/ (new secrets blueprints)
+            #  3) Files under Moria/Content/Tech/Data/ (DataTables that may be
+            #     secrets-only, like DT_CategoryTags, DT_OfferDecks, etc.)
             self._report_progress("Converting secrets to JSON...", 0.17)
-            uasset_files = []
-            for ext in (".uasset", ".umap"):
-                uasset_files.extend(Path(temp_retoc).rglob(f"*{ext}"))
 
-            if not uasset_files:
+            # Build set of needed relative paths from jsonfiles/
+            needed_stems = set()
+            for jf in mymodfiles_dir.rglob("*.json"):
+                # e.g. "Moria/Content/Tech/Data/Items/DT_Weapons"
+                needed_stems.add(jf.relative_to(mymodfiles_dir).with_suffix('').as_posix())
+
+            all_uasset_files = []
+            for ext in (".uasset", ".umap"):
+                all_uasset_files.extend(Path(temp_retoc).rglob(f"*{ext}"))
+
+            if not all_uasset_files:
                 logger.warning("Phase B2: No uasset files found after retoc extraction")
                 return
 
-            logger.info("Phase B2: Converting %d uasset files to JSON", len(uasset_files))
+            # Filter to only needed files
+            uasset_files = []
+            for uf in all_uasset_files:
+                rel = uf.relative_to(temp_retoc).with_suffix('').as_posix()
+                # Include if: matches a file Phase A copied, or is in Mods/ or Tech/Data/
+                if (rel in needed_stems
+                        or '/Content/Mods/' in rel
+                        or '/Content/Tech/Data/' in rel):
+                    uasset_files.append(uf)
+
+            logger.info(
+                "Phase B2: Converting %d of %d extracted files to JSON (filtered to needed)",
+                len(uasset_files), len(all_uasset_files),
+            )
             converted = 0
             for uasset_file in uasset_files:
                 rel_path = uasset_file.relative_to(temp_retoc)
