@@ -282,7 +282,7 @@ class BuildManager:  # pylint: disable=too-few-public-methods
                 logger.error("Phase B: Missing %s%s", secrets_stem, ext)
                 return
 
-        # Need global.ucas/global.utoc for retoc name resolution
+        # Need game Paks directory for global files and main game pak
         game_path = get_game_install_path()
         paks_path = Path(game_path) / "Moria" / "Content" / "Paks" if game_path else None
         if not paks_path or not paks_path.exists():
@@ -293,6 +293,12 @@ class BuildManager:  # pylint: disable=too-few-public-methods
         if not global_ucas.exists() or not global_utoc.exists():
             logger.error("Phase B: global.ucas/global.utoc not found in %s", paks_path)
             return
+        # Main game pak needed so retoc merges base game + secrets into complete files
+        game_pak_stem = "Moria-WindowsNoEditor"
+        for ext in (".pak", ".ucas", ".utoc"):
+            if not (paks_path / f"{game_pak_stem}{ext}").exists():
+                logger.error("Phase B: Main game pak %s%s not found in %s", game_pak_stem, ext, paks_path)
+                return
 
         utilities_dir = get_utilities_dir()
         retoc_path = utilities_dir / RETOC_EXE
@@ -308,11 +314,22 @@ class BuildManager:  # pylint: disable=too-few-public-methods
         temp_json = tempfile.mkdtemp(prefix="secrets_build_json_")
         temp_paks = tempfile.mkdtemp(prefix="secrets_build_paks_")
         try:
-            # Copy pak files + global files into temp paks dir
+            # Copy secrets pak + global files + main game pak into temp paks dir.
+            # retoc needs ALL paks together so it merges base game data with
+            # secrets additions, producing complete DataTable files (not just
+            # the secrets-only differential rows).
+            self._report_progress("Preparing paks for extraction...", 0.14)
             for ext in (".pak", ".ucas", ".utoc"):
                 shutil.copy2(str(pak_dir / f"{secrets_stem}{ext}"), temp_paks)
             shutil.copy2(str(global_ucas), temp_paks)
             shutil.copy2(str(global_utoc), temp_paks)
+            # Copy main game pak (large — ~15GB) so retoc can merge
+            logger.info("Phase B: Copying main game pak for merged extraction...")
+            for ext in (".pak", ".ucas", ".utoc"):
+                src = paks_path / f"{game_pak_stem}{ext}"
+                dst = Path(temp_paks) / f"{game_pak_stem}{ext}"
+                shutil.copy2(str(src), str(dst))
+            logger.info("Phase B: Game pak copy complete")
 
             # Step B1: retoc to-legacy → extract uassets
             self._report_progress("Extracting secrets pak files...", 0.15)
@@ -324,7 +341,7 @@ class BuildManager:  # pylint: disable=too-few-public-methods
             logger.info("Phase B1: Running retoc: %s", ' '.join(cmd))
             result = subprocess.run(
                 cmd, capture_output=True, text=True,
-                encoding='utf-8', errors='replace', timeout=300,
+                encoding='utf-8', errors='replace', timeout=600,
                 creationflags=subprocess.CREATE_NO_WINDOW
                 if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0,
                 check=False,
