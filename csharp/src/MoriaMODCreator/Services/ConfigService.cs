@@ -25,16 +25,16 @@ public class ConfigService
 
     // --- Directory paths (mirrors Python config.py) ---
 
-    public string DefinitionsDir => Path.Combine(AppDataDir, "Definitions");
+    public string DefinitionsDir => GetValue("Directories", "definitions") ?? Path.Combine(AppDataDir, "Definitions");
     public string PrebuiltModfilesDir => Path.Combine(AppDataDir, "prebuilt modfiles");
     public string SecretsSourceDir => Path.Combine(AppDataDir, "Secrets Source");
     public string SecretsJsonDataFullDir => Path.Combine(SecretsSourceDir, "jsondata_full");
     public string SecretsJsonDataDir => Path.Combine(SecretsSourceDir, "jsondata");
-    public string OutputDir => Path.Combine(AppDataDir, "output");
+    public string OutputDir => GetValue("Directories", "output") ?? Path.Combine(AppDataDir, "output");
     public string OutputJsonDataDir => Path.Combine(OutputDir, "jsondata");
     public string OutputRetocDir => Path.Combine(OutputDir, "retoc");
-    public string MyModFilesDir => Path.Combine(AppDataDir, "mymodfiles");
-    public string UtilitiesDir => Path.Combine(AppDataDir, "utilities");
+    public string MyModFilesDir => GetValue("Directories", "mymodfiles") ?? Path.Combine(AppDataDir, "mymodfiles");
+    public string UtilitiesDir => GetValue("Directories", "utilities") ?? Path.Combine(AppDataDir, "utilities");
     public string CacheDir => Path.Combine(AppDataDir, "cache");
     public string NewSecretsDir => Path.Combine(AppDataDir, "New Secrets");
     public string NewSecretsJsonDataDir => Path.Combine(NewSecretsDir, "jsondata");
@@ -90,9 +90,18 @@ public class ConfigService
     }
 
     public string GetColorScheme() => GetValue("Settings", "color_scheme") ?? "Blue (Default)";
-    public int GetMaxWorkers() => int.TryParse(GetValue("Settings", "max_workers"), out var w) ? w : 4;
-    public bool GetDebugMode() => GetValue("Debug", "debug_mode")?.Equals("true", StringComparison.OrdinalIgnoreCase) ?? false;
-    public string GetFinalDestinationDir() => GetValue("Settings", "final_destination")
+    public int GetMaxWorkers()
+    {
+        var val = GetValue("Performance", "max_workers") ?? GetValue("Settings", "max_workers");
+        return int.TryParse(val, out var w) ? w : 4;
+    }
+    public bool GetDebugMode()
+    {
+        var val = GetValue("Debug", "debug") ?? GetValue("Debug", "debug_mode");
+        return val?.Equals("true", StringComparison.OrdinalIgnoreCase) ?? false;
+    }
+    public string GetFinalDestinationDir() => GetValue("Directories", "final_destination")
+        ?? GetValue("Settings", "final_destination")
         ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads");
     public string NewSecretsRawJsonDir => Path.Combine(NewSecretsDir, "Raw JSON");
 

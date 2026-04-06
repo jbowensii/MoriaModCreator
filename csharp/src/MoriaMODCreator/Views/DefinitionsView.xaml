@@ -41,6 +41,11 @@
                             <DataTemplate>
                                 <Border Background="Transparent" Margin="0,1" Padding="8,6"
                                         Cursor="Hand">
+                                    <Border.InputBindings>
+                                        <MouseBinding MouseAction="LeftClick"
+                                                      Command="{Binding DataContext.ClickEntryCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                      CommandParameter="{Binding}"/>
+                                    </Border.InputBindings>
                                     <Grid>
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="Auto"/>
@@ -56,13 +61,7 @@
                                                    Visibility="{Binding IsDirectory, Converter={StaticResource BoolToVisibilityConverter}}"/>
                                         <TextBlock Grid.Column="2" Text="{Binding Name}" FontSize="13"
                                                    Foreground="#FFD700" VerticalAlignment="Center"
-                                                   TextTrimming="CharacterEllipsis" Cursor="Hand">
-                                            <TextBlock.InputBindings>
-                                                <MouseBinding MouseAction="LeftClick"
-                                                              Command="{Binding DataContext.ClickEntryCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
-                                                              CommandParameter="{Binding}"/>
-                                            </TextBlock.InputBindings>
-                                        </TextBlock>
+                                                   TextTrimming="CharacterEllipsis"/>
                                         <Button Grid.Column="3" Content="&#x1F5D1;"
                                                 Background="{StaticResource DeleteBrush}"
                                                 Padding="5,2" FontSize="10"/>
