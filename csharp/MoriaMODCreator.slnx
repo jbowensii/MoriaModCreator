@@ -1,0 +1,6 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/MoriaMODCreator.Tests/MoriaMODCreator.Tests.csproj" />
+    <Project Path="src/MoriaMODCreator/MoriaMODCreator.csproj" />
+  </Folder>
+</Solution>
