@@ -17,6 +17,10 @@ public partial class NoviceViewModel : ObservableObject
     [ObservableProperty] private bool _isBuilding;
     [ObservableProperty] private string _buildStatus = "";
     [ObservableProperty] private double _buildProgress;
+    [ObservableProperty] private PrebuiltMod? _selectedMod;
+    [ObservableProperty] private string _selectedModTitle = "";
+    [ObservableProperty] private string _selectedModAuthor = "";
+    [ObservableProperty] private string _selectedModDescription = "Select a mod from the list to see its details.";
 
     public ObservableCollection<PrebuiltMod> Mods { get; } = [];
 
@@ -105,6 +109,24 @@ public partial class NoviceViewModel : ObservableObject
     }
 
     private bool CanBuild() => !IsBuilding && !string.IsNullOrWhiteSpace(ModName);
+
+    [RelayCommand]
+    private void ViewModInfo(PrebuiltMod? mod)
+    {
+        SelectedMod = mod;
+        if (mod == null)
+        {
+            SelectedModTitle = "";
+            SelectedModAuthor = "";
+            SelectedModDescription = "Select a mod from the list to see its details.";
+            return;
+        }
+        SelectedModTitle = mod.Title;
+        SelectedModAuthor = string.IsNullOrEmpty(mod.Author) ? "" : $"by {mod.Author}";
+        SelectedModDescription = string.IsNullOrEmpty(mod.Description)
+            ? $"This mod includes {mod.DefPaths.Count} definition file(s)."
+            : mod.Description;
+    }
 
     partial void OnModNameChanged(string value) => BuildCommand.NotifyCanExecuteChanged();
     partial void OnIsBuildingChanged(bool value) => BuildCommand.NotifyCanExecuteChanged();

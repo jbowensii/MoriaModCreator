@@ -51,15 +51,24 @@ public partial class BuildingsViewModel : ObservableObject
 
         if (string.IsNullOrWhiteSpace(Prefix))
         {
-            BuildStatus = "Enter a prefix name first";
+            BuildStatus = "Enter a prefix/change set name first, then select a category.";
             return;
         }
 
-        var items = _categoryData.LoadCategoryItems(_mode, category, Prefix);
-        foreach (var item in items)
-            Items.Add(item);
+        try
+        {
+            var items = _categoryData.LoadCategoryItems(_mode, category, Prefix);
+            foreach (var item in items)
+                Items.Add(item);
 
-        BuildStatus = $"{category}: {items.Count} items loaded";
+            BuildStatus = items.Count > 0
+                ? $"{category}: {items.Count} items loaded"
+                : $"{category}: No items found. Try running Import first.";
+        }
+        catch (Exception ex)
+        {
+            BuildStatus = $"Error loading {category}: {ex.Message}";
+        }
     }
 
     [RelayCommand]

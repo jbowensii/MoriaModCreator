@@ -52,7 +52,13 @@
                                                   VerticalAlignment="Center" Margin="0,0,8,0"/>
                                         <TextBlock Grid.Column="1" Text="{Binding Title}" FontSize="13"
                                                    Foreground="#FFD700" VerticalAlignment="Center"
-                                                   TextTrimming="CharacterEllipsis"/>
+                                                   TextTrimming="CharacterEllipsis" Cursor="Hand">
+                                            <TextBlock.InputBindings>
+                                                <MouseBinding MouseAction="LeftClick"
+                                                              Command="{Binding DataContext.ViewModInfoCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                              CommandParameter="{Binding}"/>
+                                            </TextBlock.InputBindings>
+                                        </TextBlock>
                                         <Button Grid.Column="2" Content="&#x1F5D1;"
                                                 Background="{StaticResource DeleteBrush}"
                                                 Padding="6,3" FontSize="11"
@@ -94,9 +100,15 @@
                     <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
 
-                <!-- Title area -->
-                <TextBlock Grid.Row="0" Text="Mod Information" FontSize="18" FontWeight="Bold"
-                           Foreground="{StaticResource TextBrush}" Margin="0,0,0,10"/>
+                <!-- Selected mod info -->
+                <StackPanel Grid.Row="0" Margin="0,0,0,10">
+                    <TextBlock Text="{Binding SelectedModTitle}" FontSize="22" FontWeight="Bold"
+                               Foreground="{StaticResource TextBrush}"/>
+                    <TextBlock Text="{Binding SelectedModAuthor}" FontSize="14"
+                               Foreground="{StaticResource TextSecondaryBrush}" Margin="0,4,0,0"/>
+                    <Border Height="2" Background="{StaticResource TextSecondaryBrush}"
+                            Margin="0,10,0,0" Opacity="0.3"/>
+                </StackPanel>
 
                 <!-- Build progress -->
                 <StackPanel Grid.Row="1" Margin="0,0,0,10"
@@ -106,30 +118,11 @@
                                Foreground="{StaticResource TextSecondaryBrush}"/>
                 </StackPanel>
 
-                <!-- Description / help content area -->
+                <!-- Description content area -->
                 <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
-                    <StackPanel>
-                        <TextBlock TextWrapping="Wrap" FontSize="14" LineHeight="22"
-                                   Foreground="{StaticResource TextBrush}">
-                            <Run FontWeight="Bold" FontSize="16">Welcome to Moria MOD Creator</Run>
-                            <LineBreak/><LineBreak/>
-                            <Run>Select prebuilt mods from the list on the left, enter a mod name, and click Build to create your mod.</Run>
-                            <LineBreak/><LineBreak/>
-                            <Run FontWeight="Bold">Getting Started:</Run>
-                            <LineBreak/>
-                            <Run>1. Click Import to extract game files</Run>
-                            <LineBreak/>
-                            <Run>2. Check the mods you want to include</Run>
-                            <LineBreak/>
-                            <Run>3. Enter a name for your mod</Run>
-                            <LineBreak/>
-                            <Run>4. Click Build to create your mod package</Run>
-                            <LineBreak/><LineBreak/>
-                            <Run FontWeight="Bold">Advanced Mode:</Run>
-                            <LineBreak/>
-                            <Run>Switch to Advanced mode using the toggle in the top right to access the full mod builder with definition editing, secrets management, and custom mod creation tools.</Run>
-                        </TextBlock>
-                    </StackPanel>
+                    <TextBlock Text="{Binding SelectedModDescription}" TextWrapping="Wrap"
+                               FontSize="14" LineHeight="22"
+                               Foreground="{StaticResource TextBrush}"/>
                 </ScrollViewer>
 
                 <!-- Status when not building -->

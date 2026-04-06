@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.Extensions.DependencyInjection;
 using MoriaMODCreator.Services;
 
 namespace MoriaMODCreator.ViewModels;
@@ -19,6 +20,11 @@ public partial class DefinitionsViewModel : ObservableObject
     [ObservableProperty] private bool _isBuilding;
     [ObservableProperty] private string _buildStatus = "";
     [ObservableProperty] private double _buildProgress;
+    [ObservableProperty] private DefinitionEntry? _selectedEntry;
+    [ObservableProperty] private string _selectedTitle = "";
+    [ObservableProperty] private string _selectedAuthor = "";
+    [ObservableProperty] private string _selectedDescription = "";
+    [ObservableProperty] private string _selectedChanges = "Select a .def file to view its changes.";
 
     public ObservableCollection<DefinitionEntry> Entries { get; } = [];
 
@@ -64,6 +70,49 @@ public partial class DefinitionsViewModel : ObservableObject
         {
             CurrentPath = entry.FullPath;
             RefreshList();
+        }
+    }
+
+    [RelayCommand]
+    private void SelectEntry(DefinitionEntry? entry)
+    {
+        SelectedEntry = entry;
+        if (entry == null || entry.IsDirectory)
+        {
+            SelectedTitle = "";
+            SelectedAuthor = "";
+            SelectedDescription = "";
+            SelectedChanges = "Select a .def file to view its changes.";
+            return;
+        }
+
+        // Parse the .def file to show its details in the right pane
+        try
+        {
+            var defService = App.Services.GetRequiredService<DefinitionService>();
+            var def = defService.Parse(entry.FullPath);
+            SelectedTitle = def.Title;
+            SelectedAuthor = string.IsNullOrEmpty(def.Author) ? "" : $"by {def.Author}";
+            SelectedDescription = def.Description;
+
+            // Build changes summary
+            var lines = new List<string>();
+            foreach (var modFile in def.ModFiles)
+            {
+                lines.Add($"File: {Path.GetFileName(modFile.FilePath)}");
+                foreach (var change in modFile.Changes)
+                    lines.Add($"  CHANGE: {change.Item}.{change.Property} = {change.Value}");
+                foreach (var del in modFile.Deletes)
+                    lines.Add($"  DELETE: {del.Item}.{del.Property} = {del.Value}");
+            }
+            SelectedChanges = lines.Count > 0
+                ? string.Join("\n", lines)
+                : "No changes defined.";
+        }
+        catch (Exception ex)
+        {
+            SelectedTitle = entry.Name;
+            SelectedChanges = $"Error reading .def file: {ex.Message}";
         }
     }
 

@@ -1,3 +1,6 @@
+// Import dialog — runs the combined import pipeline with progress display.
+// Mirrors Python combined_import_dialog.py.
+
 using System.Windows;
 using Microsoft.Extensions.DependencyInjection;
 using MoriaMODCreator.Services;
@@ -7,8 +10,8 @@ namespace MoriaMODCreator.Views.Dialogs;
 public partial class ImportDialog : Window, IDisposable
 {
     private readonly CancellationTokenSource _cts = new();
-    private bool _disposed;
     private readonly ImportService _importService;
+    private bool _disposed;
 
     public bool ImportSuccess { get; private set; }
 
@@ -21,6 +24,28 @@ public partial class ImportDialog : Window, IDisposable
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
+        // Check prerequisites before starting
+        var config = App.Services.GetRequiredService<ConfigService>();
+        var gamePath = config.GetGameInstallPath();
+        if (string.IsNullOrEmpty(gamePath) || !System.IO.Directory.Exists(gamePath))
+        {
+            TitleText.Text = "Configuration Required";
+            StatusText.Text = "Game install path is not configured. Open Settings first.";
+            FileText.Text = "";
+            CancelBtn.Content = "Close";
+            return;
+        }
+
+        var errors = config.ValidateConfig();
+        if (errors.Count > 0)
+        {
+            TitleText.Text = "Configuration Issues";
+            StatusText.Text = string.Join("\n", errors);
+            FileText.Text = "Fix these issues in Settings, then try again.";
+            CancelBtn.Content = "Close";
+            return;
+        }
+
         var progress = new Progress<ImportProgress>(p =>
         {
             Dispatcher.Invoke(() =>
@@ -33,14 +58,28 @@ public partial class ImportDialog : Window, IDisposable
 
         try
         {
+            TitleText.Text = "Starting Import...";
+            StatusText.Text = "Initializing...";
+
             var result = await _importService.RunCombinedImportAsync(progress, _cts.Token);
             ImportSuccess = result.Success;
+
+            TitleText.Text = result.Success ? "Import Complete" : "Import Failed";
             StatusText.Text = result.Message;
+            ProgressBar.Value = result.Success ? 1.0 : ProgressBar.Value;
             CancelBtn.Content = "Close";
         }
         catch (OperationCanceledException)
         {
-            StatusText.Text = "Import cancelled";
+            TitleText.Text = "Import Cancelled";
+            StatusText.Text = "Import was cancelled by user.";
+            CancelBtn.Content = "Close";
+        }
+        catch (Exception ex)
+        {
+            TitleText.Text = "Import Error";
+            StatusText.Text = $"Error: {ex.Message}";
+            FileText.Text = ex.InnerException?.Message ?? "";
             CancelBtn.Content = "Close";
         }
     }
@@ -56,6 +95,7 @@ public partial class ImportDialog : Window, IDisposable
         {
             _cts.Cancel();
             StatusText.Text = "Cancelling...";
+            CancelBtn.IsEnabled = false;
         }
     }
 
