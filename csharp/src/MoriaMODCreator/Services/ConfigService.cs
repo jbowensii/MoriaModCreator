@@ -96,6 +96,24 @@ public class ConfigService
         ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads");
     public string NewSecretsRawJsonDir => Path.Combine(NewSecretsDir, "Raw JSON");
 
+    public bool GetGenerateBuildersPackEnabled() =>
+        GetValue("Settings", "generate_builders_pack")?.Equals("true", StringComparison.OrdinalIgnoreCase) ?? false;
+
+    public string GetConstructionsJsonDir() =>
+        GetValue("Settings", "constructions_json_dir") ?? Path.Combine(OutputJsonDataDir, "Moria", "Content", "Tech", "Data", "Building");
+
+    public void SetConstructionsJsonDir(string path) =>
+        SetValue("Settings", "constructions_json_dir", path);
+
+    /// <summary>Apply a color scheme to the WPF application theme.</summary>
+    public static void ApplyColorScheme(string scheme)
+    {
+        // WPF themes are handled via ResourceDictionary at application level.
+        // This is a placeholder — the actual theme switching would update
+        // Application.Current.Resources merged dictionaries.
+        // For now, only dark theme is supported.
+    }
+
     public bool IsConfigValid()
     {
         var gamePath = GetGameInstallPath();

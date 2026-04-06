@@ -421,6 +421,62 @@ public class ImportService
         _logger.LogInformation("Generated secrets manifest with {Count} entries", jsonFiles.Length);
     }
 
+    // --- Path conversion and file scanning utilities ---
+
+    /// <summary>
+    /// Scan includes.xml files for additional mod file paths.
+    /// Secondary scan used when .def files reference an includes.xml.
+    /// </summary>
+    public HashSet<string> ScanIncludesXmlForModPaths()
+    {
+        var paths = new HashSet<string>();
+        var defDir = _config.DefinitionsDir;
+        if (!Directory.Exists(defDir)) return paths;
+
+        foreach (var xmlFile in Directory.GetFiles(defDir, "includes.xml", SearchOption.AllDirectories))
+        {
+            try
+            {
+                var doc = XDocument.Load(xmlFile);
+                foreach (var includeElem in doc.Descendants("include"))
+                {
+                    var filePath = includeElem.Attribute("file")?.Value;
+                    if (filePath != null)
+                        paths.Add(DefinitionService.NormalizePath(filePath));
+                }
+            }
+            catch { /* skip invalid XML */ }
+        }
+
+        return paths;
+    }
+
+    /// <summary>
+    /// Convert a JSON relative path to its corresponding .uasset path.
+    /// e.g., "Moria/Content/Tech/Data/Items/DT_Weapons.json" →
+    ///        "Moria/Content/Tech/Data/Items/DT_Weapons.uasset"
+    /// </summary>
+    public static string ConvertJsonPathToUasset(string jsonRelPath)
+    {
+        return Path.ChangeExtension(jsonRelPath, ".uasset");
+    }
+
+    /// <summary>
+    /// Get all game file paths that need to be imported based on .def files.
+    /// Returns paths relative to the game content directory.
+    /// </summary>
+    public HashSet<string> GetGameFilePathsToImport()
+    {
+        var paths = ScanDefFilesForGamePaths();
+
+        // Also scan includes.xml
+        var includesPaths = ScanIncludesXmlForModPaths();
+        foreach (var p in includesPaths)
+            paths.Add(p);
+
+        return paths;
+    }
+
     // --- Helpers ---
 
     private void CleanDirectories()
