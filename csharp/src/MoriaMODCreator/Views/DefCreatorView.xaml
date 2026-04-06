@@ -1,0 +1,92 @@
+<UserControl x:Class="MoriaMODCreator.Views.DefCreatorView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:MoriaMODCreator.ViewModels"
+             d:DataContext="{d:DesignInstance vm:DefCreatorViewModel}"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             Background="{StaticResource BackgroundBrush}">
+
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="280"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+
+        <!-- LEFT: Extracted files + controls -->
+        <Border Grid.Column="0" Background="{StaticResource SurfaceBrush}"
+                CornerRadius="6" Margin="0,0,5,0">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <TextBlock Grid.Row="0" Text="Create DEF" FontSize="14" FontWeight="Bold"
+                           Foreground="{StaticResource TextBrush}" Margin="10,10,10,5"/>
+
+                <Button Grid.Row="1" Content="Extract Game Files"
+                        Command="{Binding ExtractCommand}"
+                        Background="{StaticResource ImportBrush}"
+                        Padding="12,6" Margin="10,5"/>
+
+                <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" Margin="5,0">
+                    <ItemsControl ItemsSource="{Binding ExtractedFiles}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Padding="6,3" Cursor="Hand">
+                                    <TextBlock Text="{Binding}" FontSize="11"
+                                               Foreground="#FFD700" TextTrimming="CharacterEllipsis">
+                                        <TextBlock.InputBindings>
+                                            <MouseBinding MouseAction="LeftClick"
+                                                          Command="{Binding DataContext.CompareFileCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"/>
+                                        </TextBlock.InputBindings>
+                                    </TextBlock>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+
+                <StackPanel Grid.Row="3" Margin="10,5">
+                    <Button Content="Compare" Command="{Binding CompareFileCommand}"
+                            Padding="12,6" Margin="0,2"/>
+                    <Button Content="Generate DEF" Command="{Binding GenerateDefCommand}"
+                            Background="{StaticResource AccentBrush}"
+                            Padding="12,6" Margin="0,2"/>
+                    <Button Content="Save DEF" Command="{Binding SaveDefCommand}"
+                            Background="{StaticResource BuildBrush}"
+                            Padding="12,6" Margin="0,2"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- RIGHT: DEF output / differences -->
+        <Border Grid.Column="1" Background="{StaticResource SurfaceBrush}"
+                CornerRadius="6" Margin="5,0,0,0">
+            <Grid Margin="15">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <TextBlock Grid.Row="0" Text="DEF Output" FontSize="14" FontWeight="Bold"
+                           Foreground="{StaticResource TextBrush}" Margin="0,0,0,10"/>
+
+                <TextBox Grid.Row="1" Text="{Binding DefOutput}" IsReadOnly="True"
+                         AcceptsReturn="True" TextWrapping="Wrap"
+                         VerticalScrollBarVisibility="Auto"
+                         FontFamily="Consolas" FontSize="11"
+                         Background="{StaticResource BackgroundBrush}"
+                         Foreground="{StaticResource TextBrush}"/>
+
+                <TextBlock Grid.Row="2" Text="{Binding Status}" FontSize="12"
+                           Foreground="{StaticResource TextSecondaryBrush}" Margin="0,5,0,0"/>
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>

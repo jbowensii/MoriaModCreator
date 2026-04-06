@@ -12,28 +12,31 @@ namespace MoriaMODCreator.ViewModels;
 public partial class BuildingsViewModel : ObservableObject
 {
     private readonly ConfigService _config;
-    private readonly string _mode; // "secrets" or "constructions"
+    private readonly CategoryDataService _categoryData;
+    private readonly DiffService _diffService;
+    private readonly string _mode;
 
     [ObservableProperty] private string _prefix = "";
     [ObservableProperty] private string _selectedCategory = "";
-    [ObservableProperty] private string? _selectedItem;
+    [ObservableProperty] private CategoryItem? _selectedItem;
     [ObservableProperty] private bool _isBuilding;
     [ObservableProperty] private string _buildStatus = "";
     [ObservableProperty] private double _buildProgress;
 
     public ObservableCollection<string> Categories { get; } = [];
-    public ObservableCollection<ItemEntry> Items { get; } = [];
-    public ObservableCollection<PropertyField> Fields { get; } = [];
+    public ObservableCollection<CategoryItem> Items { get; } = [];
+    public ObservableCollection<FieldEntry> Fields { get; } = [];
 
     public string ModeLabel { get; }
 
-    public BuildingsViewModel(ConfigService config, string mode)
+    public BuildingsViewModel(ConfigService config, CategoryDataService categoryData, DiffService diffService, string mode)
     {
         _config = config;
+        _categoryData = categoryData;
+        _diffService = diffService;
         _mode = mode;
         ModeLabel = mode == "secrets" ? "Change Secrets" : "Change Constructions";
 
-        // Standard categories
         foreach (var cat in new[] { "Buildings", "Weapons", "Armor", "Tools", "Flora", "Loot", "Items", "Ores" })
             Categories.Add(cat);
     }
@@ -44,50 +47,94 @@ public partial class BuildingsViewModel : ObservableObject
         SelectedCategory = category;
         Items.Clear();
         Fields.Clear();
-        // TODO: Load items for selected category from cached JSON
-        BuildStatus = $"Selected category: {category}";
+        SelectedItem = null;
+
+        if (string.IsNullOrWhiteSpace(Prefix))
+        {
+            BuildStatus = "Enter a prefix name first";
+            return;
+        }
+
+        var items = _categoryData.LoadCategoryItems(_mode, category, Prefix);
+        foreach (var item in items)
+            Items.Add(item);
+
+        BuildStatus = $"{category}: {items.Count} items loaded";
     }
 
     [RelayCommand]
-    private void SelectItem(ItemEntry? item)
+    private void SelectItem(CategoryItem? item)
     {
-        SelectedItem = item?.Name;
+        SelectedItem = item;
         Fields.Clear();
         if (item == null) return;
-        // TODO: Load fields for selected item from JSON
+
+        foreach (var (name, value) in item.Fields)
+        {
+            var strValue = value?.ToString() ?? "";
+            Fields.Add(new FieldEntry
+            {
+                Name = name,
+                Value = strValue,
+                OriginalValue = strValue,
+            });
+        }
     }
 
     [RelayCommand]
     private void SaveItem()
     {
-        // TODO: Save edited fields back to JSON and edits.json manifest
-        BuildStatus = "Item saved";
+        if (SelectedItem == null) return;
+
+        var editedFields = new Dictionary<string, object?>();
+        foreach (var field in Fields)
+        {
+            if (field.Value != field.OriginalValue)
+                editedFields[field.Name] = field.Value;
+        }
+
+        if (editedFields.Count == 0)
+        {
+            BuildStatus = "No changes to save";
+            return;
+        }
+
+        _categoryData.SaveItemEdits(SelectedItem, editedFields);
+        BuildStatus = $"Saved {editedFields.Count} change(s) to {SelectedItem.RowName}";
     }
 
     [RelayCommand]
     private async Task BuildAsync()
     {
+        if (string.IsNullOrWhiteSpace(Prefix))
+        {
+            BuildStatus = "Enter a prefix name first";
+            return;
+        }
+
         IsBuilding = true;
-        BuildStatus = "Building...";
-        // TODO: Build from change set
-        await Task.Delay(100);
-        BuildStatus = "Build not yet implemented for change sets";
+        BuildStatus = "Building change set...";
+
+        await Task.Run(() =>
+        {
+            // TODO: Generate .def files from diffs and trigger build
+            BuildStatus = "Build for change sets — implementation in progress";
+        });
+
         IsBuilding = false;
+    }
+
+    [RelayCommand]
+    private void RefreshCache()
+    {
+        if (!string.IsNullOrWhiteSpace(SelectedCategory))
+            SelectCategory(SelectedCategory);
     }
 }
 
-public partial class ItemEntry : ObservableObject
-{
-    [ObservableProperty] private bool _isChecked;
-    public string Name { get; init; } = "";
-    public string DisplayName { get; init; } = "";
-}
-
-public partial class PropertyField : ObservableObject
+public partial class FieldEntry : ObservableObject
 {
     [ObservableProperty] private string _value = "";
     public string Name { get; init; } = "";
     public string OriginalValue { get; init; } = "";
-    public string FieldType { get; init; } = "text"; // text, dropdown, checkbox
-    public List<string> Options { get; init; } = [];
 }

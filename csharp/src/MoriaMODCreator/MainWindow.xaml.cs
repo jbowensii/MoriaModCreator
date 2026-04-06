@@ -28,10 +28,19 @@ public partial class MainWindow : Window
         DefinitionsTab.DataContext = App.Services.GetRequiredService<DefinitionsViewModel>();
 
         var config = App.Services.GetRequiredService<ConfigService>();
-        SecretsTab.DataContext = new BuildingsViewModel(config, "secrets");
-        ConstructionsTab.DataContext = new BuildingsViewModel(config, "constructions");
-        ObjectEditorTab.DataContext = new { Title = "Object Editor" };
-        CreateDefTab.DataContext = new { Title = "Create DEF" };
+        var catData = App.Services.GetRequiredService<CategoryDataService>();
+        var diffService = App.Services.GetRequiredService<DiffService>();
+        SecretsTab.DataContext = new BuildingsViewModel(config, catData, diffService, "secrets");
+        ConstructionsTab.DataContext = new BuildingsViewModel(config, catData, diffService, "constructions");
+        ObjectEditorTab.DataContext = new ObjectEditorViewModel(
+            config,
+            App.Services.GetRequiredService<ObjectTemplateService>(),
+            catData);
+        CreateDefTab.DataContext = new DefCreatorViewModel(
+            config,
+            App.Services.GetRequiredService<RetocService>(),
+            App.Services.GetRequiredService<UAssetService>(),
+            diffService);
 
         // Apply initial mode
         ApplyMode("Novice");

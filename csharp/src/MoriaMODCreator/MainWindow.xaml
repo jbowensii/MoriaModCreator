@@ -99,8 +99,8 @@
             <views:DefinitionsView x:Name="DefinitionsTab" Visibility="Collapsed"/>
             <views:BuildingsView x:Name="SecretsTab" Visibility="Collapsed"/>
             <views:BuildingsView x:Name="ConstructionsTab" Visibility="Collapsed"/>
-            <views:PlaceholderView x:Name="ObjectEditorTab" Visibility="Collapsed"/>
-            <views:PlaceholderView x:Name="CreateDefTab" Visibility="Collapsed"/>
+            <views:ObjectEditorView x:Name="ObjectEditorTab" Visibility="Collapsed"/>
+            <views:DefCreatorView x:Name="CreateDefTab" Visibility="Collapsed"/>
         </Grid>
 
         <!-- ===== STATUS BAR ===== -->

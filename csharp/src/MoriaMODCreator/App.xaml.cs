@@ -34,20 +34,13 @@ public partial class App : Application
         services.AddSingleton<ImportService>();
         services.AddSingleton<ObjectTemplateService>();
         services.AddSingleton<DefinitionManagerService>();
+        services.AddSingleton<CategoryDataService>();
+        services.AddSingleton<DiffService>();
 
-        // ViewModels
+        // ViewModels (BuildingsViewModel created in MainWindow with mode parameter)
         services.AddTransient<MainViewModel>();
         services.AddTransient<NoviceViewModel>();
         services.AddTransient<DefinitionsViewModel>();
-        services.AddTransient(sp => new BuildingsViewModel(
-            sp.GetRequiredService<ConfigService>(), "secrets"));
-        services.AddTransient(sp =>
-        {
-            // Named instance for constructions — use a factory key
-            var vm = new BuildingsViewModel(
-                sp.GetRequiredService<ConfigService>(), "constructions");
-            return vm;
-        });
 
         Services = services.BuildServiceProvider();
 
