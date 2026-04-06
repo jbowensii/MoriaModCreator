@@ -86,7 +86,20 @@ public class ConfigService
 
     public string? GetGameInstallPath()
     {
-        return GetValue("Settings", "game_path");
+        return GetValue("Game", "game_path") ?? GetValue("Settings", "game_path");
+    }
+
+    public string GetColorScheme() => GetValue("Settings", "color_scheme") ?? "Blue (Default)";
+    public int GetMaxWorkers() => int.TryParse(GetValue("Settings", "max_workers"), out var w) ? w : 4;
+    public bool GetDebugMode() => GetValue("Debug", "debug_mode")?.Equals("true", StringComparison.OrdinalIgnoreCase) ?? false;
+    public string GetFinalDestinationDir() => GetValue("Settings", "final_destination")
+        ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads");
+    public string NewSecretsRawJsonDir => Path.Combine(NewSecretsDir, "Raw JSON");
+
+    public bool IsConfigValid()
+    {
+        var gamePath = GetGameInstallPath();
+        return !string.IsNullOrEmpty(gamePath) && Directory.Exists(gamePath);
     }
 
     public string? GetGamePaksPath()

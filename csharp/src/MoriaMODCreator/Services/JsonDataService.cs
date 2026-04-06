@@ -148,6 +148,84 @@ public class JsonDataService
             nameArray.Add(JsonValue.Create(name));
     }
 
+    /// <summary>
+    /// Merge secrets-only rows into a game JSON file.
+    /// Appends rows from secrets that don't exist in game.
+    /// Returns number of rows merged.
+    /// </summary>
+    public int MergeSecretsRows(string gameJsonPath, string secretsJsonPath)
+    {
+        var gameNode = JsonNode.Parse(File.ReadAllText(gameJsonPath));
+        var secretsNode = JsonNode.Parse(File.ReadAllText(secretsJsonPath));
+        if (gameNode == null || secretsNode == null) return 0;
+
+        var gameData = GetDataArray(gameNode);
+        var secretsData = GetDataArray(secretsNode);
+        if (gameData == null || secretsData == null) return 0;
+
+        var existingNames = GetRowNames(gameNode);
+        int merged = 0;
+
+        foreach (var row in secretsData)
+        {
+            var name = row?["Name"]?.GetValue<string>();
+            if (name != null && !existingNames.Contains(name))
+            {
+                var clone = JsonNode.Parse(row!.ToJsonString());
+                if (clone != null)
+                {
+                    gameData.Add(clone);
+                    merged++;
+                }
+            }
+        }
+
+        if (merged > 0)
+        {
+            // Also merge NameMap entries
+            var gameNm = gameNode["NameMap"] as JsonArray;
+            var secretsNm = secretsNode["NameMap"] as JsonArray;
+            if (gameNm != null && secretsNm != null)
+            {
+                var existingNm = new HashSet<string>();
+                foreach (var n in gameNm)
+                    if (n != null) existingNm.Add(n.GetValue<string>());
+                foreach (var n in secretsNm)
+                {
+                    var val = n?.GetValue<string>();
+                    if (val != null && !existingNm.Contains(val))
+                        gameNm.Add(JsonValue.Create(val));
+                }
+            }
+
+            var options = new JsonSerializerOptions { WriteIndented = true };
+            File.WriteAllText(gameJsonPath, gameNode.ToJsonString(options));
+        }
+
+        return merged;
+    }
+
+    /// <summary>
+    /// Set a property value using a dot-separated path like "LevelData.bCanPatrol".
+    /// Handles nested StructPropertyData traversal.
+    /// </summary>
+    public bool SetNestedPropertyValue(JsonNode row, string propertyPath, string value)
+    {
+        return SetPropertyValue(row, propertyPath, value);
+    }
+
+    /// <summary>Check if a property is a GameplayTagContainer.</summary>
+    public bool IsGameplayTagContainer(JsonNode row, string propertyName)
+    {
+        var valueArray = row["Value"] as JsonArray;
+        if (valueArray == null) return false;
+
+        var baseProp = propertyName.Split('.')[0];
+        return valueArray.Any(p =>
+            p?["Name"]?.GetValue<string>() == baseProp &&
+            p["StructType"]?.GetValue<string>() == "GameplayTagContainer");
+    }
+
     // --- Private helpers ---
 
     private static HashSet<string> GetRowNames(JsonNode root)

@@ -1,5 +1,6 @@
 using System.IO;
 using MoriaMODCreator.Services;
+using MoriaMODCreator.Models;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
@@ -40,10 +41,35 @@ public class DefinitionServiceTests
             Assert.Equal("150", result.ModFiles[0].Changes[0].Value);
             Assert.Equal("100", result.ModFiles[0].Changes[0].Original);
         }
-        finally
+        finally { File.Delete(tempFile); }
+    }
+
+    [Fact]
+    public void Parse_MultipleModBlocks_ParsesAll()
+    {
+        var defContent = """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <definition>
+              <title>Multi Mod</title>
+              <mod file="DT_Weapons.json">
+                <change item="Sword" property="Damage" value="100" />
+              </mod>
+              <mod file="DT_Armor.json">
+                <change item="Shield" property="Defense" value="50" />
+              </mod>
+            </definition>
+            """;
+
+        var tempFile = Path.GetTempFileName();
+        File.WriteAllText(tempFile, defContent);
+        try
         {
-            File.Delete(tempFile);
+            var result = _service.Parse(tempFile);
+            Assert.Equal(2, result.ModFiles.Count);
+            Assert.Equal("DT_Weapons.json", result.ModFiles[0].FilePath);
+            Assert.Equal("DT_Armor.json", result.ModFiles[1].FilePath);
         }
+        finally { File.Delete(tempFile); }
     }
 
     [Fact]
@@ -68,9 +94,16 @@ public class DefinitionServiceTests
     }
 
     [Fact]
+    public void NormalizePath_StripsLeadingSlash()
+    {
+        Assert.Equal("Items/DT_Weapons.json",
+            DefinitionService.NormalizePath("/Items/DT_Weapons.json"));
+    }
+
+    [Fact]
     public void ReferencesSecrets_DetectsSecretsPath()
     {
-        var def = new Models.ModDefinition
+        var def = new ModDefinition
         {
             ModFiles = [new() { FilePath = "Secrets Source/jsondata/Items/DT_Items.json" }]
         };
@@ -80,10 +113,20 @@ public class DefinitionServiceTests
     [Fact]
     public void ReferencesSecrets_ReturnsFalseForGamePath()
     {
-        var def = new Models.ModDefinition
+        var def = new ModDefinition
         {
             ModFiles = [new() { FilePath = "Moria/Content/Items/DT_Items.json" }]
         };
         Assert.False(_service.ReferencesSecrets(def));
+    }
+
+    [Fact]
+    public void ReferencesSecrets_CaseInsensitive()
+    {
+        var def = new ModDefinition
+        {
+            ModFiles = [new() { FilePath = "SECRETS SOURCE/jsondata/DT_X.json" }]
+        };
+        Assert.True(_service.ReferencesSecrets(def));
     }
 }

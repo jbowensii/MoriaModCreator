@@ -192,6 +192,17 @@ public class ObjectTemplateService
         return false;
     }
 
+    /// <summary>Generate a unique tag string (hex-based).</summary>
+    public static string GenUniqueTag()
+    {
+        var bytes = Guid.NewGuid().ToByteArray();
+        return BitConverter.ToString(bytes).Replace("-", "").ToUpperInvariant()[..32];
+    }
+
+    /// <summary>Extract ores fields from a row (same structure as items).</summary>
+    public Dictionary<string, object?> ExtractOresFields(JsonNode row)
+        => ExtractItemFields(row);
+
     /// <summary>Clone an existing row with a new name.</summary>
     public JsonNode? CloneRow(JsonNode root, string sourceRowName, string newRowName)
     {
