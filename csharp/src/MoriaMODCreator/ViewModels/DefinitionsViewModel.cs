@@ -63,13 +63,18 @@ public partial class DefinitionsViewModel : ObservableObject
             });
     }
 
+    /// <summary>Handle a click on a definition entry — navigate dirs, select files.</summary>
     [RelayCommand]
-    private void NavigateTo(DefinitionEntry entry)
+    private void ClickEntry(DefinitionEntry entry)
     {
         if (entry.IsDirectory)
         {
             CurrentPath = entry.FullPath;
             RefreshList();
+        }
+        else
+        {
+            SelectEntry(entry);
         }
     }
 

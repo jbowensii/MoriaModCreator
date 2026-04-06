@@ -8,6 +8,8 @@
         Icon="/Assets/Icons/app_icon.ico"
         Background="{StaticResource BackgroundBrush}">
 
+    <!-- ComboBox dark theme now handled globally in DarkTheme.xaml -->
+
     <Grid Margin="20">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>  <!-- Game path -->

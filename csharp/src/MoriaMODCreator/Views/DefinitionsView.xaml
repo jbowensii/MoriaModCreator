@@ -59,10 +59,7 @@
                                                    TextTrimming="CharacterEllipsis" Cursor="Hand">
                                             <TextBlock.InputBindings>
                                                 <MouseBinding MouseAction="LeftClick"
-                                                              Command="{Binding DataContext.NavigateToCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
-                                                              CommandParameter="{Binding}"/>
-                                                <MouseBinding MouseAction="LeftClick"
-                                                              Command="{Binding DataContext.SelectEntryCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                              Command="{Binding DataContext.ClickEntryCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                                               CommandParameter="{Binding}"/>
                                             </TextBlock.InputBindings>
                                         </TextBlock>
