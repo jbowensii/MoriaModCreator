@@ -4,71 +4,114 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:views="clr-namespace:MoriaMODCreator.Views"
-        xmlns:local="clr-namespace:MoriaMODCreator"
         mc:Ignorable="d"
         Title="Moria MOD Creator"
-        Height="900" Width="520"
-        MinHeight="700" MinWidth="450"
+        Height="900" Width="900"
+        MinHeight="700" MinWidth="700"
         WindowStartupLocation="CenterScreen"
         Background="{StaticResource BackgroundBrush}">
 
     <Grid>
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>  <!-- Header + toolbar -->
+            <RowDefinition Height="*"/>     <!-- Main content area -->
+            <RowDefinition Height="Auto"/>  <!-- Status bar -->
         </Grid.RowDefinitions>
 
-        <!-- Header -->
-        <Grid Grid.Row="0" Margin="20,15,20,5">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="Auto"/>
-            </Grid.ColumnDefinitions>
+        <!-- ===== HEADER BAR ===== -->
+        <Border Grid.Row="0" Background="{StaticResource SurfaceBrush}" Padding="15,10">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>  <!-- Title -->
+                    <ColumnDefinition Width="*"/>     <!-- Toolbar buttons (center) -->
+                    <ColumnDefinition Width="Auto"/>  <!-- Mode toggle + settings -->
+                </Grid.ColumnDefinitions>
 
-            <StackPanel Orientation="Horizontal">
-                <TextBlock Text="&#x2692;" FontSize="36" VerticalAlignment="Center"
-                           Margin="0,0,12,0" Foreground="{StaticResource AccentBrush}"/>
-                <TextBlock Text="Moria MOD Creator" FontSize="28" FontWeight="Bold"
-                           VerticalAlignment="Center" Foreground="{StaticResource TextBrush}"/>
-            </StackPanel>
+                <!-- LEFT: App title -->
+                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="&#x2692;" FontSize="28" VerticalAlignment="Center"
+                               Margin="0,0,10,0" Foreground="{StaticResource AccentBrush}"/>
+                    <TextBlock Text="Moria MOD Creator" FontSize="22" FontWeight="Bold"
+                               VerticalAlignment="Center" Foreground="{StaticResource TextBrush}"/>
+                </StackPanel>
 
-            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                <Button Content="&#x2699;" Padding="8,4" FontSize="16"
-                        ToolTip="Settings" Background="Transparent"
-                        Click="OnSettingsClick"/>
-                <Button Content="&#x2753;" Padding="8,4" FontSize="16"
-                        ToolTip="About" Background="Transparent"
-                        Click="OnAboutClick" Margin="5,0,0,0"/>
-            </StackPanel>
+                <!-- CENTER: Toolbar buttons -->
+                <StackPanel Grid.Column="1" x:Name="ToolbarPanel" Orientation="Horizontal"
+                            HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <!-- These buttons are shown/hidden by mode -->
+                    <Button x:Name="ModBuilderBtn" Content="Mod Builder"
+                            Style="{StaticResource ToolbarButton}"
+                            Background="{StaticResource PrimaryBrush}"
+                            Click="OnModBuilderClick" Margin="3,0"/>
+                    <Button x:Name="SecretsBtn" Content="Secrets"
+                            Style="{StaticResource ToolbarButton}"
+                            Background="{StaticResource ButtonInactiveBrush}"
+                            Click="OnSecretsClick" Margin="3,0"/>
+                    <Button x:Name="ObjectEditorBtn" Content="Create/Edit Secret"
+                            Style="{StaticResource ToolbarButton}" MinWidth="140"
+                            Background="{StaticResource ButtonInactiveBrush}"
+                            Click="OnObjectEditorClick" Margin="3,0"/>
+                    <Button x:Name="ConstructionsBtn" Content="Constructions"
+                            Style="{StaticResource ToolbarButton}"
+                            Background="{StaticResource ButtonInactiveBrush}"
+                            Click="OnConstructionsClick" Margin="3,0"/>
+                    <Button x:Name="CreateDefBtn" Content="Create DEF"
+                            Style="{StaticResource ToolbarButton}"
+                            Background="{StaticResource ButtonInactiveBrush}"
+                            Click="OnCreateDefClick" Margin="3,0"/>
+                    <TextBlock x:Name="ToolbarSep" Text="|" Foreground="Gray"
+                               FontSize="20" VerticalAlignment="Center" Margin="8,0"/>
+                    <Button x:Name="ImportBtn" Content="Import"
+                            Style="{StaticResource ToolbarButton}"
+                            Background="{StaticResource ImportBrush}"
+                            Click="OnImportClick" Margin="3,0"/>
+                </StackPanel>
+
+                <!-- RIGHT: Mode toggle + Settings + Help -->
+                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                    <StackPanel Orientation="Horizontal" Margin="0,0,10,0">
+                        <ToggleButton x:Name="NoviceToggle" Content="Novice"
+                                      Style="{StaticResource ModeToggle}"
+                                      IsChecked="True" Click="OnNoviceToggle"/>
+                        <ToggleButton x:Name="AdvancedToggle" Content="Advanced"
+                                      Style="{StaticResource ModeToggle}"
+                                      Click="OnAdvancedToggle" Margin="2,0,0,0"/>
+                    </StackPanel>
+                    <Button Content="&#x2699;" Padding="8,6" FontSize="16"
+                            Background="Transparent" ToolTip="Settings"
+                            Click="OnSettingsClick"/>
+                    <Button Content="&#x2753;" Padding="8,6" FontSize="16"
+                            Background="Transparent" ToolTip="About"
+                            Click="OnAboutClick" Margin="3,0,0,0"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- ===== MAIN CONTENT AREA ===== -->
+        <Grid Grid.Row="1" Margin="10">
+            <!-- Novice View (shown in Novice mode) -->
+            <views:NoviceView x:Name="NoviceTab" Visibility="Visible"/>
+
+            <!-- Advanced: Definitions View (shown in Advanced/Mod Builder mode) -->
+            <views:DefinitionsView x:Name="DefinitionsTab" Visibility="Collapsed"/>
+
+            <!-- Advanced: Change Secrets View -->
+            <views:BuildingsView x:Name="SecretsTab" Visibility="Collapsed"/>
+
+            <!-- Advanced: Change Constructions View -->
+            <views:BuildingsView x:Name="ConstructionsTab" Visibility="Collapsed"/>
+
+            <!-- Advanced: Object Editor (placeholder) -->
+            <views:PlaceholderView x:Name="ObjectEditorTab" Visibility="Collapsed"/>
+
+            <!-- Advanced: Create DEF (placeholder) -->
+            <views:PlaceholderView x:Name="CreateDefTab" Visibility="Collapsed"/>
         </Grid>
 
-        <!-- Tab Control with real views -->
-        <TabControl Grid.Row="1" Margin="10,5,10,10"
-                    Background="{StaticResource BackgroundBrush}">
-
-            <TabItem Header="Novice Mode">
-                <views:NoviceView x:Name="NoviceTab"/>
-            </TabItem>
-
-            <TabItem Header="Advanced Mode">
-                <views:DefinitionsView x:Name="DefinitionsTab"/>
-            </TabItem>
-
-            <TabItem Header="Change Secrets">
-                <views:BuildingsView x:Name="SecretsTab"/>
-            </TabItem>
-
-            <TabItem Header="Change Constructions">
-                <views:BuildingsView x:Name="ConstructionsTab"/>
-            </TabItem>
-
-            <TabItem Header="Object Editor">
-                <views:PlaceholderView DataContext="{x:Static local:PlaceholderData.ObjectEditor}"/>
-            </TabItem>
-
-            <TabItem Header="Create DEF">
-                <views:PlaceholderView DataContext="{x:Static local:PlaceholderData.CreateDef}"/>
-            </TabItem>
-        </TabControl>
+        <!-- ===== STATUS BAR ===== -->
+        <Border Grid.Row="2" Background="{StaticResource SurfaceBrush}" Padding="15,8">
+            <TextBlock x:Name="StatusText" Text="" FontSize="12"
+                       Foreground="{StaticResource TextSecondaryBrush}"/>
+        </Border>
     </Grid>
 </Window>

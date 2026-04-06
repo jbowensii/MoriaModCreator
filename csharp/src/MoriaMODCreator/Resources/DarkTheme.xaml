@@ -13,8 +13,11 @@
     <Color x:Key="WarningColor">#FFA500</Color>
     <Color x:Key="ButtonColor">#1f6aa5</Color>
     <Color x:Key="ButtonHoverColor">#3b8ed0</Color>
+    <Color x:Key="ButtonInactiveColor">#4d4d4d</Color>
+    <Color x:Key="ButtonInactiveHoverColor">#666666</Color>
     <Color x:Key="DeleteColor">#d32f2f</Color>
     <Color x:Key="BuildColor">#4caf50</Color>
+    <Color x:Key="ImportColor">#2E7D32</Color>
 
     <SolidColorBrush x:Key="BackgroundBrush" Color="{StaticResource BackgroundColor}"/>
     <SolidColorBrush x:Key="SurfaceBrush" Color="{StaticResource SurfaceColor}"/>
@@ -27,8 +30,11 @@
     <SolidColorBrush x:Key="WarningBrush" Color="{StaticResource WarningColor}"/>
     <SolidColorBrush x:Key="ButtonBrush" Color="{StaticResource ButtonColor}"/>
     <SolidColorBrush x:Key="ButtonHoverBrush" Color="{StaticResource ButtonHoverColor}"/>
+    <SolidColorBrush x:Key="ButtonInactiveBrush" Color="{StaticResource ButtonInactiveColor}"/>
+    <SolidColorBrush x:Key="ButtonInactiveHoverBrush" Color="{StaticResource ButtonInactiveHoverColor}"/>
     <SolidColorBrush x:Key="DeleteBrush" Color="{StaticResource DeleteColor}"/>
     <SolidColorBrush x:Key="BuildBrush" Color="{StaticResource BuildColor}"/>
+    <SolidColorBrush x:Key="ImportBrush" Color="{StaticResource ImportColor}"/>
 
     <!-- Window style -->
     <Style TargetType="Window">
@@ -75,6 +81,15 @@
         </Setter>
     </Style>
 
+    <!-- Toolbar Button style (nav buttons) -->
+    <Style x:Key="ToolbarButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+        <Setter Property="FontSize" Value="13"/>
+        <Setter Property="FontWeight" Value="Bold"/>
+        <Setter Property="Padding" Value="14,8"/>
+        <Setter Property="MinWidth" Value="100"/>
+        <Setter Property="Height" Value="36"/>
+    </Style>
+
     <!-- TextBox -->
     <Style TargetType="TextBox">
         <Setter Property="Background" Value="{StaticResource SurfaceBrush}"/>
@@ -107,26 +122,38 @@
         <Setter Property="Height" Value="8"/>
     </Style>
 
-    <!-- TabControl -->
-    <Style TargetType="TabControl">
-        <Setter Property="Background" Value="{StaticResource BackgroundBrush}"/>
-        <Setter Property="BorderThickness" Value="0"/>
-    </Style>
-
-    <Style TargetType="TabItem">
-        <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
-        <Setter Property="FontSize" Value="14"/>
-        <Setter Property="Padding" Value="16,8"/>
-        <Style.Triggers>
-            <Trigger Property="IsSelected" Value="True">
-                <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
-            </Trigger>
-        </Style.Triggers>
-    </Style>
-
     <!-- ScrollViewer -->
     <Style TargetType="ScrollViewer">
         <Setter Property="Background" Value="Transparent"/>
+    </Style>
+
+    <!-- ToggleButton (for Novice/Advanced toggle) -->
+    <Style x:Key="ModeToggle" TargetType="ToggleButton">
+        <Setter Property="Background" Value="{StaticResource ButtonInactiveBrush}"/>
+        <Setter Property="Foreground" Value="White"/>
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="FontWeight" Value="Bold"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Padding" Value="14,6"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ToggleButton">
+                    <Border Background="{TemplateBinding Background}"
+                            CornerRadius="6" Padding="{TemplateBinding Padding}">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter Property="Background" Value="{StaticResource PrimaryBrush}"/>
+                        </Trigger>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter Property="Background" Value="{StaticResource ButtonHoverBrush}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
     </Style>
 
 </ResourceDictionary>
