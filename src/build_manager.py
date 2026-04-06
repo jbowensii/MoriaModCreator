@@ -13,13 +13,12 @@ import logging
 import re
 import shutil
 import subprocess
-import tempfile
 import xml.etree.ElementTree as ET
 import zipfile
 from pathlib import Path
 from typing import Callable
 
-from src.config import get_appdata_dir, get_output_dir, get_default_mymodfiles_dir, get_utilities_dir, get_final_destination_dir, get_game_install_path
+from src.config import get_appdata_dir, get_output_dir, get_default_mymodfiles_dir, get_utilities_dir, get_final_destination_dir
 from src.constants import (
     UE_VERSION,
     RETOC_UE_VERSION,
