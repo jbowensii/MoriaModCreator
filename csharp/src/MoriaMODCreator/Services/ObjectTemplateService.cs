@@ -196,7 +196,7 @@ public class ObjectTemplateService
     public static string GenUniqueTag()
     {
         var bytes = Guid.NewGuid().ToByteArray();
-        return BitConverter.ToString(bytes).Replace("-", "").ToUpperInvariant()[..32];
+        return Convert.ToHexString(bytes);
     }
 
     /// <summary>Extract ores fields from a row (same structure as items).</summary>

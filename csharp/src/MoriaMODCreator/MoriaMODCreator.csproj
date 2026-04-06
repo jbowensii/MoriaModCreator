@@ -6,6 +6,9 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+    <NoWarn>CA1515;CA2007;CA1848;CA1822;CA1852;CA1859</NoWarn>
   </PropertyGroup>
 
   <PropertyGroup>
