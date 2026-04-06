@@ -106,6 +106,27 @@ public class ConfigService
         SetValue("Settings", "constructions_json_dir", path);
 
     /// <summary>Apply a color scheme to the WPF application theme.</summary>
+    /// <summary>
+    /// Find a source JSON file by checking secrets jsondata_full first (for secrets mode),
+    /// then game output jsondata. Shared utility for CategoryDataService and BuildingsDataService.
+    /// </summary>
+    public string? FindSourceJson(string mode, string relativePath)
+    {
+        // Check secrets jsondata_full first for secrets mode
+        if (mode == "secrets")
+        {
+            var secretsPath = Path.Combine(SecretsJsonDataFullDir, "Moria", "Content", relativePath);
+            if (File.Exists(secretsPath)) return secretsPath;
+        }
+
+        // Check game output jsondata
+        var gamePath = Path.Combine(OutputJsonDataDir, "Moria", "Content", relativePath);
+        if (File.Exists(gamePath)) return gamePath;
+
+        return null;
+    }
+
+    /// <summary>Apply a color scheme to the WPF application theme.</summary>
     public static void ApplyColorScheme(string scheme)
     {
         // WPF themes are handled via ResourceDictionary at application level.

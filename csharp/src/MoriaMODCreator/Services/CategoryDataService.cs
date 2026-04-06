@@ -70,7 +70,7 @@ public class CategoryDataService
         if (!File.Exists(defJsonPath))
         {
             // Copy from source
-            var sourcePath = FindSourceJson(mode, paths.DefinitionPath);
+            var sourcePath = _config.FindSourceJson(mode, paths.DefinitionPath);
             if (sourcePath != null && File.Exists(sourcePath))
             {
                 Directory.CreateDirectory(cacheDir);
@@ -140,7 +140,13 @@ public class CategoryDataService
                     if (prop?["Name"]?.GetValue<string>() == fieldName)
                     {
                         var existing = prop!["Value"];
-                        prop["Value"] = ConvertValue(strVal, existing);
+                        prop["Value"] = existing?.GetValueKind() switch
+                        {
+                            JsonValueKind.Number when int.TryParse(strVal, out var i) => JsonValue.Create(i),
+                            JsonValueKind.Number when double.TryParse(strVal, out var d) => JsonValue.Create(d),
+                            JsonValueKind.True or JsonValueKind.False when bool.TryParse(strVal, out var b) => JsonValue.Create(b),
+                            _ => JsonValue.Create(strVal)!,
+                        };
                         break;
                     }
                 }
@@ -186,39 +192,7 @@ public class CategoryDataService
         return rowName;
     }
 
-    private string? FindSourceJson(string mode, string relativePath)
-    {
-        // Check game output jsondata
-        var gamePath = Path.Combine(_config.OutputJsonDataDir, "Moria", "Content", relativePath);
-        if (File.Exists(gamePath)) return gamePath;
-
-        // Check secrets jsondata_full
-        if (mode == "secrets")
-        {
-            var secretsPath = Path.Combine(_config.SecretsJsonDataFullDir, "Moria", "Content", relativePath);
-            if (File.Exists(secretsPath)) return secretsPath;
-        }
-
-        return null;
-    }
-
-    private static JsonNode ConvertValue(string value, JsonNode? existing)
-    {
-        if (existing == null) return JsonValue.Create(value)!;
-
-        var kind = existing.GetValueKind();
-        if (kind == JsonValueKind.Number)
-        {
-            if (int.TryParse(value, out var intVal)) return JsonValue.Create(intVal);
-            if (double.TryParse(value, out var dblVal)) return JsonValue.Create(dblVal);
-        }
-        else if (kind is JsonValueKind.True or JsonValueKind.False)
-        {
-            if (bool.TryParse(value, out var boolVal)) return JsonValue.Create(boolVal);
-        }
-
-        return JsonValue.Create(value)!;
-    }
+    // FindSourceJson and ConvertValue are shared via ConfigService and JsonDataService
 
     private void SaveEditManifest(CategoryItem item)
     {

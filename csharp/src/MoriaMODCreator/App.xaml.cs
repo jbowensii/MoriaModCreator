@@ -56,7 +56,6 @@ public partial class App : Application
         services.AddSingleton<BuildingsDataService>();     // Cache management, edit manifests, display names
 
         // View models — BuildingsViewModel created in MainWindow with mode parameter
-        services.AddTransient<MainViewModel>();
         services.AddTransient<NoviceViewModel>();
         services.AddTransient<DefinitionsViewModel>();
 

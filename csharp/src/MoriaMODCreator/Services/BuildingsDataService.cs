@@ -60,28 +60,14 @@ public class BuildingsDataService
 
     private void CopySourceToCache(string mode, string relativePath, string cacheDir)
     {
-        var sourcePath = FindSourceJson(mode, relativePath);
+        var sourcePath = _config.FindSourceJson(mode, relativePath);
         if (sourcePath == null || !File.Exists(sourcePath)) return;
 
         var destPath = Path.Combine(cacheDir, Path.GetFileName(relativePath));
         File.Copy(sourcePath, destPath, true);
     }
 
-    private string? FindSourceJson(string mode, string relativePath)
-    {
-        // Check secrets jsondata_full first (for secrets mode)
-        if (mode == "secrets")
-        {
-            var secretsPath = Path.Combine(_config.SecretsJsonDataFullDir, "Moria", "Content", relativePath);
-            if (File.Exists(secretsPath)) return secretsPath;
-        }
-
-        // Check game output jsondata
-        var gamePath = Path.Combine(_config.OutputJsonDataDir, "Moria", "Content", relativePath);
-        if (File.Exists(gamePath)) return gamePath;
-
-        return null;
-    }
+    // FindSourceJson is shared via ConfigService.FindSourceJson
 
     // =========================================================================
     // EDIT MANIFEST (edits.json)
@@ -388,7 +374,7 @@ public class BuildingsDataService
         var cacheDir = GetCacheDir(mode, prefix, category);
         var defFileName = Path.GetFileName(paths.DefinitionPath);
         var cachePath = Path.Combine(cacheDir, defFileName);
-        var sourcePath = FindSourceJson(mode, paths.DefinitionPath);
+        var sourcePath = _config.FindSourceJson(mode, paths.DefinitionPath);
 
         if (!File.Exists(cachePath) || sourcePath == null || !File.Exists(sourcePath))
             return "";
@@ -550,7 +536,7 @@ public class BuildingsDataService
 
         foreach (var relPath in tablePaths)
         {
-            var fullPath = FindSourceJson(mode, relPath);
+            var fullPath = _config.FindSourceJson(mode, relPath);
             if (fullPath == null || !File.Exists(fullPath)) continue;
 
             var root = _templates.LoadJson(fullPath);

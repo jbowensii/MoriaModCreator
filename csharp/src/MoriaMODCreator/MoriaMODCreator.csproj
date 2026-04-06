@@ -8,7 +8,7 @@
     <UseWPF>true</UseWPF>
     <EnableNETAnalyzers>true</EnableNETAnalyzers>
     <AnalysisLevel>latest-recommended</AnalysisLevel>
-    <NoWarn>CA1515;CA2007;CA1848;CA1822;CA1852;CA1859</NoWarn>
+    <NoWarn>CA1515;CA2007;CA1848;CA1822;CA1852;CA1859;CA1310;CA1307;CA1305</NoWarn>
   </PropertyGroup>
 
   <PropertyGroup>

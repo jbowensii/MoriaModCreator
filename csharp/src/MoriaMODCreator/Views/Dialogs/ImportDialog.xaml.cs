@@ -4,9 +4,10 @@ using MoriaMODCreator.Services;
 
 namespace MoriaMODCreator.Views.Dialogs;
 
-public partial class ImportDialog : Window
+public partial class ImportDialog : Window, IDisposable
 {
     private readonly CancellationTokenSource _cts = new();
+    private bool _disposed;
     private readonly ImportService _importService;
 
     public bool ImportSuccess { get; private set; }
@@ -58,9 +59,19 @@ public partial class ImportDialog : Window
         }
     }
 
+    public void Dispose()
+    {
+        if (!_disposed)
+        {
+            _cts.Dispose();
+            _disposed = true;
+        }
+        GC.SuppressFinalize(this);
+    }
+
     protected override void OnClosed(EventArgs e)
     {
-        _cts.Dispose();
+        Dispose();
         base.OnClosed(e);
     }
 }
