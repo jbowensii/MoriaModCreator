@@ -48,18 +48,21 @@ public partial class ImportDialog : Window, IDisposable
 
         var progress = new Progress<ImportProgress>(p =>
         {
-            Dispatcher.Invoke(() =>
+            // Use BeginInvoke for non-blocking UI updates
+            Dispatcher.BeginInvoke(() =>
             {
                 TitleText.Text = p.Title;
                 StatusText.Text = p.Status;
                 ProgressBar.Value = p.Progress;
+                FileText.Text = $"{p.Progress:P0}";
             });
         });
 
         try
         {
             TitleText.Text = "Starting Import...";
-            StatusText.Text = "Initializing...";
+            StatusText.Text = "Checking configuration...";
+            FileText.Text = "";
 
             var result = await _importService.RunCombinedImportAsync(progress, _cts.Token);
             ImportSuccess = result.Success;

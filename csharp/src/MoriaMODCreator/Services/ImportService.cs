@@ -44,16 +44,22 @@ public class ImportService
         {
             // Step 1: Clean directories
             progress?.Report(new("Preparing import...", "Clearing directories...", 0.0));
-            CleanDirectories();
+            _logger.LogInformation("Import: cleaning directories");
+            await Task.Run(CleanDirectories, ct);
 
             // Step 2: Extract game files
             progress?.Report(new("Importing Game Files", "Extracting game data...", 0.05));
+            _logger.LogInformation("Import: extracting game files");
             var gameResult = await ExtractGameFilesAsync(progress, ct);
             if (!gameResult)
+            {
+                _logger.LogError("Import: game file extraction failed");
                 return new ImportResult(false, "Game file extraction failed");
+            }
 
             // Step 3: Import secrets (if available)
             progress?.Report(new("Importing Secrets", "Checking for secrets...", 0.50));
+            _logger.LogInformation("Import: starting secrets import");
             var secretsResult = await ImportSecretsAsync(progress, ct);
 
             progress?.Report(new("Import Complete", "Done!", 1.0));
@@ -86,28 +92,34 @@ public class ImportService
 
         // Step 1: Extract ZIPs
         progress?.Report(new("Importing Secrets", "Extracting ZIP files...", 0.52));
-        ExtractSecretsZips(secretsDir);
+        _logger.LogInformation("Secrets: extracting ZIPs");
+        await Task.Run(() => ExtractSecretsZips(secretsDir), ct);
 
         // Step 2: IoStore extraction (retoc to-legacy)
         progress?.Report(new("Importing Secrets", "Extracting IoStore files...", 0.55));
+        _logger.LogInformation("Secrets: IoStore extraction");
         await ExtractSecretsIoStoreAsync(secretsDir, progress, ct);
 
         // Step 3: Convert uasset to JSON → jsondata_full/
         progress?.Report(new("Converting Secrets", "Converting to JSON...", 0.65));
+        _logger.LogInformation("Secrets: converting to JSON");
         await ConvertSecretsToJsonAsync(secretsDir, progress, ct);
 
         // Step 3b: Copy jsondata_full/ → jsondata/, then strip duplicate rows
         progress?.Report(new("Filtering Secrets", "Removing game data from secrets...", 0.80));
-        CopyFullToFiltered(secretsDir);
-        StripDuplicateRows(secretsDir, progress);
+        _logger.LogInformation("Secrets: stripping duplicate rows");
+        await Task.Run(() => CopyFullToFiltered(secretsDir), ct);
+        await Task.Run(() => StripDuplicateRows(secretsDir, progress), ct);
 
         // Step 3c: Copy to New Secrets
         progress?.Report(new("Finalizing", "Copying to New Secrets...", 0.92));
-        CopyToNewSecrets(secretsDir);
+        _logger.LogInformation("Secrets: copying to New Secrets");
+        await Task.Run(() => CopyToNewSecrets(secretsDir), ct);
 
         // Step 4: Generate manifest
         progress?.Report(new("Finalizing", "Generating manifest...", 0.95));
-        GenerateSecretsManifest(secretsDir);
+        _logger.LogInformation("Secrets: generating manifest");
+        await Task.Run(() => GenerateSecretsManifest(secretsDir), ct);
 
         return new ImportResult(true, "Secrets import completed");
     }
@@ -148,14 +160,16 @@ public class ImportService
                     File.Copy(src, Path.Combine(tempPaks, name));
             }
 
-            // Copy main game pak
+            // Copy main game pak (large files — run on background thread)
             foreach (var ext in new[] { ".pak", ".ucas", ".utoc" })
             {
                 var src = Path.Combine(gamePaksPath, $"Moria-WindowsNoEditor{ext}");
                 if (File.Exists(src))
                 {
                     progress?.Report(new("Importing Game Files", $"Copying game files{ext}...", 0.10));
-                    File.Copy(src, Path.Combine(tempPaks, $"Moria-WindowsNoEditor{ext}"));
+                    _logger.LogInformation("Copying {File}...", Path.GetFileName(src));
+                    var dst = Path.Combine(tempPaks, $"Moria-WindowsNoEditor{ext}");
+                    await Task.Run(() => File.Copy(src, dst), ct);
                 }
             }
 

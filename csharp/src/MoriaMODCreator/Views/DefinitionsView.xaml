@@ -81,6 +81,7 @@
                     </Grid.ColumnDefinitions>
                     <Button Grid.Column="0" Content="My Mod Name"
                             Background="{StaticResource AccentBrush}"
+                            Command="{Binding ChooseModNameCommand}"
                             Padding="10,6" FontSize="12"/>
                     <TextBox Grid.Column="1" Text="{Binding ModName, UpdateSourceTrigger=PropertyChanged}"
                              Margin="6,0" VerticalAlignment="Center" FontSize="12"/>

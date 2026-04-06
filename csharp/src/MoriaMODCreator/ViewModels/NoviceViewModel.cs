@@ -41,6 +41,20 @@ public partial class NoviceViewModel : ObservableObject
     }
 
     [RelayCommand]
+    private void ChooseModName()
+    {
+        var dialog = new Views.Dialogs.ModNameDialog
+        {
+            Owner = System.Windows.Application.Current.MainWindow
+        };
+        if (dialog.ShowDialog() == true && dialog.SelectedModName != null)
+        {
+            ModName = dialog.SelectedModName;
+            BuildStatus = $"Mod '{ModName}' selected";
+        }
+    }
+
+    [RelayCommand]
     private void SelectAll()
     {
         foreach (var mod in Mods)
