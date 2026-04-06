@@ -31,6 +31,7 @@ public partial class App : Application
         services.AddSingleton<JsonDataService>();
         services.AddSingleton<BuildService>();
         services.AddSingleton<PrebuiltModService>();
+        services.AddSingleton<ImportService>();
 
         // ViewModels
         services.AddTransient<MainViewModel>();

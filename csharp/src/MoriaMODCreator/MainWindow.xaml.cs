@@ -109,7 +109,10 @@ public partial class MainWindow : Window
 
     private void OnImportClick(object sender, RoutedEventArgs e)
     {
-        StatusText.Text = "Import not yet implemented in C# version";
+        var dialog = new ImportDialog { Owner = this };
+        dialog.ShowDialog();
+        if (dialog.ImportSuccess)
+            StatusText.Text = "Import completed successfully";
     }
 
     private void SwitchToView(string view)

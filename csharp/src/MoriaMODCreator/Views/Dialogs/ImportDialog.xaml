@@ -1,0 +1,52 @@
+<Window x:Class="MoriaMODCreator.Views.Dialogs.ImportDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Moria MOD Creator - Import"
+        Height="300" Width="500"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        Icon="/Assets/Icons/app_icon.ico"
+        Background="{StaticResource BackgroundBrush}">
+
+    <Grid Margin="25">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Title -->
+        <TextBlock Grid.Row="0" x:Name="TitleText" Text="Importing Game Files"
+                   FontSize="18" FontWeight="Bold"
+                   Foreground="{StaticResource TextBrush}"
+                   HorizontalAlignment="Center" Margin="0,0,0,15"/>
+
+        <!-- Status -->
+        <TextBlock Grid.Row="1" x:Name="StatusText" Text="Preparing..."
+                   FontSize="13" Foreground="{StaticResource TextSecondaryBrush}"
+                   HorizontalAlignment="Center" Margin="0,0,0,5"/>
+
+        <!-- File info -->
+        <TextBlock Grid.Row="2" x:Name="FileText" Text=""
+                   FontSize="11" Foreground="{StaticResource TextSecondaryBrush}"
+                   HorizontalAlignment="Center" Margin="0,0,0,10"/>
+
+        <!-- Progress bar -->
+        <ProgressBar Grid.Row="3" x:Name="ProgressBar" Height="10" Maximum="1"
+                     Margin="0,0,0,10"/>
+
+        <!-- Count -->
+        <TextBlock Grid.Row="4" x:Name="CountText" Text=""
+                   FontSize="11" Foreground="{StaticResource TextSecondaryBrush}"
+                   HorizontalAlignment="Center"/>
+
+        <!-- Cancel button -->
+        <Button Grid.Row="5" x:Name="CancelBtn" Content="Cancel"
+                Background="{StaticResource DeleteBrush}"
+                Padding="20,8" HorizontalAlignment="Center"
+                Click="OnCancel"/>
+    </Grid>
+</Window>
