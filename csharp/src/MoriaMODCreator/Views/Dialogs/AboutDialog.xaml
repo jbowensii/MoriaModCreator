@@ -2,43 +2,158 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="About Moria MOD Creator"
-        Height="350" Width="450"
+        Height="550" Width="600"
         WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize"
         Background="{StaticResource BackgroundBrush}">
 
-    <Grid Margin="30">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>
-        </Grid.RowDefinitions>
+    <Grid>
+        <TabControl Background="{StaticResource BackgroundBrush}" BorderThickness="0" Margin="10">
+            <TabControl.Resources>
+                <Style TargetType="TabItem">
+                    <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+                    <Setter Property="FontSize" Value="14"/>
+                    <Setter Property="Padding" Value="16,8"/>
+                    <Setter Property="Background" Value="{StaticResource SurfaceBrush}"/>
+                    <Setter Property="Template">
+                        <Setter.Value>
+                            <ControlTemplate TargetType="TabItem">
+                                <Border x:Name="Bd" Background="{StaticResource SurfaceBrush}"
+                                        CornerRadius="6,6,0,0" Padding="16,8" Margin="2,0">
+                                    <ContentPresenter ContentSource="Header"/>
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsSelected" Value="True">
+                                        <Setter TargetName="Bd" Property="Background" Value="{StaticResource PrimaryBrush}"/>
+                                    </Trigger>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter TargetName="Bd" Property="Background" Value="{StaticResource ButtonHoverBrush}"/>
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Setter.Value>
+                    </Setter>
+                </Style>
+            </TabControl.Resources>
 
-        <TextBlock Grid.Row="0" Text="Moria MOD Creator" FontSize="24" FontWeight="Bold"
-                   Foreground="{StaticResource TextBrush}" HorizontalAlignment="Center"/>
+            <!-- About Tab -->
+            <TabItem Header="About">
+                <Border Background="{StaticResource SurfaceBrush}" CornerRadius="0,6,6,6" Padding="20">
+                    <StackPanel HorizontalAlignment="Center">
+                        <Image Source="/Assets/Images/background.png" Width="200" Height="200"
+                               Margin="0,10,0,20" RenderOptions.BitmapScalingMode="HighQuality"
+                               Stretch="Uniform"/>
 
-        <TextBlock Grid.Row="1" Text="Version 2.10.0  •  April 2026" FontSize="14"
-                   Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Center"
-                   Margin="0,8,0,0"/>
+                        <TextBlock Text="Moria MOD Creator" FontSize="24" FontWeight="Bold"
+                                   Foreground="{StaticResource TextBrush}" HorizontalAlignment="Center"/>
 
-        <TextBlock Grid.Row="2" FontSize="13" Foreground="{StaticResource TextBrush}"
-                   HorizontalAlignment="Center" Margin="0,20,0,0"
-                   TextAlignment="Center">
-            Created by John B Owens II
-            <LineBreak/>
-            Create DEF functionality by Sqitey
-        </TextBlock>
+                        <TextBlock Text="Version 2.10.0  •  April 2026" FontSize="14"
+                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   HorizontalAlignment="Center" Margin="0,8,0,0"/>
 
-        <TextBlock Grid.Row="3" FontSize="12" Foreground="{StaticResource AccentBrush}"
-                   HorizontalAlignment="Center" Margin="0,15,0,0"
-                   Cursor="Hand" TextDecorations="Underline"
-                   Text="https://github.com/jbowensii/MoriaModCreator"
-                   MouseDown="OnGitHubLink"/>
+                        <TextBlock FontSize="13" Foreground="{StaticResource TextBrush}"
+                                   HorizontalAlignment="Center" Margin="0,20,0,0" TextAlignment="Center">
+                            Created by John B Owens II
+                            <LineBreak/>
+                            Create DEF functionality by Sqitey
+                        </TextBlock>
 
-        <Button Grid.Row="5" Content="Close" Padding="20,8"
-                HorizontalAlignment="Center" Click="OnClose"/>
+                        <TextBlock FontSize="12" Foreground="{StaticResource AccentBrush}"
+                                   HorizontalAlignment="Center" Margin="0,15,0,0"
+                                   Cursor="Hand" TextDecorations="Underline"
+                                   Text="https://github.com/jbowensii/MoriaModCreator"
+                                   MouseDown="OnGitHubLink"/>
+                    </StackPanel>
+                </Border>
+            </TabItem>
+
+            <!-- Help Tab -->
+            <TabItem Header="Help">
+                <Border Background="{StaticResource SurfaceBrush}" CornerRadius="0,6,6,6" Padding="20">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <TextBlock TextWrapping="Wrap" FontSize="13" LineHeight="22"
+                                   Foreground="{StaticResource TextBrush}">
+                            <Run FontWeight="Bold" FontSize="16">Getting Started</Run>
+                            <LineBreak/><LineBreak/>
+                            <Run FontWeight="Bold">Novice Mode</Run>
+                            <LineBreak/>
+                            <Run>Select prebuilt mods from the list, enter a mod name, and click Build. The app will combine your selected mods into a single pak file ready for the game.</Run>
+                            <LineBreak/><LineBreak/>
+                            <Run FontWeight="Bold">Advanced Mode</Run>
+                            <LineBreak/>
+                            <Run>Create custom mod definitions by editing JSON data tables directly. Use the definition editor to browse game data, modify values, and build custom mods.</Run>
+                            <LineBreak/><LineBreak/>
+                            <Run FontWeight="Bold">Import</Run>
+                            <LineBreak/>
+                            <Run>Before building mods, you need to import game files. Click the Import button to extract game data and secrets content. This only needs to be done once (or when the game updates).</Run>
+                            <LineBreak/><LineBreak/>
+                            <Run FontWeight="Bold">Secrets of Khazad-dum</Run>
+                            <LineBreak/>
+                            <Run>If you have the Secrets of Khazad-dum mod, download the pak files and place them in the Secrets Source folder. The Import process will extract and integrate them with the game data.</Run>
+                            <LineBreak/><LineBreak/>
+                            <Run FontWeight="Bold">Change Secrets / Constructions</Run>
+                            <LineBreak/>
+                            <Run>Use these views to modify individual items in the secrets or constructions data tables. Select a category (Buildings, Weapons, Armor, etc.), browse items, and edit their properties.</Run>
+                            <LineBreak/><LineBreak/>
+                            <Run FontWeight="Bold">Create DEF</Run>
+                            <LineBreak/>
+                            <Run>Extract and compare game files to create new definition files (.def) that describe your mod changes.</Run>
+                            <LineBreak/><LineBreak/>
+                            <Run FontWeight="Bold">Build Output</Run>
+                            <LineBreak/>
+                            <Run>Built mods are saved as ZIP files in your Downloads folder. Extract the mod's _P folder into your game's Moria\Content\Paks directory to install.</Run>
+                        </TextBlock>
+                    </ScrollViewer>
+                </Border>
+            </TabItem>
+
+            <!-- Credits Tab -->
+            <TabItem Header="Credits">
+                <Border Background="{StaticResource SurfaceBrush}" CornerRadius="0,6,6,6" Padding="20">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel>
+                            <TextBlock Text="Credits" FontSize="18" FontWeight="Bold"
+                                       Foreground="{StaticResource TextBrush}" Margin="0,0,0,15"/>
+
+                            <TextBlock FontSize="13" Foreground="{StaticResource TextBrush}"
+                                       TextWrapping="Wrap" LineHeight="24">
+                                <Run FontWeight="Bold">Application Developer</Run>
+                                <LineBreak/>
+                                <Run>John B Owens II (Mereak Firmaxe)</Run>
+                                <LineBreak/><LineBreak/>
+                                <Run FontWeight="Bold">Create DEF Functionality</Run>
+                                <LineBreak/>
+                                <Run>Sqitey</Run>
+                                <LineBreak/><LineBreak/>
+                                <Run FontWeight="Bold">Tools Used</Run>
+                                <LineBreak/>
+                                <Run>• UAssetGUI / UAssetAPI by atenfyr</Run>
+                                <LineBreak/>
+                                <Run>• retoc by trumank</Run>
+                                <LineBreak/>
+                                <Run>• FModel by 4sval</Run>
+                                <LineBreak/><LineBreak/>
+                                <Run FontWeight="Bold">Special Thanks</Run>
+                                <LineBreak/>
+                                <Run>• ChaosGodstone — testing and bug reports</Run>
+                                <LineBreak/>
+                                <Run>• The Return to Moria modding community</Run>
+                            </TextBlock>
+
+                            <TextBlock FontSize="12" Foreground="{StaticResource TextSecondaryBrush}"
+                                       Margin="0,20,0,0" TextAlignment="Center"
+                                       HorizontalAlignment="Center">
+                                Licensed under the MIT License
+                            </TextBlock>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Border>
+            </TabItem>
+        </TabControl>
+
+        <!-- Close button -->
+        <Button Content="Close" Padding="20,8" HorizontalAlignment="Right"
+                VerticalAlignment="Bottom" Margin="0,0,20,15"
+                Click="OnClose"/>
     </Grid>
 </Window>

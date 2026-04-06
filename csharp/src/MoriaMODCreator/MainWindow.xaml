@@ -9,28 +9,29 @@
         Height="900" Width="900"
         MinHeight="700" MinWidth="700"
         WindowStartupLocation="CenterScreen"
+        Icon="Assets/Icons/app_icon.ico"
         Background="{StaticResource BackgroundBrush}">
 
     <Grid>
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>  <!-- Header + toolbar -->
-            <RowDefinition Height="*"/>     <!-- Main content area -->
-            <RowDefinition Height="Auto"/>  <!-- Status bar -->
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
         <!-- ===== HEADER BAR ===== -->
         <Border Grid.Row="0" Background="{StaticResource SurfaceBrush}" Padding="15,10">
             <Grid>
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto"/>  <!-- Title -->
-                    <ColumnDefinition Width="*"/>     <!-- Toolbar buttons (center) -->
-                    <ColumnDefinition Width="Auto"/>  <!-- Mode toggle + settings -->
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
-                <!-- LEFT: App title -->
+                <!-- LEFT: App icon + title -->
                 <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock Text="&#x2692;" FontSize="28" VerticalAlignment="Center"
-                               Margin="0,0,10,0" Foreground="{StaticResource AccentBrush}"/>
+                    <Image Source="Assets/Icons/app_icon.png" Width="36" Height="36"
+                           Margin="0,0,10,0" RenderOptions.BitmapScalingMode="HighQuality"/>
                     <TextBlock Text="Moria MOD Creator" FontSize="22" FontWeight="Bold"
                                VerticalAlignment="Center" Foreground="{StaticResource TextBrush}"/>
                 </StackPanel>
@@ -38,7 +39,6 @@
                 <!-- CENTER: Toolbar buttons -->
                 <StackPanel Grid.Column="1" x:Name="ToolbarPanel" Orientation="Horizontal"
                             HorizontalAlignment="Center" VerticalAlignment="Center">
-                    <!-- These buttons are shown/hidden by mode -->
                     <Button x:Name="ModBuilderBtn" Content="Mod Builder"
                             Style="{StaticResource ToolbarButton}"
                             Background="{StaticResource PrimaryBrush}"
@@ -77,34 +77,29 @@
                                       Style="{StaticResource ModeToggle}"
                                       Click="OnAdvancedToggle" Margin="2,0,0,0"/>
                     </StackPanel>
-                    <Button Content="&#x2699;" Padding="8,6" FontSize="16"
-                            Background="Transparent" ToolTip="Settings"
-                            Click="OnSettingsClick"/>
-                    <Button Content="&#x2753;" Padding="8,6" FontSize="16"
-                            Background="Transparent" ToolTip="About"
-                            Click="OnAboutClick" Margin="3,0,0,0"/>
+                    <Button Padding="4" Background="Transparent" ToolTip="Settings"
+                            Click="OnSettingsClick">
+                        <Image Source="Assets/Icons/gear_icon.png" Width="24" Height="24"
+                               RenderOptions.BitmapScalingMode="HighQuality"/>
+                    </Button>
+                    <Button Padding="4" Background="Transparent" ToolTip="About"
+                            Click="OnAboutClick" Margin="3,0,0,0">
+                        <Image Source="Assets/Icons/help_icon.png" Width="24" Height="24"
+                               RenderOptions.BitmapScalingMode="HighQuality"/>
+                    </Button>
                 </StackPanel>
             </Grid>
         </Border>
 
         <!-- ===== MAIN CONTENT AREA ===== -->
         <Grid Grid.Row="1" Margin="10">
-            <!-- Novice View (shown in Novice mode) -->
+            <!-- Novice View -->
             <views:NoviceView x:Name="NoviceTab" Visibility="Visible"/>
-
-            <!-- Advanced: Definitions View (shown in Advanced/Mod Builder mode) -->
+            <!-- Advanced views -->
             <views:DefinitionsView x:Name="DefinitionsTab" Visibility="Collapsed"/>
-
-            <!-- Advanced: Change Secrets View -->
             <views:BuildingsView x:Name="SecretsTab" Visibility="Collapsed"/>
-
-            <!-- Advanced: Change Constructions View -->
             <views:BuildingsView x:Name="ConstructionsTab" Visibility="Collapsed"/>
-
-            <!-- Advanced: Object Editor (placeholder) -->
             <views:PlaceholderView x:Name="ObjectEditorTab" Visibility="Collapsed"/>
-
-            <!-- Advanced: Create DEF (placeholder) -->
             <views:PlaceholderView x:Name="CreateDefTab" Visibility="Collapsed"/>
         </Grid>
 

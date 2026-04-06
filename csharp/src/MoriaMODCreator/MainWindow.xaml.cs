@@ -155,7 +155,8 @@ public partial class MainWindow : Window
 
     private void OnSettingsClick(object sender, RoutedEventArgs e)
     {
-        StatusText.Text = "Settings not yet implemented";
+        var dialog = new ConfigDialog { Owner = this };
+        dialog.ShowDialog();
     }
 
     private void OnAboutClick(object sender, RoutedEventArgs e)

@@ -8,91 +8,135 @@
              mc:Ignorable="d"
              Background="{StaticResource BackgroundBrush}">
 
-    <Grid Margin="10">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-        </Grid.RowDefinitions>
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="1*"/>
+            <ColumnDefinition Width="3*"/>
+        </Grid.ColumnDefinitions>
 
-        <!-- Header with select all -->
-        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,10">
-            <CheckBox Content="Select All" VerticalAlignment="Center"
-                      Command="{Binding SelectAllCommand}" Margin="0,0,10,0"/>
-            <TextBlock Text="Prebuilt Mods" FontSize="16" FontWeight="Bold"
-                       VerticalAlignment="Center" Foreground="{StaticResource TextBrush}"/>
-            <Button Content="&#x21BB;" Command="{Binding LoadModsCommand}"
-                    Margin="10,0,0,0" Padding="8,4" FontSize="14"
-                    ToolTip="Refresh mod list"/>
-        </StackPanel>
+        <!-- ===== LEFT PANE: Prebuilt Mod List ===== -->
+        <Border Grid.Column="0" Background="{StaticResource SurfaceBrush}"
+                CornerRadius="6" Margin="0,0,5,0">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
 
-        <!-- Mod list -->
-        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
-            <ItemsControl ItemsSource="{Binding Mods}">
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate>
-                        <Border Background="{StaticResource SurfaceBrush}"
-                                CornerRadius="4" Margin="0,2" Padding="10,8">
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="Auto"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
+                <!-- Header -->
+                <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="10,10,10,5">
+                    <CheckBox Content="" VerticalAlignment="Center" Margin="0,0,8,0"
+                              Command="{Binding SelectAllCommand}"/>
+                    <TextBlock Text="Prebuilt Mods" FontSize="14" FontWeight="Bold"
+                               Foreground="{StaticResource TextBrush}" VerticalAlignment="Center"/>
+                    <Button Content="&#x21BB;" Command="{Binding LoadModsCommand}"
+                            Margin="10,0,0,0" Padding="6,3" FontSize="14"
+                            Background="Transparent" ToolTip="Refresh"/>
+                </StackPanel>
 
-                                <CheckBox Grid.Column="0" IsChecked="{Binding IsChecked}"
-                                          VerticalAlignment="Center" Margin="0,0,10,0"/>
-                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                    <TextBlock Text="{Binding Title}" FontSize="14"
-                                               Foreground="#FFD700"/>
-                                    <TextBlock Text="{Binding Author}" FontSize="11"
-                                               Foreground="{StaticResource TextSecondaryBrush}"
-                                               Visibility="{Binding Author, Converter={StaticResource StringToVisibilityConverter}}"/>
-                                </StackPanel>
-                                <Button Grid.Column="2" Content="&#x1F5D1;"
-                                        Background="{StaticResource DeleteBrush}"
-                                        Padding="8,4" FontSize="12"
-                                        VerticalAlignment="Center"
-                                        ToolTip="Delete this mod"/>
-                            </Grid>
-                        </Border>
-                    </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
-        </ScrollViewer>
+                <!-- Mod list -->
+                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Margin="5,0">
+                    <ItemsControl ItemsSource="{Binding Mods}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Background="Transparent" Margin="0,1" Padding="8,6"
+                                        Cursor="Hand">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <CheckBox Grid.Column="0" IsChecked="{Binding IsChecked}"
+                                                  VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                        <TextBlock Grid.Column="1" Text="{Binding Title}" FontSize="13"
+                                                   Foreground="#FFD700" VerticalAlignment="Center"
+                                                   TextTrimming="CharacterEllipsis"/>
+                                        <Button Grid.Column="2" Content="&#x1F5D1;"
+                                                Background="{StaticResource DeleteBrush}"
+                                                Padding="6,3" FontSize="11"
+                                                VerticalAlignment="Center"/>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
 
-        <!-- Build progress -->
-        <StackPanel Grid.Row="2" Margin="0,10,0,5"
-                    Visibility="{Binding IsBuilding, Converter={StaticResource BoolToVisibilityConverter}}">
-            <ProgressBar Value="{Binding BuildProgress}" Maximum="1" Height="8" Margin="0,0,0,5"/>
-            <TextBlock Text="{Binding BuildStatus}" FontSize="12"
-                       Foreground="{StaticResource TextSecondaryBrush}"/>
-        </StackPanel>
+                <!-- Bottom: Mod name + Build -->
+                <Grid Grid.Row="2" Margin="10,5,10,10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <Button Grid.Column="0" Content="My Mod Name"
+                            Background="{StaticResource AccentBrush}"
+                            Padding="10,6" FontSize="12"/>
+                    <TextBox Grid.Column="1" Text="{Binding ModName, UpdateSourceTrigger=PropertyChanged}"
+                             Margin="6,0" VerticalAlignment="Center" FontSize="12"/>
+                    <Button Grid.Column="2" Content="Build"
+                            Background="{StaticResource BuildBrush}"
+                            Command="{Binding BuildCommand}" Padding="14,6" FontSize="12"/>
+                </Grid>
+            </Grid>
+        </Border>
 
-        <!-- Mod name and build -->
-        <Grid Grid.Row="3" Margin="0,5,0,0">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto"/>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="Auto"/>
-            </Grid.ColumnDefinitions>
+        <!-- ===== RIGHT PANE: Mod Description / Info ===== -->
+        <Border Grid.Column="1" Background="{StaticResource SurfaceBrush}"
+                CornerRadius="6" Margin="5,0,0,0">
+            <Grid Margin="15">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
 
-            <Button Grid.Column="0" Content="My Mod Name"
-                    Background="{StaticResource AccentBrush}"
-                    Padding="12,8" Margin="0,0,8,0"/>
-            <TextBox Grid.Column="1" Text="{Binding ModName, UpdateSourceTrigger=PropertyChanged}"
-                     VerticalAlignment="Center"/>
-            <Button Grid.Column="2" Content="Build"
-                    Background="{StaticResource BuildBrush}"
-                    Command="{Binding BuildCommand}"
-                    Padding="20,8" Margin="8,0,0,0"/>
-        </Grid>
+                <!-- Title area -->
+                <TextBlock Grid.Row="0" Text="Mod Information" FontSize="18" FontWeight="Bold"
+                           Foreground="{StaticResource TextBrush}" Margin="0,0,0,10"/>
 
-        <!-- Status text when not building -->
-        <TextBlock Grid.Row="4" Text="{Binding BuildStatus}" FontSize="12"
-                   Foreground="{StaticResource TextSecondaryBrush}" Margin="0,5,0,0"
-                   Visibility="{Binding IsBuilding, Converter={StaticResource InverseBoolToVisibilityConverter}}"/>
+                <!-- Build progress -->
+                <StackPanel Grid.Row="1" Margin="0,0,0,10"
+                            Visibility="{Binding IsBuilding, Converter={StaticResource BoolToVisibilityConverter}}">
+                    <ProgressBar Value="{Binding BuildProgress}" Maximum="1" Height="8" Margin="0,0,0,5"/>
+                    <TextBlock Text="{Binding BuildStatus}" FontSize="12"
+                               Foreground="{StaticResource TextSecondaryBrush}"/>
+                </StackPanel>
+
+                <!-- Description / help content area -->
+                <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
+                    <StackPanel>
+                        <TextBlock TextWrapping="Wrap" FontSize="14" LineHeight="22"
+                                   Foreground="{StaticResource TextBrush}">
+                            <Run FontWeight="Bold" FontSize="16">Welcome to Moria MOD Creator</Run>
+                            <LineBreak/><LineBreak/>
+                            <Run>Select prebuilt mods from the list on the left, enter a mod name, and click Build to create your mod.</Run>
+                            <LineBreak/><LineBreak/>
+                            <Run FontWeight="Bold">Getting Started:</Run>
+                            <LineBreak/>
+                            <Run>1. Click Import to extract game files</Run>
+                            <LineBreak/>
+                            <Run>2. Check the mods you want to include</Run>
+                            <LineBreak/>
+                            <Run>3. Enter a name for your mod</Run>
+                            <LineBreak/>
+                            <Run>4. Click Build to create your mod package</Run>
+                            <LineBreak/><LineBreak/>
+                            <Run FontWeight="Bold">Advanced Mode:</Run>
+                            <LineBreak/>
+                            <Run>Switch to Advanced mode using the toggle in the top right to access the full mod builder with definition editing, secrets management, and custom mod creation tools.</Run>
+                        </TextBlock>
+                    </StackPanel>
+                </ScrollViewer>
+
+                <!-- Status when not building -->
+                <TextBlock Grid.Row="3" Text="{Binding BuildStatus}" FontSize="12"
+                           Foreground="{StaticResource TextSecondaryBrush}" Margin="0,10,0,0"
+                           Visibility="{Binding IsBuilding, Converter={StaticResource InverseBoolToVisibilityConverter}}"/>
+            </Grid>
+        </Border>
     </Grid>
 </UserControl>
