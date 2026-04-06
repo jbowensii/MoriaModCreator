@@ -57,16 +57,22 @@ public partial class BuildingsViewModel : ObservableObject
 
         try
         {
+            System.Diagnostics.Debug.WriteLine($"[Buildings] Loading {category} for {_mode}/{Prefix}");
             var items = _categoryData.LoadCategoryItems(_mode, category, Prefix);
+            System.Diagnostics.Debug.WriteLine($"[Buildings] Got {items.Count} items");
             foreach (var item in items)
+            {
+                System.Diagnostics.Debug.WriteLine($"[Buildings]   {item.RowName} -> {item.DisplayName}");
                 Items.Add(item);
+            }
 
             BuildStatus = items.Count > 0
                 ? $"{category}: {items.Count} items loaded"
-                : $"{category}: No items found. Try running Import first.";
+                : $"{category}: No items found. Ensure Import has been run and a prefix is entered.";
         }
         catch (Exception ex)
         {
+            System.Diagnostics.Debug.WriteLine($"[Buildings] ERROR: {ex}");
             BuildStatus = $"Error loading {category}: {ex.Message}";
         }
     }
