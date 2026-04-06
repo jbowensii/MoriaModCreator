@@ -203,6 +203,103 @@ public class ObjectTemplateService
     public Dictionary<string, object?> ExtractOresFields(JsonNode row)
         => ExtractItemFields(row);
 
+    /// <summary>Load a template JSON from the docs/templates directory.</summary>
+    public JsonNode? LoadTemplate(string templateName)
+    {
+        var templatePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "docs", "templates", templateName);
+        if (!File.Exists(templatePath))
+        {
+            // Also check relative to config AppData
+            templatePath = Path.Combine(_config.AppDataDir, "..", "templates", templateName);
+        }
+        return File.Exists(templatePath) ? LoadJson(templatePath) : null;
+    }
+
+    /// <summary>Create a new construction row from a template, with a unique name.</summary>
+    public JsonNode? CreateConstructionRow(JsonNode templateRow, string newName)
+    {
+        var clone = JsonNode.Parse(templateRow.ToJsonString());
+        if (clone == null) return null;
+        clone["Name"] = JsonValue.Create(newName);
+        return clone;
+    }
+
+    /// <summary>Create a new construction recipe row.</summary>
+    public JsonNode? CreateConstructionRecipeRow(JsonNode templateRow, string newName)
+        => CreateConstructionRow(templateRow, newName);
+
+    /// <summary>Create a new item recipe row.</summary>
+    public JsonNode? CreateItemRecipeRow(JsonNode templateRow, string newName)
+        => CreateConstructionRow(templateRow, newName);
+
+    /// <summary>Add a string table entry to a string table JSON.</summary>
+    public bool AddStringTableEntry(JsonNode root, string key, string value)
+    {
+        var data = root["Exports"]?[0]?["Table"]?["Data"] as JsonArray;
+        if (data == null) return false;
+
+        // Check if key already exists
+        if (data.Any(r => r?["Name"]?.GetValue<string>() == key))
+            return false;
+
+        var entry = new JsonObject
+        {
+            ["Name"] = key,
+            ["Value"] = new JsonArray
+            {
+                new JsonObject
+                {
+                    ["Name"] = "SourceString",
+                    ["Value"] = value,
+                },
+            },
+        };
+        data.Add(entry);
+        return true;
+    }
+
+    /// <summary>Build a required materials array for a recipe.</summary>
+    public JsonArray BuildRequiredMaterials(IEnumerable<(string Material, int Amount)> materials)
+    {
+        var arr = new JsonArray();
+        foreach (var (material, amount) in materials)
+        {
+            arr.Add(new JsonObject
+            {
+                ["Name"] = material,
+                ["Value"] = new JsonArray
+                {
+                    new JsonObject { ["Name"] = "ItemDefinition", ["Value"] = material },
+                    new JsonObject { ["Name"] = "Amount", ["Value"] = amount },
+                },
+            });
+        }
+        return arr;
+    }
+
+    /// <summary>Build a crafting stations array.</summary>
+    public JsonArray BuildCraftingStations(IEnumerable<string> stations)
+    {
+        var arr = new JsonArray();
+        foreach (var station in stations)
+            arr.Add(JsonValue.Create(station));
+        return arr;
+    }
+
+    /// <summary>Build an unlock condition struct.</summary>
+    public JsonObject BuildUnlockCondition(string unlockType, string? requiredItem = null)
+    {
+        return new JsonObject
+        {
+            ["Name"] = "UnlockCondition",
+            ["Value"] = new JsonArray
+            {
+                new JsonObject { ["Name"] = "UnlockType", ["Value"] = unlockType },
+                new JsonObject { ["Name"] = "RequiredItem", ["Value"] = requiredItem ?? "" },
+            },
+        };
+    }
+
     /// <summary>Clone an existing row with a new name.</summary>
     public JsonNode? CloneRow(JsonNode root, string sourceRowName, string newRowName)
     {

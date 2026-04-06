@@ -36,6 +36,7 @@ public partial class App : Application
         services.AddSingleton<DefinitionManagerService>();
         services.AddSingleton<CategoryDataService>();
         services.AddSingleton<DiffService>();
+        services.AddSingleton<BuildingsDataService>();
 
         // ViewModels (BuildingsViewModel created in MainWindow with mode parameter)
         services.AddTransient<MainViewModel>();

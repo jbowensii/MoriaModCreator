@@ -102,6 +102,50 @@ public class ConfigService
         return !string.IsNullOrEmpty(gamePath) && Directory.Exists(gamePath);
     }
 
+    /// <summary>Validate all config paths exist.</summary>
+    public List<string> ValidateConfig()
+    {
+        var errors = new List<string>();
+        var gamePath = GetGameInstallPath();
+        if (string.IsNullOrEmpty(gamePath) || !Directory.Exists(gamePath))
+            errors.Add("Game install path is not configured or does not exist");
+        if (!File.Exists(RetocExePath))
+            errors.Add("retoc.exe not found in utilities directory");
+        if (!File.Exists(UAssetGuiExePath))
+            errors.Add("UAssetGUI.exe not found in utilities directory");
+        return errors;
+    }
+
+    /// <summary>Check if a Steam install exists.</summary>
+    public static string? CheckSteamPath()
+    {
+        var paths = new[]
+        {
+            @"C:\Program Files (x86)\Steam\steamapps\common\Return to Moria",
+            @"C:\Program Files\Steam\steamapps\common\Return to Moria",
+        };
+        return paths.FirstOrDefault(Directory.Exists);
+    }
+
+    /// <summary>Check if an Epic Games install exists.</summary>
+    public static string? CheckEpicPath()
+    {
+        var path = @"C:\Program Files\Epic Games\ReturnToMoria";
+        return Directory.Exists(path) ? path : null;
+    }
+
+    /// <summary>Get all available game install options.</summary>
+    public static List<(string Name, string Path)> GetAvailableInstallOptions()
+    {
+        var options = new List<(string, string)>();
+        var epic = CheckEpicPath();
+        if (epic != null) options.Add(("Epic Games", epic));
+        var steam = CheckSteamPath();
+        if (steam != null) options.Add(("Steam", steam));
+        options.Add(("Custom", ""));
+        return options;
+    }
+
     public string? GetGamePaksPath()
     {
         var gamePath = GetGameInstallPath();
