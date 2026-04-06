@@ -32,6 +32,8 @@ public partial class App : Application
         services.AddSingleton<BuildService>();
         services.AddSingleton<PrebuiltModService>();
         services.AddSingleton<ImportService>();
+        services.AddSingleton<ObjectTemplateService>();
+        services.AddSingleton<DefinitionManagerService>();
 
         // ViewModels
         services.AddTransient<MainViewModel>();
