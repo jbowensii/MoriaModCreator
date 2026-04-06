@@ -3,11 +3,11 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        xmlns:vm="clr-namespace:MoriaMODCreator.ViewModels"
+        xmlns:views="clr-namespace:MoriaMODCreator.Views"
+        xmlns:local="clr-namespace:MoriaMODCreator"
         mc:Ignorable="d"
-        d:DataContext="{d:DesignInstance vm:MainViewModel}"
-        Title="{Binding Title}"
-        Height="900" Width="500"
+        Title="Moria MOD Creator"
+        Height="900" Width="520"
         MinHeight="700" MinWidth="450"
         WindowStartupLocation="CenterScreen"
         Background="{StaticResource BackgroundBrush}">
@@ -19,71 +19,55 @@
         </Grid.RowDefinitions>
 
         <!-- Header -->
-        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="20,15,20,5">
-            <!-- App icon placeholder -->
-            <TextBlock Text="&#x2692;" FontSize="36" VerticalAlignment="Center" Margin="0,0,12,0"
-                       Foreground="{StaticResource AccentBrush}"/>
-            <TextBlock Text="Moria MOD Creator" FontSize="28" FontWeight="Bold"
-                       VerticalAlignment="Center" Foreground="{StaticResource TextBrush}"/>
-        </StackPanel>
+        <Grid Grid.Row="0" Margin="20,15,20,5">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
 
-        <!-- Tab Control -->
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="&#x2692;" FontSize="36" VerticalAlignment="Center"
+                           Margin="0,0,12,0" Foreground="{StaticResource AccentBrush}"/>
+                <TextBlock Text="Moria MOD Creator" FontSize="28" FontWeight="Bold"
+                           VerticalAlignment="Center" Foreground="{StaticResource TextBrush}"/>
+            </StackPanel>
+
+            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                <Button Content="&#x2699;" Padding="8,4" FontSize="16"
+                        ToolTip="Settings" Background="Transparent"
+                        Click="OnSettingsClick"/>
+                <Button Content="&#x2753;" Padding="8,4" FontSize="16"
+                        ToolTip="About" Background="Transparent"
+                        Click="OnAboutClick" Margin="5,0,0,0"/>
+            </StackPanel>
+        </Grid>
+
+        <!-- Tab Control with real views -->
         <TabControl Grid.Row="1" Margin="10,5,10,10"
-                    SelectedIndex="{Binding SelectedTabIndex}"
                     Background="{StaticResource BackgroundBrush}">
 
-            <!-- Novice Mode Tab -->
             <TabItem Header="Novice Mode">
-                <Grid Background="{StaticResource BackgroundBrush}">
-                    <TextBlock Text="Novice Mode - Coming Soon"
-                               HorizontalAlignment="Center" VerticalAlignment="Center"
-                               FontSize="18" Foreground="{StaticResource TextSecondaryBrush}"/>
-                </Grid>
+                <views:NoviceView x:Name="NoviceTab"/>
             </TabItem>
 
-            <!-- Advanced Mode Tab -->
             <TabItem Header="Advanced Mode">
-                <Grid Background="{StaticResource BackgroundBrush}">
-                    <TextBlock Text="Advanced Mode - Coming Soon"
-                               HorizontalAlignment="Center" VerticalAlignment="Center"
-                               FontSize="18" Foreground="{StaticResource TextSecondaryBrush}"/>
-                </Grid>
+                <views:DefinitionsView x:Name="DefinitionsTab"/>
             </TabItem>
 
-            <!-- Change Secrets Tab -->
             <TabItem Header="Change Secrets">
-                <Grid Background="{StaticResource BackgroundBrush}">
-                    <TextBlock Text="Change Secrets - Coming Soon"
-                               HorizontalAlignment="Center" VerticalAlignment="Center"
-                               FontSize="18" Foreground="{StaticResource TextSecondaryBrush}"/>
-                </Grid>
+                <views:BuildingsView x:Name="SecretsTab"/>
             </TabItem>
 
-            <!-- Change Constructions Tab -->
             <TabItem Header="Change Constructions">
-                <Grid Background="{StaticResource BackgroundBrush}">
-                    <TextBlock Text="Change Constructions - Coming Soon"
-                               HorizontalAlignment="Center" VerticalAlignment="Center"
-                               FontSize="18" Foreground="{StaticResource TextSecondaryBrush}"/>
-                </Grid>
+                <views:BuildingsView x:Name="ConstructionsTab"/>
             </TabItem>
 
-            <!-- Object Editor Tab -->
             <TabItem Header="Object Editor">
-                <Grid Background="{StaticResource BackgroundBrush}">
-                    <TextBlock Text="Object Editor - Coming Soon"
-                               HorizontalAlignment="Center" VerticalAlignment="Center"
-                               FontSize="18" Foreground="{StaticResource TextSecondaryBrush}"/>
-                </Grid>
+                <views:PlaceholderView DataContext="{x:Static local:PlaceholderData.ObjectEditor}"/>
             </TabItem>
 
-            <!-- Create DEF Tab -->
             <TabItem Header="Create DEF">
-                <Grid Background="{StaticResource BackgroundBrush}">
-                    <TextBlock Text="Create DEF - Coming Soon"
-                               HorizontalAlignment="Center" VerticalAlignment="Center"
-                               FontSize="18" Foreground="{StaticResource TextSecondaryBrush}"/>
-                </Grid>
+                <views:PlaceholderView DataContext="{x:Static local:PlaceholderData.CreateDef}"/>
             </TabItem>
         </TabControl>
     </Grid>

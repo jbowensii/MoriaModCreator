@@ -30,16 +30,25 @@ public partial class App : Application
         services.AddSingleton<DefinitionService>();
         services.AddSingleton<JsonDataService>();
         services.AddSingleton<BuildService>();
+        services.AddSingleton<PrebuiltModService>();
 
         // ViewModels
         services.AddTransient<MainViewModel>();
+        services.AddTransient<NoviceViewModel>();
+        services.AddTransient<DefinitionsViewModel>();
+        services.AddTransient(sp => new BuildingsViewModel(
+            sp.GetRequiredService<ConfigService>(), "secrets"));
+        services.AddTransient(sp =>
+        {
+            // Named instance for constructions — use a factory key
+            var vm = new BuildingsViewModel(
+                sp.GetRequiredService<ConfigService>(), "constructions");
+            return vm;
+        });
 
         Services = services.BuildServiceProvider();
 
-        var mainWindow = new MainWindow
-        {
-            DataContext = Services.GetRequiredService<MainViewModel>()
-        };
+        var mainWindow = new MainWindow();
         mainWindow.Show();
     }
 }

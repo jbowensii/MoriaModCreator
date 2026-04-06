@@ -1,0 +1,44 @@
+<Window x:Class="MoriaMODCreator.Views.Dialogs.AboutDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="About Moria MOD Creator"
+        Height="350" Width="450"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        Background="{StaticResource BackgroundBrush}">
+
+    <Grid Margin="30">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0" Text="Moria MOD Creator" FontSize="24" FontWeight="Bold"
+                   Foreground="{StaticResource TextBrush}" HorizontalAlignment="Center"/>
+
+        <TextBlock Grid.Row="1" Text="Version 2.10.0  •  April 2026" FontSize="14"
+                   Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Center"
+                   Margin="0,8,0,0"/>
+
+        <TextBlock Grid.Row="2" FontSize="13" Foreground="{StaticResource TextBrush}"
+                   HorizontalAlignment="Center" Margin="0,20,0,0"
+                   TextAlignment="Center">
+            Created by John B Owens II
+            <LineBreak/>
+            Create DEF functionality by Sqitey
+        </TextBlock>
+
+        <TextBlock Grid.Row="3" FontSize="12" Foreground="{StaticResource AccentBrush}"
+                   HorizontalAlignment="Center" Margin="0,15,0,0"
+                   Cursor="Hand" TextDecorations="Underline"
+                   Text="https://github.com/jbowensii/MoriaModCreator"
+                   MouseDown="OnGitHubLink"/>
+
+        <Button Grid.Row="5" Content="Close" Padding="20,8"
+                HorizontalAlignment="Center" Click="OnClose"/>
+    </Grid>
+</Window>

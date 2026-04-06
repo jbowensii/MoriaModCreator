@@ -1,0 +1,142 @@
+<UserControl x:Class="MoriaMODCreator.Views.BuildingsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:MoriaMODCreator.ViewModels"
+             d:DataContext="{d:DesignInstance vm:BuildingsViewModel}"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             Background="{StaticResource BackgroundBrush}">
+
+    <Grid Margin="10">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Prefix selector -->
+        <Grid Grid.Row="0" Margin="0,0,0,10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock Text="{Binding ModeLabel}" FontSize="16" FontWeight="Bold"
+                       Foreground="{StaticResource TextBrush}" VerticalAlignment="Center"
+                       Margin="0,0,10,0"/>
+            <TextBox Grid.Column="1" Text="{Binding Prefix, UpdateSourceTrigger=PropertyChanged}"
+                     VerticalAlignment="Center"/>
+        </Grid>
+
+        <!-- Category buttons -->
+        <WrapPanel Grid.Row="1" Margin="0,0,0,10">
+            <Button Content="Buildings" Command="{Binding SelectCategoryCommand}" CommandParameter="Buildings"
+                    Margin="2" Padding="12,6" Background="#795548"/>
+            <Button Content="Weapons" Command="{Binding SelectCategoryCommand}" CommandParameter="Weapons"
+                    Margin="2" Padding="12,6" Background="#E65100"/>
+            <Button Content="Armor" Command="{Binding SelectCategoryCommand}" CommandParameter="Armor"
+                    Margin="2" Padding="12,6" Background="#1565C0"/>
+            <Button Content="Tools" Command="{Binding SelectCategoryCommand}" CommandParameter="Tools"
+                    Margin="2" Padding="12,6" Background="#2E7D32"/>
+            <Button Content="Flora" Command="{Binding SelectCategoryCommand}" CommandParameter="Flora"
+                    Margin="2" Padding="12,6" Background="#388E3C"/>
+            <Button Content="Loot" Command="{Binding SelectCategoryCommand}" CommandParameter="Loot"
+                    Margin="2" Padding="12,6" Background="#F57F17"/>
+            <Button Content="Items" Command="{Binding SelectCategoryCommand}" CommandParameter="Items"
+                    Margin="2" Padding="12,6" Background="#6A1B9A"/>
+            <Button Content="Ores" Command="{Binding SelectCategoryCommand}" CommandParameter="Ores"
+                    Margin="2" Padding="12,6" Background="#795548"/>
+        </WrapPanel>
+
+        <!-- Main content: item list + editor pane -->
+        <Grid Grid.Row="2">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="250"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Left: Item list -->
+            <Border Grid.Column="0" Background="{StaticResource SurfaceBrush}"
+                    CornerRadius="4" Margin="0,0,5,0" Padding="5">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <ItemsControl ItemsSource="{Binding Items}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Padding="4,3" Cursor="Hand">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <CheckBox IsChecked="{Binding IsChecked}" VerticalAlignment="Center"
+                                                  Margin="0,0,6,0"/>
+                                        <TextBlock Grid.Column="1" FontSize="12"
+                                                   Foreground="{StaticResource TextBrush}">
+                                            <TextBlock.Text>
+                                                <MultiBinding StringFormat="{}{0}">
+                                                    <Binding Path="DisplayName"/>
+                                                </MultiBinding>
+                                            </TextBlock.Text>
+                                            <TextBlock.InputBindings>
+                                                <MouseBinding MouseAction="LeftClick"
+                                                              Command="{Binding DataContext.SelectItemCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                              CommandParameter="{Binding}"/>
+                                            </TextBlock.InputBindings>
+                                        </TextBlock>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </Border>
+
+            <!-- Right: Editor pane -->
+            <Border Grid.Column="1" Background="{StaticResource SurfaceBrush}"
+                    CornerRadius="4" Margin="5,0,0,0" Padding="10">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0" Text="{Binding SelectedItem}" FontSize="16"
+                               FontWeight="Bold" Foreground="#FFD700" Margin="0,0,0,10"/>
+
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                        <ItemsControl ItemsSource="{Binding Fields}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Margin="0,0,0,8">
+                                        <TextBlock Text="{Binding Name}" FontSize="12"
+                                                   Foreground="{StaticResource TextSecondaryBrush}"/>
+                                        <TextBox Text="{Binding Value, UpdateSourceTrigger=PropertyChanged}"
+                                                 Margin="0,3,0,0"/>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+
+                    <Button Grid.Row="2" Content="Save" Command="{Binding SaveItemCommand}"
+                            Background="{StaticResource BuildBrush}" Padding="16,8"
+                            HorizontalAlignment="Right" Margin="0,10,0,0"/>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <!-- Build bar -->
+        <Grid Grid.Row="3" Margin="0,10,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock Text="{Binding BuildStatus}" VerticalAlignment="Center"
+                       Foreground="{StaticResource TextSecondaryBrush}"/>
+            <Button Grid.Column="1" Content="Build" Background="{StaticResource BuildBrush}"
+                    Command="{Binding BuildCommand}" Padding="20,8"/>
+        </Grid>
+    </Grid>
+</UserControl>
