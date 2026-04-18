@@ -64,39 +64,8 @@ public class DiffService
                 if (pName != null) origProps[pName] = prop!;
             }
 
-            // Compare properties
-            foreach (var editedProp in editedValues)
-            {
-                var propName = editedProp?["Name"]?.GetValue<string>();
-                if (propName == null) continue;
-
-                if (!origProps.TryGetValue(propName, out var origProp))
-                    continue;
-
-                // Check if it's a GameplayTagContainer
-                var structType = editedProp!["StructType"]?.GetValue<string>();
-                if (structType == "GameplayTagContainer")
-                {
-                    CompareTagContainers(diffs, rowName, propName, editedProp, origProp);
-                    continue;
-                }
-
-                // Compare values
-                var editedVal = editedProp["Value"]?.ToJsonString();
-                var origVal = origProp["Value"]?.ToJsonString();
-
-                if (editedVal != origVal)
-                {
-                    diffs.Add(new PropertyDiff
-                    {
-                        ItemName = rowName,
-                        PropertyPath = propName,
-                        NewValue = FormatValue(editedProp["Value"]),
-                        OriginalValue = FormatValue(origProp["Value"]),
-                        DiffType = DiffType.Change,
-                    });
-                }
-            }
+            // Recursively compare properties to find leaf-level changes
+            ComparePropertyArrays(diffs, rowName, "", editedValues, origProps);
         }
 
         return diffs;
@@ -104,43 +73,45 @@ public class DiffService
 
     /// <summary>Generate a .def XML file from a list of diffs.</summary>
     public string GenerateDefXml(
-        string title, string modFilePath, List<PropertyDiff> diffs)
+        string title, string modFilePath, List<PropertyDiff> diffs,
+        string? description = null, string? changeNote = null, bool includeComments = false)
     {
+        var desc = !string.IsNullOrEmpty(description)
+            ? description
+            : $"{diffs.Count} modifications to {Path.GetFileName(modFilePath)}";
+
         var root = new XElement("definition",
             new XElement("title", title),
             new XElement("author", "Moria MOD Creator"),
-            new XElement("description", $"{diffs.Count} modifications to {Path.GetFileName(modFilePath)}"));
+            new XElement("description", desc));
 
         var modElem = new XElement("mod", new XAttribute("file", modFilePath));
 
         foreach (var diff in diffs)
         {
-            switch (diff.DiffType)
+            XElement elem = diff.DiffType switch
             {
-                case DiffType.Change:
-                    var changeElem = new XElement("change",
-                        new XAttribute("item", diff.ItemName),
-                        new XAttribute("property", diff.PropertyPath),
-                        new XAttribute("value", diff.NewValue));
-                    if (!string.IsNullOrEmpty(diff.OriginalValue))
-                        changeElem.Add(new XAttribute("original", diff.OriginalValue));
-                    modElem.Add(changeElem);
-                    break;
-
-                case DiffType.Delete:
-                    modElem.Add(new XElement("delete",
-                        new XAttribute("item", diff.ItemName),
-                        new XAttribute("property", diff.PropertyPath),
-                        new XAttribute("value", diff.NewValue)));
-                    break;
-
-                case DiffType.AddTag:
-                    modElem.Add(new XElement("change",
-                        new XAttribute("item", diff.ItemName),
-                        new XAttribute("property", diff.PropertyPath),
-                        new XAttribute("value", diff.NewValue)));
-                    break;
-            }
+                DiffType.Change => new XElement("change",
+                    new XAttribute("item", diff.ItemName),
+                    new XAttribute("property", diff.PropertyPath),
+                    new XAttribute("value", diff.NewValue)),
+                DiffType.Delete => new XElement("delete",
+                    new XAttribute("item", diff.ItemName),
+                    new XAttribute("property", diff.PropertyPath),
+                    new XAttribute("value", diff.NewValue)),
+                DiffType.AddTag => new XElement("change",
+                    new XAttribute("item", diff.ItemName),
+                    new XAttribute("property", diff.PropertyPath),
+                    new XAttribute("value", diff.NewValue)),
+                _ => new XElement("change"),
+            };
+            if (diff.DiffType == DiffType.Change && !string.IsNullOrEmpty(diff.OriginalValue))
+                elem.Add(new XAttribute("original", diff.OriginalValue));
+            if (!string.IsNullOrEmpty(changeNote))
+                elem.Add(new XAttribute("note", changeNote));
+            if (includeComments)
+                modElem.Add(new XComment($" {diff.ItemName} → {diff.PropertyPath} "));
+            modElem.Add(elem);
         }
 
         root.Add(modElem);
@@ -176,7 +147,121 @@ public class DiffService
         return string.Join(Environment.NewLine, lines);
     }
 
-    // --- Private helpers ---
+    // --- Recursive deep comparison (matches Python find_differences) ---
+
+    /// <summary>
+    /// Recursively compare two property arrays, drilling into structs and arrays
+    /// to find specific leaf-level scalar changes with dot-path property names.
+    /// e.g., "DefaultRequiredMaterials[0].Count" with value "20" → "0"
+    /// </summary>
+    private void ComparePropertyArrays(
+        List<PropertyDiff> diffs, string itemName, string pathPrefix,
+        JsonArray editedProps, Dictionary<string, JsonNode> origProps)
+    {
+        foreach (var editedProp in editedProps)
+        {
+            var propName = editedProp?["Name"]?.GetValue<string>();
+            if (propName == null) continue;
+
+            if (!origProps.TryGetValue(propName, out var origProp))
+                continue;
+
+            var fullPath = string.IsNullOrEmpty(pathPrefix) ? propName : $"{pathPrefix}.{propName}";
+            var typeStr = editedProp!["$type"]?.GetValue<string>() ?? "";
+
+            // GameplayTagContainer — special handling
+            var structType = editedProp["StructType"]?.GetValue<string>();
+            if (structType == "GameplayTagContainer")
+            {
+                CompareTagContainers(diffs, itemName, fullPath, editedProp, origProp);
+                continue;
+            }
+
+            // Quick equality check — skip if identical
+            var editedJson = editedProp.ToJsonString();
+            var origJson = origProp.ToJsonString();
+            if (editedJson == origJson) continue;
+
+            var editedValue = editedProp["Value"];
+            var origValue = origProp["Value"];
+
+            // ArrayPropertyData — compare element by element
+            if (typeStr.Contains("ArrayPropertyData") &&
+                editedValue is JsonArray editedArr && origValue is JsonArray origArr)
+            {
+                var maxLen = Math.Max(editedArr.Count, origArr.Count);
+                for (int i = 0; i < maxLen; i++)
+                {
+                    if (i >= editedArr.Count || i >= origArr.Count)
+                    {
+                        // Array length changed
+                        diffs.Add(new PropertyDiff
+                        {
+                            ItemName = itemName,
+                            PropertyPath = $"{fullPath}[{i}]",
+                            NewValue = i < editedArr.Count ? FormatValue(editedArr[i]) : "(removed)",
+                            OriginalValue = i < origArr.Count ? FormatValue(origArr[i]) : "(added)",
+                            DiffType = DiffType.Change,
+                        });
+                        continue;
+                    }
+
+                    var editedElem = editedArr[i];
+                    var origElem = origArr[i];
+                    if (editedElem?.ToJsonString() == origElem?.ToJsonString()) continue;
+
+                    // If elements are struct-like (have Value array), recurse
+                    if (editedElem?["Value"] is JsonArray innerEdited && origElem?["Value"] is JsonArray innerOrig)
+                    {
+                        var innerOrigProps = new Dictionary<string, JsonNode>();
+                        foreach (var p in innerOrig)
+                        {
+                            var n = p?["Name"]?.GetValue<string>();
+                            if (n != null) innerOrigProps[n] = p!;
+                        }
+                        ComparePropertyArrays(diffs, itemName, $"{fullPath}[{i}]", innerEdited, innerOrigProps);
+                    }
+                    else
+                    {
+                        // Leaf-level array element change
+                        diffs.Add(new PropertyDiff
+                        {
+                            ItemName = itemName,
+                            PropertyPath = $"{fullPath}[{i}]",
+                            NewValue = FormatValue(editedElem),
+                            OriginalValue = FormatValue(origElem),
+                            DiffType = DiffType.Change,
+                        });
+                    }
+                }
+                continue;
+            }
+
+            // StructPropertyData — recurse into nested properties
+            if (typeStr.Contains("StructPropertyData") &&
+                editedValue is JsonArray editedStructProps && origValue is JsonArray origStructProps)
+            {
+                var innerOrigProps = new Dictionary<string, JsonNode>();
+                foreach (var p in origStructProps)
+                {
+                    var n = p?["Name"]?.GetValue<string>();
+                    if (n != null) innerOrigProps[n] = p!;
+                }
+                ComparePropertyArrays(diffs, itemName, fullPath, editedStructProps, innerOrigProps);
+                continue;
+            }
+
+            // Scalar change — leaf level
+            diffs.Add(new PropertyDiff
+            {
+                ItemName = itemName,
+                PropertyPath = fullPath,
+                NewValue = FormatValue(editedValue),
+                OriginalValue = FormatValue(origValue),
+                DiffType = DiffType.Change,
+            });
+        }
+    }
 
     private void CompareTagContainers(
         List<PropertyDiff> diffs, string rowName, string propName,
@@ -213,17 +298,105 @@ public class DiffService
         }
     }
 
-    private static string FormatValue(JsonNode? value)
+    internal static string FormatValue(JsonNode? value)
     {
         if (value == null) return "";
-        return value.GetValueKind() switch
+        var kind = value.GetValueKind();
+
+        // Scalar types — return directly
+        if (kind is System.Text.Json.JsonValueKind.String) return value.GetValue<string>();
+        if (kind is System.Text.Json.JsonValueKind.Number) return value.ToString();
+        if (kind is System.Text.Json.JsonValueKind.True) return "True";
+        if (kind is System.Text.Json.JsonValueKind.False) return "False";
+
+        // UAssetAPI property object — extract the scalar Value inside
+        if (value is JsonObject obj)
         {
-            System.Text.Json.JsonValueKind.String => value.GetValue<string>(),
-            System.Text.Json.JsonValueKind.Number => value.ToString(),
-            System.Text.Json.JsonValueKind.True => "True",
-            System.Text.Json.JsonValueKind.False => "False",
-            _ => value.ToJsonString(),
-        };
+            // SoftObjectPath: { "AssetPath": { "AssetName": "X", ... }, ... }
+            var assetName = obj["AssetPath"]?["AssetName"];
+            if (assetName != null && assetName.GetValueKind() == System.Text.Json.JsonValueKind.String)
+                return assetName.GetValue<string>();
+
+            // DataTableRowHandle-style: has RowName directly at top level
+            if (obj["RowName"] is JsonNode rn)
+                return rn.GetValueKind() == System.Text.Json.JsonValueKind.String
+                    ? rn.GetValue<string>() : rn.ToString();
+
+            var inner = obj["Value"];
+            if (inner != null)
+            {
+                var innerKind = inner.GetValueKind();
+
+                // Scalar Value — extract
+                if (innerKind is System.Text.Json.JsonValueKind.String
+                    or System.Text.Json.JsonValueKind.Number
+                    or System.Text.Json.JsonValueKind.True
+                    or System.Text.Json.JsonValueKind.False)
+                {
+                    return inner.ToString();
+                }
+
+                // Struct Value (array of inner props) — extract RowName, AssetName, or key scalars
+                if (inner is JsonArray innerArr)
+                {
+                    // Try to find RowName first (DataTableRowHandle/ItemHandle pattern)
+                    foreach (var p in innerArr)
+                    {
+                        var pName = p?["Name"]?.GetValue<string>();
+                        if (pName == "RowName")
+                            return FormatValue(p!["Value"]);
+                    }
+
+                    // Otherwise summarize scalar props as "k=v, k=v"
+                    var parts = new List<string>();
+                    foreach (var p in innerArr)
+                    {
+                        var pName = p?["Name"]?.GetValue<string>();
+                        if (pName == null) continue;
+                        var pVal = FormatValue(p!["Value"]);
+                        if (!string.IsNullOrEmpty(pVal) && pVal.Length < 40)
+                            parts.Add($"{pName}={pVal}");
+                        if (parts.Count >= 4) break;
+                    }
+                    if (parts.Count > 0)
+                        return string.Join(", ", parts);
+                }
+
+                // Nested SoftObjectPath inside Value
+                if (inner is JsonObject innerObj)
+                {
+                    var an = innerObj["AssetPath"]?["AssetName"];
+                    if (an != null && an.GetValueKind() == System.Text.Json.JsonValueKind.String)
+                        return an.GetValue<string>();
+                }
+            }
+
+            // CultureInvariantString (TextPropertyData)
+            var cis = obj["CultureInvariantString"];
+            if (cis != null && cis.GetValueKind() == System.Text.Json.JsonValueKind.String)
+                return cis.GetValue<string>();
+        }
+
+        // Array — try to summarize briefly
+        if (value is JsonArray arr)
+        {
+            if (arr.Count == 0) return "";
+            if (arr.Count == 1) return FormatValue(arr[0]);
+            // For small arrays of simple values, join them
+            var simpleItems = new List<string>();
+            foreach (var item in arr)
+            {
+                var s = FormatValue(item);
+                if (!string.IsNullOrEmpty(s) && s.Length < 40)
+                    simpleItems.Add(s);
+            }
+            if (simpleItems.Count > 0)
+                return string.Join(", ", simpleItems.Take(10));
+        }
+
+        // Fallback — truncated JSON
+        var json = value.ToJsonString();
+        return json.Length > 120 ? json[..120] + "..." : json;
     }
 }
 

@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using MoriaMODCreator.Services;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
@@ -66,5 +67,100 @@ public class DiffServiceTests
     {
         var ini = _service.GenerateIniContent("Test", "Author", ["x.def"], false);
         Assert.Contains("include_secrets = False", ini);
+    }
+
+    // =========================================================================
+    // FormatValue — avoid JSON blobs for struct/SoftObject array elements
+    // =========================================================================
+
+    [Fact]
+    public void FormatValue_ExtractsRowNameFromDataTableRowHandleStruct()
+    {
+        // A struct property element with an inner RowName (ItemHandle / MaterialHandle pattern)
+        var node = JsonNode.Parse("""
+            {
+              "$type": "StructPropertyData",
+              "Name": "MaterialHandle",
+              "StructType": "DataTableRowHandle",
+              "Value": [
+                { "Name": "DataTable", "Value": "DT_Items" },
+                { "Name": "RowName", "Value": "Item.Wood" }
+              ]
+            }
+            """);
+
+        var result = DiffService.FormatValue(node);
+        Assert.Equal("Item.Wood", result);
+    }
+
+    [Fact]
+    public void FormatValue_ExtractsAssetNameFromSoftObjectPath()
+    {
+        var node = JsonNode.Parse("""
+            {
+              "$type": "SoftObjectPropertyData",
+              "Name": "Actor",
+              "Value": { "AssetPath": { "AssetName": "BP_Sword_C", "PackageName": "..." } }
+            }
+            """);
+
+        var result = DiffService.FormatValue(node);
+        Assert.Equal("BP_Sword_C", result);
+    }
+
+    [Fact]
+    public void FormatValue_ExtractsCultureInvariantStringFromText()
+    {
+        var node = JsonNode.Parse("""
+            {
+              "$type": "TextPropertyData",
+              "Name": "DisplayName",
+              "CultureInvariantString": "Iron Sword",
+              "Value": { "History": {} }
+            }
+            """);
+
+        var result = DiffService.FormatValue(node);
+        Assert.Equal("Iron Sword", result);
+    }
+
+    [Fact]
+    public void FormatValue_DoesNotEmitJsonBlobForKnownStructs()
+    {
+        var node = JsonNode.Parse("""
+            {
+              "$type": "StructPropertyData",
+              "Name": "Handle",
+              "Value": [ { "Name": "RowName", "Value": "Building.Stone" } ]
+            }
+            """);
+
+        var result = DiffService.FormatValue(node);
+        Assert.Equal("Building.Stone", result);
+        Assert.DoesNotContain("\"$type\"", result);
+    }
+
+    [Fact]
+    public void GenerateDefXml_EmbedsDescriptionWhenProvided()
+    {
+        var diffs = new List<PropertyDiff>
+        {
+            new() { ItemName = "Sword", PropertyPath = "Damage", NewValue = "150", DiffType = DiffType.Change },
+        };
+        var xml = _service.GenerateDefXml("Test Mod", "DT_Weapons.json", diffs,
+            description: "Buffed sword damage", changeNote: "balance pass");
+        Assert.Contains("<description>Buffed sword damage</description>", xml);
+        Assert.Contains("note=\"balance pass\"", xml);
+    }
+
+    [Fact]
+    public void GenerateDefXml_IncludesCommentsWhenRequested()
+    {
+        var diffs = new List<PropertyDiff>
+        {
+            new() { ItemName = "Axe", PropertyPath = "Weight", NewValue = "10", OriginalValue = "5", DiffType = DiffType.Change },
+        };
+        var xml = _service.GenerateDefXml("Test", "DT.json", diffs, includeComments: true);
+        Assert.Contains("<!--", xml);
     }
 }

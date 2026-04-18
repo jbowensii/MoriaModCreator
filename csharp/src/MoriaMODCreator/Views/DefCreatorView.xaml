@@ -10,15 +10,19 @@
 
     <Grid>
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="280"/>
-            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="1*" MinWidth="200"/>
+            <ColumnDefinition Width="Auto"/>
+            <ColumnDefinition Width="3*"/>
         </Grid.ColumnDefinitions>
 
-        <!-- LEFT: Extracted files + controls -->
+        <!-- LEFT: Controls, folders, file list -->
         <Border Grid.Column="0" Background="{StaticResource SurfaceBrush}"
-                CornerRadius="6" Margin="0,0,5,0">
+                CornerRadius="6" Margin="0,0,0,0">
             <Grid>
                 <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
@@ -28,64 +32,163 @@
                 <TextBlock Grid.Row="0" Text="Create DEF" FontSize="14" FontWeight="Bold"
                            Foreground="{StaticResource TextBrush}" Margin="10,10,10,5"/>
 
-                <Button Grid.Row="1" Content="Extract Game Files"
-                        Command="{Binding ExtractCommand}"
-                        Background="{StaticResource ImportBrush}"
-                        Padding="12,6" Margin="10,5"/>
+                <!-- Mod folder -->
+                <Grid Grid.Row="1" Margin="10,5,10,3">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBox Text="{Binding ModFolderPath}" FontSize="10" IsReadOnly="True"/>
+                    <Button Grid.Column="1" Content="Mod..." Command="{Binding BrowseModFolderCommand}"
+                            Padding="6,3" FontSize="10" Margin="3,0,0,0"/>
+                </Grid>
 
-                <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" Margin="5,0">
-                    <ItemsControl ItemsSource="{Binding ExtractedFiles}">
+                <!-- Original folder -->
+                <Grid Grid.Row="2" Margin="10,0,10,3">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBox Text="{Binding OrigFolderPath}" FontSize="10" IsReadOnly="True"/>
+                    <Button Grid.Column="1" Content="Orig..." Command="{Binding BrowseOrigFolderCommand}"
+                            Padding="6,3" FontSize="10" Margin="3,0,0,0"/>
+                </Grid>
+
+                <!-- Metadata -->
+                <StackPanel Grid.Row="3" Margin="10,5,10,3">
+                    <Grid Margin="0,0,0,3">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="50"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Title:" FontSize="10" Foreground="{StaticResource TextSecondaryBrush}"
+                                   VerticalAlignment="Center"/>
+                        <TextBox Grid.Column="1" Text="{Binding DefTitle, UpdateSourceTrigger=PropertyChanged}"
+                                 FontSize="10"/>
+                    </Grid>
+                    <Grid Margin="0,0,0,3">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="50"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Author:" FontSize="10" Foreground="{StaticResource TextSecondaryBrush}"
+                                   VerticalAlignment="Center"/>
+                        <TextBox Grid.Column="1" Text="{Binding DefAuthor, UpdateSourceTrigger=PropertyChanged}"
+                                 FontSize="10"/>
+                    </Grid>
+                    <Grid Margin="0,0,0,3">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="50"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Desc:" FontSize="10" Foreground="{StaticResource TextSecondaryBrush}"
+                                   VerticalAlignment="Center"/>
+                        <TextBox Grid.Column="1" Text="{Binding DefDescription, UpdateSourceTrigger=PropertyChanged}"
+                                 FontSize="10"/>
+                    </Grid>
+                    <Grid Margin="0,0,0,3">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="50"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Note:" FontSize="10" Foreground="{StaticResource TextSecondaryBrush}"
+                                   VerticalAlignment="Center"
+                                   ToolTip="Default note applied to each change"/>
+                        <TextBox Grid.Column="1" Text="{Binding DefChangeNote, UpdateSourceTrigger=PropertyChanged}"
+                                 FontSize="10"/>
+                    </Grid>
+                    <CheckBox Content="Include comments in generated .def files"
+                              IsChecked="{Binding IncludeComments}" FontSize="10" Margin="0,4,0,0"
+                              Foreground="{StaticResource TextBrush}"/>
+                </StackPanel>
+
+                <!-- Scan & Compare button -->
+                <Button Grid.Row="4" Content="Scan &amp; Compare" Command="{Binding ScanAndCompareCommand}"
+                        Background="{StaticResource ImportBrush}" Padding="12,6"
+                        Margin="10,5,10,5" FontSize="12"/>
+
+                <!-- Generated files list -->
+                <ScrollViewer Grid.Row="5" VerticalScrollBarVisibility="Auto" Margin="5,0">
+                    <ItemsControl ItemsSource="{Binding GeneratedFiles}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
-                                <Border Padding="6,3" Cursor="Hand">
-                                    <TextBlock Text="{Binding}" FontSize="11"
-                                               Foreground="#FFD700" TextTrimming="CharacterEllipsis">
-                                        <TextBlock.InputBindings>
-                                            <MouseBinding MouseAction="LeftClick"
-                                                          Command="{Binding DataContext.CompareFileCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"/>
-                                        </TextBlock.InputBindings>
-                                    </TextBlock>
+                                <Border Style="{StaticResource ListItemBorder}" Padding="6,3">
+                                    <Border.InputBindings>
+                                        <MouseBinding MouseAction="LeftClick"
+                                                      Command="{Binding DataContext.SelectGeneratedFileCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                      CommandParameter="{Binding}"/>
+                                    </Border.InputBindings>
+                                    <StackPanel>
+                                        <TextBlock Text="{Binding FileName}" FontSize="11" Foreground="#FFD700"/>
+                                        <TextBlock FontSize="9" Foreground="{StaticResource TextSecondaryBrush}">
+                                            <Run Text="{Binding Category}"/>
+                                            <Run Text=" — "/>
+                                            <Run Text="{Binding DiffCount}"/>
+                                            <Run Text=" changes"/>
+                                        </TextBlock>
+                                    </StackPanel>
                                 </Border>
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
                 </ScrollViewer>
 
-                <StackPanel Grid.Row="3" Margin="10,5">
-                    <Button Content="Compare" Command="{Binding CompareFileCommand}"
-                            Padding="12,6" Margin="0,2"/>
-                    <Button Content="Generate DEF" Command="{Binding GenerateDefCommand}"
-                            Background="{StaticResource AccentBrush}"
-                            Padding="12,6" Margin="0,2"/>
-                    <Button Content="Save DEF" Command="{Binding SaveDefCommand}"
-                            Background="{StaticResource BuildBrush}"
-                            Padding="12,6" Margin="0,2"/>
-                </StackPanel>
+                <!-- Save All button -->
+                <Button Grid.Row="6" Content="Save All .DEF Files" Command="{Binding SaveAllFilesCommand}"
+                        Background="{StaticResource BuildBrush}" Padding="12,6"
+                        Margin="10,5,10,10" FontSize="12"/>
             </Grid>
         </Border>
 
-        <!-- RIGHT: DEF output / differences -->
-        <Border Grid.Column="1" Background="{StaticResource SurfaceBrush}"
+        <!-- Resizable splitter -->
+        <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Center"
+                      VerticalAlignment="Stretch" Background="Transparent" Cursor="SizeWE"/>
+
+        <!-- RIGHT: Preview + Log -->
+        <Border Grid.Column="2" Background="{StaticResource SurfaceBrush}"
                 CornerRadius="6" Margin="5,0,0,0">
             <Grid Margin="15">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
                     <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="120"/>
+                    <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
 
-                <TextBlock Grid.Row="0" Text="DEF Output" FontSize="14" FontWeight="Bold"
+                <TextBlock Grid.Row="0" Text="DEF Preview" FontSize="14" FontWeight="Bold"
                            Foreground="{StaticResource TextBrush}" Margin="0,0,0,10"/>
 
-                <TextBox Grid.Row="1" Text="{Binding DefOutput}" IsReadOnly="True"
+                <!-- DEF output preview -->
+                <TextBox Grid.Row="1" Text="{Binding DefOutput, UpdateSourceTrigger=PropertyChanged}"
                          AcceptsReturn="True" TextWrapping="Wrap"
                          VerticalScrollBarVisibility="Auto"
                          FontFamily="Consolas" FontSize="11"
                          Background="{StaticResource BackgroundBrush}"
                          Foreground="{StaticResource TextBrush}"/>
 
-                <TextBlock Grid.Row="2" Text="{Binding Status}" FontSize="12"
-                           Foreground="{StaticResource TextSecondaryBrush}" Margin="0,5,0,0"/>
+                <TextBlock Grid.Row="2" Text="Log" FontSize="12" FontWeight="Bold"
+                           Foreground="{StaticResource TextBrush}" Margin="0,10,0,5"/>
+
+                <!-- Log output -->
+                <TextBox Grid.Row="3" Text="{Binding LogText, Mode=OneWay}"
+                         IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap"
+                         VerticalScrollBarVisibility="Auto"
+                         FontFamily="Consolas" FontSize="10"
+                         Background="{StaticResource BackgroundBrush}"
+                         Foreground="{StaticResource TextSecondaryBrush}"/>
+
+                <!-- Progress + Status -->
+                <Grid Grid.Row="4" Margin="0,5,0,0">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <ProgressBar Grid.Row="0" Value="{Binding Progress}" Maximum="1" Height="6"
+                                 Visibility="{Binding IsWorking, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                    <TextBlock Grid.Row="1" Text="{Binding Status}" FontSize="12"
+                               Foreground="{StaticResource TextSecondaryBrush}" Margin="0,3,0,0"/>
+                </Grid>
             </Grid>
         </Border>
     </Grid>
