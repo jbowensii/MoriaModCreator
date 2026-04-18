@@ -30,3 +30,23 @@ dotnet_diagnostic.CA1849.severity = suggestion
 # Culture-sensitive ops — audit per-site, don't flag all.
 dotnet_diagnostic.CA1307.severity = suggestion
 dotnet_diagnostic.CA1308.severity = suggestion
+
+# ------------------------------------------------------------
+# Broad catches are intentional across the codebase:
+# - WPF event handlers / ViewModel commands use broad catches so a single
+#   service fault never crashes the UI; critical paths already log via ILogger.
+# - Startup scans, cache cleanup, and best-effort fallbacks deliberately
+#   continue on failure with logged warnings where meaningful.
+# New catch blocks introduced during review should still be considered —
+# kept at suggestion so IDE surfaces the rule without failing the build.
+dotnet_diagnostic.CA1031.severity = suggestion
+
+# ------------------------------------------------------------
+# Test helpers construct known-safe zips; production zip extraction is
+# guarded by ImportService.SafeCombine (see CA5389 fix).
+dotnet_diagnostic.CA5389.severity = suggestion
+
+# ------------------------------------------------------------
+# CA1859 concrete-type perf hints — test helpers return JsonNode which is
+# ergonomic for the test framework; perf impact is irrelevant in tests.
+dotnet_diagnostic.CA1859.severity = suggestion
