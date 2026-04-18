@@ -51,3 +51,8 @@ logs/
 sign_config.py
 *.pfx
 *.p12
+bin/
+obj/
+*.user
+*.suo
+.vs/
