@@ -1,0 +1,48 @@
+<Window x:Class="MoriaMODCreator.Views.Dialogs.ChangeConstructionsDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Change Constructions Prefix" Height="260" Width="420"
+        WindowStartupLocation="CenterOwner" ResizeMode="NoResize"
+        Background="{StaticResource BackgroundBrush}">
+    <Grid Margin="15">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0" Text="Change Constructions Prefix" FontSize="14" FontWeight="Bold"
+                   Foreground="{StaticResource TextBrush}" Margin="0,0,0,10"/>
+
+        <Grid Grid.Row="1" Margin="0,0,0,8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="110"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock Text="Existing:" FontSize="12" VerticalAlignment="Center"
+                       Foreground="{StaticResource TextSecondaryBrush}"/>
+            <ComboBox Grid.Column="1" x:Name="ExistingCombo" FontSize="12"/>
+        </Grid>
+
+        <Grid Grid.Row="2" Margin="0,0,0,8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="110"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock Text="Or new prefix:" FontSize="12" VerticalAlignment="Center"
+                       Foreground="{StaticResource TextSecondaryBrush}"/>
+            <TextBox Grid.Column="1" x:Name="NewPrefixBox" FontSize="12"
+                     KeyDown="OnNewPrefixKeyDown"/>
+        </Grid>
+
+        <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
+            <Button Content="Delete" Click="OnDelete" Padding="12,6" FontSize="12"
+                    Background="{StaticResource DeleteBrush}" Margin="0,0,6,0"/>
+            <Button Content="Set" Click="OnSet" Padding="14,6" FontSize="12"
+                    Background="{StaticResource BuildBrush}" Margin="0,0,6,0"/>
+            <Button Content="Cancel" Click="OnCancel" Padding="12,6" FontSize="12"/>
+        </StackPanel>
+    </Grid>
+</Window>
