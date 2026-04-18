@@ -41,6 +41,19 @@ public class ImportService
     }
 
     /// <summary>
+    /// Combine a zip-entry relative path with a destination root, verifying the result
+    /// stays inside the root. Guards against zip-slip (entries like "..\..\etc\passwd").
+    /// </summary>
+    private static string SafeCombine(string root, string relative)
+    {
+        var dest = Path.GetFullPath(Path.Combine(root, relative));
+        var rootFull = Path.GetFullPath(root) + Path.DirectorySeparatorChar;
+        if (!dest.StartsWith(rootFull, StringComparison.OrdinalIgnoreCase))
+            throw new IOException($"Zip entry escapes destination: {relative}");
+        return dest;
+    }
+
+    /// <summary>
     /// Run the complete combined import (game files + secrets).
     /// </summary>
     /// <param name="progress">Progress reporter</param>
@@ -346,11 +359,11 @@ public class ImportService
 
                 if (string.IsNullOrEmpty(entry.Name))
                 {
-                    Directory.CreateDirectory(Path.Combine(githubDir, relativePath));
+                    Directory.CreateDirectory(SafeCombine(githubDir, relativePath));
                 }
                 else
                 {
-                    var destPath = Path.Combine(githubDir, relativePath);
+                    var destPath = SafeCombine(githubDir, relativePath);
                     Directory.CreateDirectory(Path.GetDirectoryName(destPath)!);
                     entry.ExtractToFile(destPath, overwrite: true);
                     filesExtracted++;
@@ -470,7 +483,7 @@ public class ImportService
                     if (string.IsNullOrEmpty(entry.Name)) continue;
                     if (!companionNames.Contains(entry.Name)) continue;
 
-                    var destPath = Path.Combine(companionDir, entry.Name);
+                    var destPath = SafeCombine(companionDir, entry.Name);
                     entry.ExtractToFile(destPath, overwrite: true);
                     extracted++;
                     _logger.LogInformation("Extracted companion pak: {Name} from {Zip}",
@@ -815,7 +828,14 @@ public class ImportService
                         paths.Add(DefinitionService.NormalizePath(filePath));
                 }
             }
-            catch { /* skip invalid XML */ }
+            catch (System.Xml.XmlException ex)
+            {
+                _logger.LogWarning(ex, "Skipping invalid .def XML file: {File}", xmlFile);
+            }
+            catch (System.IO.IOException ex)
+            {
+                _logger.LogWarning(ex, "Failed to read .def file: {File}", xmlFile);
+            }
         }
 
         return paths;
