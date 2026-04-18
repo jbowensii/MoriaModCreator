@@ -1,148 +1,146 @@
 # Moria MOD Creator
 
-A desktop application for creating mods for **Lord of the Rings: Return to Moria**.
+A native Windows desktop application for creating mods for **Lord of the Rings: Return to Moria**.
 
-![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)
+![.NET](https://img.shields.io/badge/.NET-10-512BD4.svg)
+![Framework](https://img.shields.io/badge/WPF-Windows-blue.svg)
 ![License](https://img.shields.io/badge/License-MIT-green.svg)
-![Version](https://img.shields.io/badge/Version-1.1-orange.svg)
+![Version](https://img.shields.io/badge/Version-3.0.0-orange.svg)
 
 ## Overview
 
 Moria MOD Creator simplifies the process of modding Return to Moria by providing a graphical interface to:
-- Import and extract game files
-- Convert game assets to editable JSON format
+- Import and extract game files (FModel / retoc integration)
+- Convert game assets to editable JSON format (UAssetGUI)
 - Create mod definitions that specify what values to change
-- Edit Buildings, Constructions, and Secrets with dedicated tabs
+- Edit Buildings, Constructions, Secrets, and Definitions through dedicated tabs
 - Build complete mod packages ready for use
+
+> **v3.0.0** is a ground-up rewrite from Python / CustomTkinter to C# / WPF / .NET 10. Faster, native, self-contained — no Python runtime required. The Python implementation is preserved for reference at `old-python-src/`.
 
 ## Features
 
-- **Novice / Advanced UI Modes** - Simplified card-based mod builder for beginners, full editor for power users
-- **Buildings Tab** - Edit item properties, stack sizes, durability, loot tables, and more
-- **Constructions Tab** - Edit construction recipes, costs, building properties
-- **Secrets Tab** - Edit secrets and hidden game content
-- **File Import** - Import game files using FModel integration
-- **JSON Conversion** - Convert `.uasset` files to editable JSON format using UAssetGUI
-- **Mod Definition Editor** - Create and manage `.def` files that define mod changes
-- **Build System** - Process definitions, modify JSON, convert back to game format, and package as a zip
-- **Prebuilt Mods** - 16 ready-made mods replicating popular Nexus mods
-- **Filterable Dropdowns** - Type-to-filter combo boxes for quick item selection
-- **Combined Import** - Import constructions and secrets from game data with one dialog
+- **Novice / Advanced UI Modes** — card-based mod builder for beginners, full editor for power users
+- **Mod Builder (Definitions)** — browse and toggle definition files, edit individual changes with original-value lookup
+- **Change Secrets / Change Constructions** — edit recipes, stats, materials, unlocks, tags across 8 categories (Buildings, Weapons, Armor, Tools, Flora, Loot, Items, Ores)
+- **Create DEF** — compare modded vs vanilla assets and auto-generate `.def` XML files with metadata, per-change notes, and optional inline comments
+- **Import** — extract game files via FModel, convert `.uasset` → JSON via UAssetGUI
+- **Build System** — scan definitions → apply changes to JSON → convert back to `.uasset` → package to `.pak`/`.utoc`/`.ucas` → zip
+- **Prebuilt Mods** — 18 ready-made mod templates bundled with the installer
+- **Global dark theme** — custom WPF ControlTemplates on every control (ComboBox, TextBox watermark, etc.)
+- **Structured logging** — `%APPDATA%\MoriaMODCreator\MoriaMODCreator.log`
+- **Global crash handling** — unhandled exceptions show a copy-to-clipboard dialog instead of silent termination
+- **Signed binaries** — exe + installer signed via SSL.com eSigner
 
 ## Installation
 
 ### Windows Installer (Recommended)
 
-Download the latest `MoriaMODCreator_Setup_v1.1.exe` from [GitHub Releases](https://github.com/jbowensii/MoriaModCreator/releases). The installer bundles all required utilities and definition files.
+Download `MoriaMODCreator_Setup_v3.0.0.exe` from the [latest GitHub release](https://github.com/jbowensii/MoriaModCreator/releases/latest). The installer:
+
+- Deploys the signed `MoriaMODCreator.exe` to `%LOCALAPPDATA%\Programs\Moria MOD Creator\`
+- Extracts bundled Definitions / Secrets Source / prebuilt mods / utilities to `%APPDATA%\MoriaMODCreator\`
+- Creates Start Menu shortcuts (desktop shortcut optional)
+- No admin required
+- No .NET runtime required — the exe is self-contained
 
 ### From Source
 
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/jbowensii/MoriaModCreator.git
-   cd MoriaModCreator
-   ```
+```bash
+git clone https://github.com/jbowensii/MoriaModCreator.git
+cd MoriaModCreator
+dotnet build MoriaMODCreator.slnx
+dotnet run --project src/MoriaMODCreator/MoriaMODCreator.csproj
+```
 
-2. Create a virtual environment:
-   ```bash
-   python -m venv .venv
-   .venv\Scripts\activate
-   ```
+To produce a release build identical to the installer's:
 
-3. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
+```bash
+dotnet publish src/MoriaMODCreator/MoriaMODCreator.csproj \
+    -c Release -r win-x64 --self-contained true \
+    -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true \
+    -p:DebugType=None -p:DebugSymbols=false \
+    -o release/publish
+```
 
-4. Place required utilities in `%APPDATA%\MoriaMODCreator\utilities\`
-
-5. Run the application:
-   ```bash
-   python main.py
-   ```
+The published exe appears at `release/publish/MoriaMODCreator.exe`.
 
 ## Requirements
 
-- Python 3.10 or higher
-- Windows OS
-- The following utilities (placed in `%APPDATA%\MoriaMODCreator\utilities\`):
-  - [UAssetGUI](https://github.com/atenfyr/UAssetGUI) - For JSON/uasset conversion
-  - [retoc](https://github.com/trumank/retoc) - For creating zen format packages
-  - [FModel](https://fmodel.app/) - For extracting game files (optional, for import feature)
-  - [ZenTools](https://github.com/WistfulHopes/ZenTools-UE4) - For UE4 zen packaging
+- **Windows 10 1809+ or Windows 11** (required by .NET 10)
+- External utilities (bundled in the installer, or placed manually in `%APPDATA%\MoriaMODCreator\utilities\`):
+  - [UAssetGUI](https://github.com/atenfyr/UAssetGUI) — `.uasset` ↔ JSON conversion
+  - [retoc](https://github.com/trumank/retoc) — zen-format packaging
+  - [FModel](https://fmodel.app/) — game file extraction (optional)
+  - [ZenTools](https://github.com/WistfulHopes/ZenTools-UE4) — UE4 zen packaging
+
+For source development: **.NET 10 SDK**.
 
 ## Usage
 
 ### Getting Started
 
-1. **Import Game Files** - Click the Import button to extract game files using FModel
-2. **Convert to JSON** - Convert the extracted `.uasset` files to JSON format
-3. **Create a Mod** - Use "My Mods" dropdown to create a new mod project
-4. **Add Definitions** - Create `.def` files or use the built-in tabs to edit values
-5. **Build** - Click Build to process your mod and create a ready-to-use zip file
+1. **Import Game Files** — toolbar "Import" button uses FModel to extract `.pak` / `.ucas` / `.utoc` from the installed game
+2. **Pick or create a mod** — "Mod Name" button opens the mod picker
+3. **Edit** — use the Mod Builder to edit raw `.def` files, or Change Secrets / Change Constructions to visually edit item properties
+4. **Build** — "Build" button processes your mod and writes a ready-to-use zip to your Downloads folder
 
-### Mod Definition Files (.def)
+### Mod Definition Files (`.def`)
 
-Definition files are XML files that specify what changes to make to game data:
+`.def` files are XML files describing changes to game data:
 
 ```xml
 <?xml version="1.0" encoding="utf-8"?>
 <definition>
-    <description>Makes mining song buff last longer</description>
+    <title>Longer Mining Song Buff</title>
     <author>YourName</author>
+    <description>Makes mining song buff last longer</description>
     <mod file="\Moria\Content\Character\Shared\Effects\GE_MiningSong_CompleteBuff.json">
-        <object name="GE_MiningSong_CompleteBuff">
-            <change property="DurationMagnitude.ScalableFloatMagnitude.Value" value="1800" />
-        </object>
+        <change item="GE_MiningSong_CompleteBuff"
+                property="DurationMagnitude.ScalableFloatMagnitude.Value"
+                value="1800"
+                note="balance pass"/>
     </mod>
 </definition>
 ```
 
+Create DEF can generate these automatically by diffing a modded file against the vanilla original.
+
 ### Build Output
 
-When you click Build, the application:
-1. Copies and modifies JSON files based on your definitions
-2. Converts JSON back to `.uasset` format
-3. Packages assets into zen format (`.utoc`/`.ucas`/`.pak`)
-4. Creates a zip file in your Downloads folder
+Clicking **Build**:
+
+1. Scans your selected definitions and loads the targeted JSON files
+2. Applies each `<change>` / `<delete>` / `<add_property>` to the corresponding JSON
+3. Converts the patched JSON back to `.uasset` via UAssetGUI
+4. Packages the result into `.pak` / `.utoc` / `.ucas` via retoc
+5. Zips the mod into `%USERPROFILE%\Downloads\{ModName}.zip`
 
 ## Project Structure
 
 ```
 MoriaModCreator/
-├── main.py                          # Application entry point
-├── requirements.txt                 # Python dependencies
-├── assets/                          # Icons and images
-│   ├── icons/
-│   └── images/
-├── src/
-│   ├── build_manager.py             # Build pipeline logic
-│   ├── config.py                    # Configuration management
-│   ├── constants.py                 # Application constants
-│   ├── definition_manager.py        # .def file handling
-│   └── ui/
-│       ├── main_window.py           # Main application window
-│       ├── buildings_view.py        # Buildings tab
-│       ├── constructions_view.py    # Constructions tab
-│       ├── about_dialog.py          # Help/About dialog
-│       ├── config_dialog.py         # Settings dialog
-│       ├── import_dialog.py         # File import dialog
-│       ├── combined_import_dialog.py # Combined import dialog
-│       ├── secrets_import_dialog.py # Secrets import dialog
-│       ├── import_construction_dialog.py # Construction import
-│       ├── json_convert_dialog.py   # JSON conversion dialog
-│       ├── mod_name_dialog.py       # Mod naming dialog
-│       ├── filterable_combobox.py   # Type-to-filter dropdown
-│       ├── shared_utils.py          # Shared UI utilities
-│       ├── html_text_renderer.py    # HTML rendering
-│       └── utility_check_dialog.py  # Utility validation
-├── tests/                           # Test suite (211 tests)
-├── scripts/                         # Build and release scripts
-├── helpers/                         # Developer utility scripts
-├── installer/                       # Inno Setup script and zip bundles
-└── docs/                            # Documentation and example mods
-    ├── definitions/                 # Reference .def files
-    └── prebuilt modfiles/           # Pre-built mod .ini files
+├── MoriaMODCreator.slnx              # .NET solution file
+├── src/                              # C# source (the standard build)
+│   ├── .globalconfig                 # Roslyn analyzer config
+│   ├── MoriaMODCreator/              # WPF app
+│   │   ├── App.xaml / MainWindow.xaml
+│   │   ├── Models/                   # Constants, FormField, ModDefinition, PrebuiltMod
+│   │   ├── Services/                 # BuildService, ImportService, CategoryDataService,
+│   │   │                             #   DiffService, ObjectTemplateService, etc.
+│   │   ├── ViewModels/               # NoviceVM, DefinitionsVM, BuildingsVM, DefCreatorVM,
+│   │   │                             #   ObjectEditorVM, FormBuilder (shared helpers)
+│   │   ├── Views/                    # XAML views + Dialogs
+│   │   ├── Converters/               # FormFieldTemplateSelector, StringToBrush, etc.
+│   │   └── Resources/                # DarkTheme.xaml (full custom ControlTemplates)
+│   └── MoriaMODCreator.Tests/        # xUnit test suite (158 tests)
+├── old-python-src/                   # Archived Python implementation (not built)
+├── installer/
+│   ├── MoriaMODCreator.iss           # Inno Setup script
+│   └── *.zip                         # Bundled assets (7 zips: Definitions, Utilities, etc.)
+├── docs/                             # Reference definitions + example mods
+├── release/                          # Build output (exe + signed installer)
+└── release_notes_v3.0.md             # This release's notes
 ```
 
 ## Data Directories
@@ -151,34 +149,74 @@ The application stores data in `%APPDATA%\MoriaMODCreator\`:
 
 | Directory | Purpose |
 |-----------|---------|
-| `Definitions/` | Global definition files |
-| `mymodfiles/` | Per-mod project files |
+| `Definitions/` | Global definition files (115 .def files in 14 categories) |
+| `mymodfiles/` | Per-mod project files (build intermediates) |
 | `cache/` | Cached game JSON (constructions, game, secrets) |
 | `changeconstructions/` | Construction change definitions and build intermediates |
 | `changesecrets/` | Secret change definitions and build intermediates |
-| `prebuilt modfiles/` | Pre-configured mod .ini files |
+| `prebuilt modfiles/` | 18 pre-configured mod `.ini` files |
 | `New Objects/` | Custom object/NPC definitions |
-| `Secrets Source/` | Secrets .def source files |
+| `Secrets Source/` | Secrets `.def` source files |
 | `utilities/` | External tools (UAssetGUI, retoc, FModel, ZenTools) |
 | `output/` | Build output files |
+| `MoriaMODCreator.log` | Application log (structured `ILogger` output) |
+
+## Development
+
+### Tests
+
+```bash
+dotnet test MoriaMODCreator.slnx
+```
+
+158 xUnit tests cover services, view models, converters, diff round-trips, prefix validation, and more.
+
+### Static Analysis
+
+```bash
+dotnet build MoriaMODCreator.slnx -p:AnalysisLevel=latest-all
+```
+
+The project builds clean at `latest-all` (the strictest Roslyn analyzer setting) with 0 warnings / 0 errors. Suppression rationale for each disabled rule is documented inline in `src/.globalconfig`.
+
+### Format
+
+```bash
+dotnet format MoriaMODCreator.slnx --verify-no-changes
+```
+
+## Release Pipeline
+
+1. Bump `AppVersion` in `src/MoriaMODCreator/Models/Constants.cs`, `<Version>` in the `.csproj`, and `#define MyAppVersion` in `installer/MoriaMODCreator.iss`
+2. `dotnet publish` (see "From Source" above) → copy `release/publish/MoriaMODCreator.exe` to `release/MoriaMODCreator.exe`
+3. Sign the exe via SSL.com eSigner
+4. Compile the installer: `ISCC.exe installer/MoriaMODCreator.iss` (Inno Setup 6)
+5. Sign the installer
+6. Tag + GitHub release:
+   ```bash
+   git tag -a v3.0.0 -m "..."
+   git push origin v3.0.0
+   gh release create v3.0.0 release/MoriaMODCreator_Setup_v3.0.0.exe \
+       --title "Moria MOD Creator v3.0.0" --notes-file release_notes_v3.0.md
+   ```
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-Bug reports: https://github.com/jbowensii/MoriaModCreator/issues
+Contributions are welcome. Please open an issue or pull request at https://github.com/jbowensii/MoriaModCreator.
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+MIT — see [LICENSE](LICENSE).
 
 ## Acknowledgments
 
-- [UAssetGUI](https://github.com/atenfyr/UAssetGUI) - For uasset/JSON conversion
-- [retoc](https://github.com/trumank/retoc) - For zen format packaging
-- [FModel](https://fmodel.app/) - For game file extraction
-- [ZenTools](https://github.com/WistfulHopes/ZenTools-UE4) - For UE4 zen packaging
-- [CustomTkinter](https://github.com/TomSchimansky/CustomTkinter) - Modern UI framework
+- Original Python implementation and ongoing design: **John B Owens II** (Mereak Firmaxe)
+- "Create DEF" feature: **Sqitey**
+- [UAssetGUI](https://github.com/atenfyr/UAssetGUI) — uasset/JSON conversion
+- [retoc](https://github.com/trumank/retoc) — zen format packaging
+- [FModel](https://fmodel.app/) — game file extraction
+- [ZenTools](https://github.com/WistfulHopes/ZenTools-UE4) — UE4 zen packaging
+- [.NET Community Toolkit MVVM](https://github.com/CommunityToolkit/dotnet) — MVVM source generators
 
 ## Disclaimer
 
