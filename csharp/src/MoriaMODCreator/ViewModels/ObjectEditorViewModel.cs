@@ -33,6 +33,7 @@ public partial class ObjectEditorViewModel : ObservableObject
     [ObservableProperty] private string _modName = "";
     [ObservableProperty] private bool _isBuilding;
     [ObservableProperty] private double _buildProgress;
+    [ObservableProperty] private string _itemCountText = "";
 
     public ObservableCollection<string> Categories { get; } = [];
     public ObservableCollection<CategoryItem> Items { get; } = [];
@@ -130,6 +131,10 @@ public partial class ObjectEditorViewModel : ObservableObject
                 FilteredItems.Add(item);
             }
         }
+
+        ItemCountText = FilteredItems.Count == Items.Count
+            ? $"{Items.Count} items"
+            : $"{FilteredItems.Count} of {Items.Count} items";
     }
 
     partial void OnSearchTextChanged(string value) => ApplyFilter();
@@ -624,6 +629,31 @@ public partial class ObjectEditorViewModel : ObservableObject
         var item = Items.FirstOrDefault(i => i.RowName == rowName);
         if (item != null) SelectItem(item);
         Status = "Reverted";
+    }
+
+    // =========================================================================
+    // MATERIAL ROW MANAGEMENT
+    // =========================================================================
+
+    [RelayCommand]
+    private void AddMaterialRow(MaterialSection section)
+    {
+        section.Rows.Add(new MaterialRow
+        {
+            Material = "Item.Wood",
+            Amount = "1",
+            MaterialOptions = section.MaterialOptions,
+        });
+    }
+
+    [RelayCommand]
+    private void RemoveMaterialRow(MaterialRow row)
+    {
+        row.IsRemoved = true;
+        foreach (var section in MaterialSections)
+        {
+            if (section.Rows.Remove(row)) break;
+        }
     }
 
     private IEnumerable<FormField> AllEditableFields()
