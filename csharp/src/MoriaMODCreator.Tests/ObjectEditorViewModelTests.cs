@@ -15,9 +15,9 @@ public class ObjectEditorViewModelTests
         var tpl = new ObjectTemplateService(cfg, NullLogger<ObjectTemplateService>.Instance);
         var cat = new CategoryDataService(cfg, tpl, NullLogger<CategoryDataService>.Instance);
         return new ObjectEditorViewModel(cfg, tpl, cat,
-            /* buildService */ null!,
-            /* buildingsData */ null!,
-            /* diffService */ null!,
+            /* buildService */null!,
+            /* buildingsData */null!,
+            /* diffService */null!,
             NullLogger<ObjectEditorViewModel>.Instance);
     }
 

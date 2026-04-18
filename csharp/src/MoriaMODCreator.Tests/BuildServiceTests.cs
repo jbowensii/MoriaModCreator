@@ -7,8 +7,6 @@ namespace MoriaMODCreator.Tests;
 
 public class BuildServiceTests
 {
-    private readonly ConfigService _config = new();
-
     // =========================================================================
     // BuildProgress / BuildResult records
     // =========================================================================

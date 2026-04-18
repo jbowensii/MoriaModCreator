@@ -1,0 +1,32 @@
+is_global = true
+
+# ------------------------------------------------------------
+# CommunityToolkit.Mvvm ObservableProperty generator requires private `_foo` fields
+# CA1707: Identifiers should not contain underscores (source-generated)
+dotnet_diagnostic.CA1707.severity = none
+
+# ------------------------------------------------------------
+# App-only project — no library consumers need defensive null-guards on public APIs.
+# All call sites are internal and pass non-null values.
+dotnet_diagnostic.CA1062.severity = none
+
+# ------------------------------------------------------------
+# App-only project — no collection-type API contract to defend.
+dotnet_diagnostic.CA1002.severity = none
+
+# ------------------------------------------------------------
+# WPF Window / UserControl inherit IDisposable via DispatcherObject.
+# ShowDialog() manages lifetime; manual Dispose is not expected.
+dotnet_diagnostic.CA1063.severity = none
+dotnet_diagnostic.CA2000.severity = none
+
+# ------------------------------------------------------------
+# Not relevant for internal app (file/URI paths are all internal).
+dotnet_diagnostic.CA2234.severity = suggestion
+
+# Sync I/O inside Task.Run is intentional (preserves progress callbacks, buffered IO).
+dotnet_diagnostic.CA1849.severity = suggestion
+
+# Culture-sensitive ops — audit per-site, don't flag all.
+dotnet_diagnostic.CA1307.severity = suggestion
+dotnet_diagnostic.CA1308.severity = suggestion

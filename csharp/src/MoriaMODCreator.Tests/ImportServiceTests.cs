@@ -8,8 +8,6 @@ namespace MoriaMODCreator.Tests;
 
 public class ImportServiceTests
 {
-    private readonly ConfigService _config = new();
-
     // =========================================================================
     // ExtractGitHubJsonFiles logic (tested via helper that mirrors the method)
     // =========================================================================
