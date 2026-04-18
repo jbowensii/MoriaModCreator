@@ -41,6 +41,14 @@ public partial class ChangeConstructionsDialog : Window
             return;
         }
         var baseDir = _mode == "secrets" ? _config.ChangeSecretsDir : _config.ChangeConstructionsDir;
+        if (chosen.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0
+            || chosen.Contains("..")
+            || Path.IsPathRooted(chosen))
+        {
+            MessageBox.Show(this, "Invalid prefix name (no path separators, '..', or rooted paths).",
+                Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
         Directory.CreateDirectory(Path.Combine(baseDir, chosen));
         SelectedPrefix = chosen;
         DialogResult = true;
@@ -56,8 +64,13 @@ public partial class ChangeConstructionsDialog : Window
         if (result != MessageBoxResult.Yes) return;
         var baseDir = _mode == "secrets" ? _config.ChangeSecretsDir : _config.ChangeConstructionsDir;
         var target = Path.Combine(baseDir, picked);
+        var full = Path.GetFullPath(target);
+        var root = Path.GetFullPath(baseDir);
+        if (!full.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+            return;
         if (Directory.Exists(target)) Directory.Delete(target, recursive: true);
         ExistingCombo.Items.Remove(picked);
+        ExistingCombo.SelectedItem = null;
         NewPrefixBox.Text = "";
     }
 
