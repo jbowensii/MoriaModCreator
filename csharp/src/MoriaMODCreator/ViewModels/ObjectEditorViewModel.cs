@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Text.Json.Nodes;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -529,5 +530,189 @@ public partial class ObjectEditorViewModel : ObservableObject
             _form.AddDropdown(fields, name, options, label);
         else
             _form.AddTextField(fields, name, label);
+    }
+
+    // =========================================================================
+    // ITEM COMMANDS: NewItem / SaveItem / RevertItem
+    // =========================================================================
+
+    [RelayCommand]
+    private void NewItem()
+    {
+        if (string.IsNullOrWhiteSpace(SelectedCategory))
+        {
+            Status = "Select a category first";
+            return;
+        }
+
+        var dialog = new Views.Dialogs.ConstructionNameDialog
+        {
+            Owner = System.Windows.Application.Current.MainWindow,
+        };
+        if (dialog.ShowDialog() != true || string.IsNullOrWhiteSpace(dialog.EnteredName)) return;
+
+        var newName = dialog.EnteredName;
+        if (Items.Any(i => i.RowName.Equals(newName, StringComparison.OrdinalIgnoreCase)))
+        {
+            Status = $"'{newName}' already exists";
+            return;
+        }
+
+        var pathMap = CategoryDataService.ConstructionsPaths;
+        if (!pathMap.TryGetValue(SelectedCategory, out var paths)) return;
+
+        var baseDir = Path.Combine(_config.ChangeSecretsDir, SentinelPrefix);
+        var cacheDir = Path.Combine(baseDir, SelectedCategory.ToLowerInvariant());
+        Directory.CreateDirectory(cacheDir);
+        var defJsonPath = Path.Combine(cacheDir, Path.GetFileName(paths.DefinitionPath));
+
+        if (!File.Exists(defJsonPath))
+        {
+            var sourcePath = _config.FindSourceJson("constructions", paths.DefinitionPath);
+            if (sourcePath != null && File.Exists(sourcePath))
+                File.Copy(sourcePath, defJsonPath, overwrite: true);
+        }
+
+        var root = _templates.LoadJson(defJsonPath);
+        if (root == null) { Status = "Failed to load template JSON"; return; }
+
+        var firstRow = _templates.GetRowNames(root).FirstOrDefault();
+        if (firstRow == null) { Status = "No template row available"; return; }
+
+        var clone = _templates.CloneRow(root, firstRow, newName);
+        if (clone == null) return;
+        _templates.AddRow(root, clone);
+        _templates.SaveJson(defJsonPath, root);
+
+        SelectCategory(SelectedCategory);
+        var created = Items.FirstOrDefault(i => i.RowName == newName);
+        if (created != null) SelectItem(created);
+        Status = $"Created new {SelectedCategory}: {newName}";
+    }
+
+    [RelayCommand]
+    private void SaveItem()
+    {
+        if (SelectedItem == null) return;
+
+        var edits = new Dictionary<string, object?>();
+        foreach (var field in AllEditableFields())
+        {
+            if (field.IsReadOnly) continue;
+            if (field.Value != field.OriginalValue)
+                edits[field.Name] = field.Value;
+        }
+        foreach (var section in MaterialSections)
+        {
+            var mats = section.Rows.Where(r => !r.IsRemoved)
+                .Select(r => new { r.Material, r.Amount }).ToList();
+            if (mats.Count > 0)
+                edits[section.FieldName] = System.Text.Json.JsonSerializer.Serialize(mats);
+        }
+
+        if (edits.Count == 0) { Status = "No changes"; return; }
+        _categoryData.SaveItemEdits(SelectedItem, edits);
+        Status = $"Saved {edits.Count} change(s)";
+    }
+
+    [RelayCommand]
+    private void RevertItem()
+    {
+        if (SelectedItem == null) return;
+        var rowName = SelectedItem.RowName;
+        SelectCategory(SelectedCategory);
+        var item = Items.FirstOrDefault(i => i.RowName == rowName);
+        if (item != null) SelectItem(item);
+        Status = "Reverted";
+    }
+
+    private IEnumerable<FormField> AllEditableFields()
+    {
+        foreach (var f in FormFields)
+        {
+            if (f.FieldType == FormFieldType.SectionHeader) continue;
+            if (f.FieldType == FormFieldType.InlineRow && f.InlineFields != null)
+            {
+                foreach (var sub in f.InlineFields) yield return sub;
+                continue;
+            }
+            yield return f;
+        }
+    }
+
+    // =========================================================================
+    // BUILD COMMANDS: BuildAsync / ChooseModName
+    // =========================================================================
+
+    [RelayCommand]
+    private async Task BuildAsync()
+    {
+        if (string.IsNullOrWhiteSpace(ModName)) { Status = "Select a mod name first"; return; }
+
+        IsBuilding = true;
+        BuildProgress = 0;
+        Status = "Generating .def files...";
+
+        try
+        {
+            var baseDir = Path.Combine(_config.ChangeSecretsDir, SentinelPrefix);
+            var pathMap = CategoryDataService.ConstructionsPaths;
+            var generatedDefs = new List<string>();
+
+            await Task.Run(() =>
+            {
+                foreach (var (category, paths) in pathMap)
+                {
+                    var categoryDir = Path.Combine(baseDir, category.ToLowerInvariant());
+                    if (!Directory.Exists(categoryDir)) continue;
+
+                    var defContent = _buildingsData!.GenerateDefFromCache("constructions", SentinelPrefix, category, paths);
+                    if (string.IsNullOrEmpty(defContent)) continue;
+                    var defPath = _buildingsData.SaveDefFile("constructions", SentinelPrefix, category, defContent);
+                    if (!string.IsNullOrEmpty(defPath))
+                        generatedDefs.Add(defPath);
+                }
+            });
+
+            if (generatedDefs.Count == 0)
+            {
+                Status = "No changes to build. Create items first.";
+                IsBuilding = false;
+                return;
+            }
+
+            Status = $"Generated {generatedDefs.Count} .def file(s). Building mod...";
+            BuildProgress = 0.2;
+
+            var progress = new Progress<Services.BuildProgress>(p =>
+            {
+                Status = p.Status;
+                BuildProgress = 0.2 + 0.8 * p.Progress;
+            });
+
+            var result = await _buildService!.BuildAsync(ModName, generatedDefs, includeSecrets: true, progress);
+            Status = result.Success
+                ? $"Build complete! {result.Message}"
+                : $"Build failed: {result.Message}";
+        }
+        catch (Exception ex)
+        {
+            Status = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            IsBuilding = false;
+        }
+    }
+
+    [RelayCommand]
+    private void ChooseModName()
+    {
+        var dialog = new Views.Dialogs.ModNameDialog { Owner = System.Windows.Application.Current.MainWindow };
+        if (dialog.ShowDialog() == true && dialog.SelectedModName != null)
+        {
+            ModName = dialog.SelectedModName;
+            Status = $"Mod '{ModName}' selected";
+        }
     }
 }

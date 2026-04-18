@@ -38,4 +38,15 @@ public class ObjectEditorViewModelTests
         Assert.Single(vm.FilteredItems);
         Assert.Equal("Sword", vm.FilteredItems[0].RowName);
     }
+
+    [Fact]
+    public void Commands_AreGenerated()
+    {
+        var vm = CreateVm();
+        Assert.NotNull(vm.NewItemCommand);
+        Assert.NotNull(vm.SaveItemCommand);
+        Assert.NotNull(vm.RevertItemCommand);
+        Assert.NotNull(vm.BuildCommand);
+        Assert.NotNull(vm.ChooseModNameCommand);
+    }
 }
