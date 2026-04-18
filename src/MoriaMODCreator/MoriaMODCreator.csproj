@@ -9,6 +9,13 @@
     <EnableNETAnalyzers>true</EnableNETAnalyzers>
     <AnalysisLevel>latest-recommended</AnalysisLevel>
     <NoWarn>CA1515;CA2007;CA1848;CA1822;CA1852;CA1859;CA1310;CA1307;CA1305;CA1001</NoWarn>
+    <Version>3.0.0</Version>
+    <AssemblyVersion>3.0.0.0</AssemblyVersion>
+    <FileVersion>3.0.0.0</FileVersion>
+    <InformationalVersion>3.0.0</InformationalVersion>
+    <Company>John B Owens II</Company>
+    <Product>Moria MOD Creator</Product>
+    <Copyright>Copyright © John B Owens II</Copyright>
   </PropertyGroup>
 
   <PropertyGroup>

@@ -64,7 +64,7 @@ public static class Constants
 
     // Application info
     public const string AppName = "Moria MOD Creator";
-    public const string AppVersion = "2.11.0";
+    public const string AppVersion = "3.0.0";
     public const string AppDate = "April 2026";
     public const string AppAuthor = "John B Owens II";
     public const string GitHubUrl = "https://github.com/jbowensii/MoriaModCreator";
