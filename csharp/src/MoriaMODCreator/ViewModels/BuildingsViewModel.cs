@@ -50,6 +50,8 @@ public partial class BuildingsViewModel : ObservableObject
     private List<string> _constructionOptions = [];
     private readonly Dictionary<string, List<string>> _enumOptions = [];
 
+    private readonly FormBuilder _form;
+
     public BuildingsViewModel(
         ConfigService config,
         CategoryDataService categoryData,
@@ -67,6 +69,7 @@ public partial class BuildingsViewModel : ObservableObject
         _templates = templates;
         _mode = mode;
         ModeLabel = mode == "secrets" ? "Change Secrets" : "Change Constructions";
+        _form = new FormBuilder(FormFields);
 
         foreach (var cat in new[] { "Buildings", "Weapons", "Armor", "Tools", "Flora", "Loot", "Items", "Ores" })
             Categories.Add(cat);
@@ -257,7 +260,7 @@ public partial class BuildingsViewModel : ObservableObject
                 // Dump all field keys + value types for diagnostics
                 foreach (var (key, val) in item.Fields.Take(15))
                 {
-                    var valStr = FieldValueToString(val);
+                    var valStr = FormBuilder.FieldValueToString(val);
                     var valType = val?.GetType().Name ?? "null";
                     System.IO.File.AppendAllText(
                         System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
@@ -304,57 +307,57 @@ public partial class BuildingsViewModel : ObservableObject
     private void BuildBuildingsForm(Dictionary<string, object?> fields)
     {
         // --- Construction Recipe Section ---
-        AddSection("Construction Recipe", "#795548");
-        AddTextField(fields, "Name", label: "Row Name", readOnly: true);
+        _form.AddSection("Construction Recipe", "#795548");
+        _form.AddTextField(fields, "Name", label: "Row Name", readOnly: true);
         AddTextFieldWithOptions(fields, "ResultConstructionHandle", _constructionOptions, label: "Result Construction");
-        AddDropdown(fields, "BuildProcess", ["Hammer", "Place", "Auto"]);
-        AddDropdown(fields, "PlacementType", ["Floor", "Wall", "Ceiling", "Any", "Freeform"]);
-        AddDropdown(fields, "LocationRequirement", ["None", "Indoors", "Outdoors", "Underground"]);
-        AddDropdown(fields, "FoundationRule", ["None", "RequiresFoundation", "IsFoundation"]);
-        AddDropdown(fields, "MonumentType", ["None", "Small", "Medium", "Large"]);
+        _form.AddDropdown(fields, "BuildProcess", ["Hammer", "Place", "Auto"]);
+        _form.AddDropdown(fields, "PlacementType", ["Floor", "Wall", "Ceiling", "Any", "Freeform"]);
+        _form.AddDropdown(fields, "LocationRequirement", ["None", "Indoors", "Outdoors", "Underground"]);
+        _form.AddDropdown(fields, "FoundationRule", ["None", "RequiresFoundation", "IsFoundation"]);
+        _form.AddDropdown(fields, "MonumentType", ["None", "Small", "Medium", "Large"]);
 
         // Placement options (checkboxes)
-        AddSection("Placement Options", "#5D4037");
-        AddCheckbox(fields, "bOnWall");
-        AddCheckbox(fields, "bOnFloor");
-        AddCheckbox(fields, "bPlaceOnWater");
-        AddCheckbox(fields, "bOverrideRotation");
-        AddCheckbox(fields, "bAllowRefunds");
-        AddCheckbox(fields, "bAutoFoundation");
-        AddCheckbox(fields, "bInheritAutoFoundationStability");
-        AddCheckbox(fields, "bOnlyOnVoxel");
+        _form.AddSection("Placement Options", "#5D4037");
+        _form.AddCheckbox(fields, "bOnWall");
+        _form.AddCheckbox(fields, "bOnFloor");
+        _form.AddCheckbox(fields, "bPlaceOnWater");
+        _form.AddCheckbox(fields, "bOverrideRotation");
+        _form.AddCheckbox(fields, "bAllowRefunds");
+        _form.AddCheckbox(fields, "bAutoFoundation");
+        _form.AddCheckbox(fields, "bInheritAutoFoundationStability");
+        _form.AddCheckbox(fields, "bOnlyOnVoxel");
 
         // Blocking options
-        AddCheckbox(fields, "bIsBlockedByNearbySettlementStones");
-        AddCheckbox(fields, "bIsBlockedByNearbyRavenConstructions");
+        _form.AddCheckbox(fields, "bIsBlockedByNearbySettlementStones");
+        _form.AddCheckbox(fields, "bIsBlockedByNearbyRavenConstructions");
 
         // Numeric properties
-        AddSection("Numeric Properties", "#5D4037");
-        AddTextField(fields, "MaxAllowedPenetrationDepth");
-        AddTextField(fields, "RequireNearbyRadius");
-        AddTextField(fields, "CameraStateOverridePriority");
+        _form.AddSection("Numeric Properties", "#5D4037");
+        _form.AddTextField(fields, "MaxAllowedPenetrationDepth");
+        _form.AddTextField(fields, "RequireNearbyRadius");
+        _form.AddTextField(fields, "CameraStateOverridePriority");
 
         // Materials
         AddMaterialSection(fields, "DefaultRequiredMaterials", "Required Materials");
         AddMaterialSection(fields, "SandboxRequiredMaterials", "Sandbox Materials");
 
         // Unlocks
-        AddSection("Default Unlocks", "#1565C0");
-        AddDropdown(fields, "EnabledState", ["Live", "Disabled", "Testing", "Hidden"], label: "Enabled State");
-        AddDropdown(fields, "DefaultUnlocks_UnlockType", ["None", "Fragments", "Construction", "Item"]);
-        AddTextField(fields, "DefaultUnlocks_NumFragments");
-        AddTextField(fields, "DefaultRequiredItems");
-        AddTextField(fields, "DefaultRequiredConstructions");
-        AddTextField(fields, "DefaultRequiredFragments");
+        _form.AddSection("Default Unlocks", "#1565C0");
+        _form.AddDropdown(fields, "EnabledState", ["Live", "Disabled", "Testing", "Hidden"], label: "Enabled State");
+        _form.AddDropdown(fields, "DefaultUnlocks_UnlockType", ["None", "Fragments", "Construction", "Item"]);
+        _form.AddTextField(fields, "DefaultUnlocks_NumFragments");
+        _form.AddTextField(fields, "DefaultRequiredItems");
+        _form.AddTextField(fields, "DefaultRequiredConstructions");
+        _form.AddTextField(fields, "DefaultRequiredFragments");
 
         // Sandbox unlocks
-        AddSection("Sandbox Overrides", "#1565C0");
-        AddCheckbox(fields, "bHasSandboxRequirementsOverride");
-        AddCheckbox(fields, "bHasSandboxUnlockOverride");
-        AddDropdown(fields, "SandboxUnlocks_UnlockType", ["None", "Fragments", "Construction", "Item"]);
+        _form.AddSection("Sandbox Overrides", "#1565C0");
+        _form.AddCheckbox(fields, "bHasSandboxRequirementsOverride");
+        _form.AddCheckbox(fields, "bHasSandboxUnlockOverride");
+        _form.AddDropdown(fields, "SandboxUnlocks_UnlockType", ["None", "Fragments", "Construction", "Item"]);
 
         // --- Construction Definition Section ---
-        AddSection("Construction Definition", "#2E7D32");
+        _form.AddSection("Construction Definition", "#2E7D32");
         AddConstructionDefinitionFields(fields);
     }
 
@@ -364,18 +367,18 @@ public partial class BuildingsViewModel : ObservableObject
 
     private void BuildWeaponForm(Dictionary<string, object?> fields)
     {
-        AddSection("Item Recipe", "#E65100");
+        _form.AddSection("Item Recipe", "#E65100");
         AddItemRecipeFields(fields);
 
-        AddSection("Combat Stats", "#D84315");
-        AddInlineRow(fields, "Damage", "Speed", "Durability", "Tier");
+        _form.AddSection("Combat Stats", "#D84315");
+        _form.AddInlineRow(fields, "Damage", "Speed", "Durability", "Tier");
 
-        AddSection("Advanced Stats", "#BF360C");
-        AddInlineRow(fields, "ArmorPenetration", "StaminaCost", "EnergyCost", "BlockDamageReduction");
+        _form.AddSection("Advanced Stats", "#BF360C");
+        _form.AddInlineRow(fields, "ArmorPenetration", "StaminaCost", "EnergyCost", "BlockDamageReduction");
 
         AddMaterialSection(fields, "InitialRepairCost", "Repair Cost");
 
-        AddSection("Display & Tags", "#E65100");
+        _form.AddSection("Display & Tags", "#E65100");
         AddCommonItemFields(fields);
     }
 
@@ -385,15 +388,15 @@ public partial class BuildingsViewModel : ObservableObject
 
     private void BuildArmorForm(Dictionary<string, object?> fields)
     {
-        AddSection("Item Recipe", "#1565C0");
+        _form.AddSection("Item Recipe", "#1565C0");
         AddItemRecipeFields(fields);
 
-        AddSection("Defense Stats", "#0D47A1");
-        AddInlineRow(fields, "Durability", "DamageReduction", "DamageProtection");
+        _form.AddSection("Defense Stats", "#0D47A1");
+        _form.AddInlineRow(fields, "Durability", "DamageReduction", "DamageProtection");
 
         AddMaterialSection(fields, "InitialRepairCost", "Repair Cost");
 
-        AddSection("Display & Tags", "#1565C0");
+        _form.AddSection("Display & Tags", "#1565C0");
         AddCommonItemFields(fields);
     }
 
@@ -403,18 +406,18 @@ public partial class BuildingsViewModel : ObservableObject
 
     private void BuildToolForm(Dictionary<string, object?> fields)
     {
-        AddSection("Item Recipe", "#2E7D32");
+        _form.AddSection("Item Recipe", "#2E7D32");
         AddItemRecipeFields(fields);
 
-        AddSection("Tool Stats", "#1B5E20");
-        AddInlineRow(fields, "Durability", "DurabilityDecayWhileEquipped", "CarveHits");
+        _form.AddSection("Tool Stats", "#1B5E20");
+        _form.AddInlineRow(fields, "Durability", "DurabilityDecayWhileEquipped", "CarveHits");
 
-        AddSection("Advanced Stats", "#1B5E20");
-        AddInlineRow(fields, "StaminaCost", "EnergyCost", "NpcMiningRate");
+        _form.AddSection("Advanced Stats", "#1B5E20");
+        _form.AddInlineRow(fields, "StaminaCost", "EnergyCost", "NpcMiningRate");
 
         AddMaterialSection(fields, "InitialRepairCost", "Repair Cost");
 
-        AddSection("Display & Tags", "#2E7D32");
+        _form.AddSection("Display & Tags", "#2E7D32");
         AddCommonItemFields(fields);
     }
 
@@ -424,10 +427,10 @@ public partial class BuildingsViewModel : ObservableObject
 
     private void BuildItemsForm(Dictionary<string, object?> fields)
     {
-        AddSection("Item Recipe", "#6A1B9A");
+        _form.AddSection("Item Recipe", "#6A1B9A");
         AddItemRecipeFields(fields);
 
-        AddSection("Item Definition", "#4A148C");
+        _form.AddSection("Item Definition", "#4A148C");
         AddCommonItemFields(fields);
     }
 
@@ -437,37 +440,37 @@ public partial class BuildingsViewModel : ObservableObject
 
     private void BuildFloraForm(Dictionary<string, object?> fields)
     {
-        AddSection("Flora Definition", "#388E3C");
-        AddTextField(fields, "Name", label: "Row Name", readOnly: true);
-        AddTextField(fields, "DisplayName");
+        _form.AddSection("Flora Definition", "#388E3C");
+        _form.AddTextField(fields, "Name", label: "Row Name", readOnly: true);
+        _form.AddTextField(fields, "DisplayName");
 
-        AddSection("Item References", "#2E7D32");
-        AddTextField(fields, "ItemRowHandle");
-        AddTextField(fields, "OverrideItemDropHandle");
+        _form.AddSection("Item References", "#2E7D32");
+        _form.AddTextField(fields, "ItemRowHandle");
+        _form.AddTextField(fields, "OverrideItemDropHandle");
 
-        AddSection("Drop Amounts", "#2E7D32");
-        AddTextField(fields, "MinCount");
-        AddTextField(fields, "MaxCount");
+        _form.AddSection("Drop Amounts", "#2E7D32");
+        _form.AddTextField(fields, "MinCount");
+        _form.AddTextField(fields, "MaxCount");
 
-        AddSection("Growth Timing", "#1B5E20");
-        AddTextField(fields, "NumToGrowPerCycle");
-        AddTextField(fields, "RegrowthSleepCount");
-        AddTextField(fields, "MinVariableGrowthTime");
-        AddTextField(fields, "MaxVariableGrowthTime");
+        _form.AddSection("Growth Timing", "#1B5E20");
+        _form.AddTextField(fields, "NumToGrowPerCycle");
+        _form.AddTextField(fields, "RegrowthSleepCount");
+        _form.AddTextField(fields, "MinVariableGrowthTime");
+        _form.AddTextField(fields, "MaxVariableGrowthTime");
 
-        AddSection("Growth Properties", "#1B5E20");
-        AddCheckbox(fields, "bPrefersInShade");
-        AddCheckbox(fields, "bCanSpoil");
-        AddCheckbox(fields, "IsPlantable");
-        AddCheckbox(fields, "IsFungus");
-        AddTextField(fields, "MinimumFarmingLight");
+        _form.AddSection("Growth Properties", "#1B5E20");
+        _form.AddCheckbox(fields, "bPrefersInShade");
+        _form.AddCheckbox(fields, "bCanSpoil");
+        _form.AddCheckbox(fields, "IsPlantable");
+        _form.AddCheckbox(fields, "IsFungus");
+        _form.AddTextField(fields, "MinimumFarmingLight");
 
-        AddSection("Type & Scale", "#388E3C");
-        AddDropdown(fields, "FloraType", ["Tree", "Bush", "Mushroom", "Herb", "Vine", "Flower"]);
-        AddDropdown(fields, "GrowthRate", ["Slow", "Medium", "Fast"]);
-        AddTextField(fields, "MinRandomScale");
-        AddTextField(fields, "MaxRandomScale");
-        AddTextField(fields, "ReceptacleActorToSpawn");
+        _form.AddSection("Type & Scale", "#388E3C");
+        _form.AddDropdown(fields, "FloraType", ["Tree", "Bush", "Mushroom", "Herb", "Vine", "Flower"]);
+        _form.AddDropdown(fields, "GrowthRate", ["Slow", "Medium", "Fast"]);
+        _form.AddTextField(fields, "MinRandomScale");
+        _form.AddTextField(fields, "MaxRandomScale");
+        _form.AddTextField(fields, "ReceptacleActorToSpawn");
     }
 
     // =========================================================================
@@ -476,16 +479,16 @@ public partial class BuildingsViewModel : ObservableObject
 
     private void BuildLootForm(Dictionary<string, object?> fields)
     {
-        AddSection("Loot Definition", "#F57F17");
-        AddTextField(fields, "Name", label: "Row Name", readOnly: true);
-        AddTextField(fields, "RequiredTags");
-        AddTextField(fields, "ItemHandle");
+        _form.AddSection("Loot Definition", "#F57F17");
+        _form.AddTextField(fields, "Name", label: "Row Name", readOnly: true);
+        _form.AddTextField(fields, "RequiredTags");
+        _form.AddTextField(fields, "ItemHandle");
 
-        AddSection("Drop Settings", "#F9A825");
-        AddTextField(fields, "DropChance");
-        AddTextField(fields, "MinQuantity");
-        AddTextField(fields, "MaxQuantity");
-        AddDropdown(fields, "EnabledState", ["Enabled", "Disabled"]);
+        _form.AddSection("Drop Settings", "#F9A825");
+        _form.AddTextField(fields, "DropChance");
+        _form.AddTextField(fields, "MinQuantity");
+        _form.AddTextField(fields, "MaxQuantity");
+        _form.AddDropdown(fields, "EnabledState", ["Enabled", "Disabled"]);
     }
 
     // =========================================================================
@@ -494,8 +497,8 @@ public partial class BuildingsViewModel : ObservableObject
 
     private void BuildOresForm(Dictionary<string, object?> fields)
     {
-        AddSection("Ore Definition", "#795548");
-        AddTextField(fields, "Name", label: "Row Name", readOnly: true);
+        _form.AddSection("Ore Definition", "#795548");
+        _form.AddTextField(fields, "Name", label: "Row Name", readOnly: true);
         AddCommonItemFields(fields);
     }
 
@@ -505,128 +508,16 @@ public partial class BuildingsViewModel : ObservableObject
 
     private void BuildGenericForm(Dictionary<string, object?> fields)
     {
-        AddSection("Properties", "#4d4d4d");
+        _form.AddSection("Properties", "#4d4d4d");
         foreach (var (name, value) in fields)
         {
-            AddTextField(fields, name);
+            _form.AddTextField(fields, name);
         }
     }
 
     // =========================================================================
-    // SHARED FORM FIELD HELPERS
+    // DATA-DEPENDENT FORM FIELD HELPERS (keep in BuildingsViewModel — need _materialOptions, _actorOptions, etc.)
     // =========================================================================
-
-    private void AddSection(string title, string color)
-    {
-        FormFields.Add(new FormField
-        {
-            Name = $"__section_{title}",
-            Label = title,
-            FieldType = FormFieldType.SectionHeader,
-            SectionColor = color,
-        });
-    }
-
-    /// <summary>Convert a field value (which may be a complex type) to a display string.</summary>
-    private static string FieldValueToString(object? value)
-    {
-        if (value == null) return "";
-        if (value is string s) return s;
-        if (value is bool b) return b.ToString();
-        if (value is int or double or float or long) return value.ToString() ?? "";
-
-        // Dictionary (from StructPropertyData) — extract RowName if present, else flatten
-        if (value is Dictionary<string, object?> dict)
-        {
-            if (dict.TryGetValue("RowName", out var rowName) && rowName != null)
-                return rowName.ToString() ?? "";
-            if (dict.TryGetValue("Value", out var val) && val != null)
-                return FieldValueToString(val);
-            // Flatten to "key=value, key=value"
-            return string.Join(", ", dict.Where(kv => kv.Value != null)
-                .Select(kv => $"{kv.Key}={FieldValueToString(kv.Value)}").Take(5));
-        }
-
-        // List (from ArrayPropertyData) — join items
-        if (value is List<object?> list)
-        {
-            if (list.Count == 0) return "";
-            var items = list.Select(FieldValueToString).Where(s => !string.IsNullOrEmpty(s)).ToList();
-            return items.Count <= 5 ? string.Join(", ", items) : $"{string.Join(", ", items.Take(5))}... ({items.Count} total)";
-        }
-
-        // List<string> (from tag extraction)
-        if (value is List<string> strList)
-            return string.Join(", ", strList);
-
-        return value.ToString() ?? "";
-    }
-
-    /// <summary>Strip UE4 enum prefix: "EBuildProcess::DualMode" → "DualMode"</summary>
-    private static string StripEnumPrefix(string value)
-    {
-        var idx = value.LastIndexOf("::", StringComparison.Ordinal);
-        return idx >= 0 ? value[(idx + 2)..] : value;
-    }
-
-    private void AddTextField(Dictionary<string, object?> fields, string name,
-        string? label = null, bool readOnly = false)
-    {
-        var value = FieldValueToString(fields.GetValueOrDefault(name));
-        FormFields.Add(new FormField
-        {
-            Name = name,
-            Label = label ?? FieldDescriptions.ToFriendlyLabel(name),
-            Tooltip = FieldDescriptions.GetTooltip(name),
-            FieldType = readOnly ? FormFieldType.ReadOnly : FormFieldType.Text,
-            Value = value,
-            OriginalValue = value,
-            IsReadOnly = readOnly,
-        });
-    }
-
-    private void AddDropdown(Dictionary<string, object?> fields, string name, List<string> options,
-        string? label = null)
-    {
-        var rawObj = fields.GetValueOrDefault(name);
-        var rawValue = FieldValueToString(rawObj);
-        var value = StripEnumPrefix(rawValue);
-        System.Diagnostics.Debug.WriteLine($"[AddDropdown] {name}: rawObj={rawObj?.GetType().Name ?? "null"} rawValue='{rawValue}' stripped='{value}'");
-        // Add the actual value to options if not already present
-        if (!string.IsNullOrEmpty(value) && !options.Contains(value))
-            options = [value, .. options];
-        FormFields.Add(new FormField
-        {
-            Name = name,
-            Label = label ?? FieldDescriptions.ToFriendlyLabel(name),
-            Tooltip = FieldDescriptions.GetTooltip(name),
-            FieldType = FormFieldType.Dropdown,
-            Value = value,
-            OriginalValue = value,
-            Options = options,
-        });
-    }
-
-    private void AddCheckbox(Dictionary<string, object?> fields, string name)
-    {
-        var rawValue = fields.GetValueOrDefault(name);
-        var boolStr = rawValue switch
-        {
-            bool b => b.ToString(),
-            _ => FieldValueToString(rawValue),
-        };
-        if (string.IsNullOrEmpty(boolStr) || boolStr == "0") boolStr = "False";
-        if (boolStr == "1") boolStr = "True";
-        FormFields.Add(new FormField
-        {
-            Name = name,
-            Label = FieldDescriptions.ToFriendlyLabel(name),
-            Tooltip = FieldDescriptions.GetTooltip(name),
-            FieldType = FormFieldType.Checkbox,
-            Value = boolStr,
-            OriginalValue = boolStr,
-        });
-    }
 
     private void AddMaterialSection(Dictionary<string, object?> fields, string fieldName, string title)
     {
@@ -655,7 +546,7 @@ public partial class BuildingsViewModel : ObservableObject
                     if (mh is Dictionary<string, object?> mhDict && mhDict.TryGetValue("RowName", out var rn))
                         mat = rn?.ToString() ?? "Item.Wood";
                     else
-                        mat = FieldValueToString(mh);
+                        mat = FormBuilder.FieldValueToString(mh);
                 }
                 // Or direct Name field
                 else if (matDict.TryGetValue("Name", out var nameVal))
@@ -713,70 +604,44 @@ public partial class BuildingsViewModel : ObservableObject
 
     private void AddItemRecipeFields(Dictionary<string, object?> fields)
     {
-        AddTextField(fields, "Name", label: "Row Name", readOnly: true);
-        AddTextField(fields, "ResultItemHandle", label: "Result Item");
-        AddTextField(fields, "CraftingStations");
-        AddTextField(fields, "CraftingTime");
-        AddTextField(fields, "CraftedAmount");
+        _form.AddTextField(fields, "Name", label: "Row Name", readOnly: true);
+        _form.AddTextField(fields, "ResultItemHandle", label: "Result Item");
+        _form.AddTextField(fields, "CraftingStations");
+        _form.AddTextField(fields, "CraftingTime");
+        _form.AddTextField(fields, "CraftedAmount");
 
         AddMaterialSection(fields, "DefaultRequiredMaterials", "Required Materials");
 
-        AddDropdown(fields, "EnabledState", ["Live", "Disabled", "Testing", "Hidden"], label: "Enabled State");
-        AddDropdown(fields, "DefaultUnlocks_UnlockType", ["None", "Fragments", "Construction", "Item"]);
-        AddTextField(fields, "DefaultUnlocks_NumFragments");
-        AddTextField(fields, "DefaultRequiredItems");
-        AddTextField(fields, "DefaultRequiredConstructions");
+        _form.AddDropdown(fields, "EnabledState", ["Live", "Disabled", "Testing", "Hidden"], label: "Enabled State");
+        _form.AddDropdown(fields, "DefaultUnlocks_UnlockType", ["None", "Fragments", "Construction", "Item"]);
+        _form.AddTextField(fields, "DefaultUnlocks_NumFragments");
+        _form.AddTextField(fields, "DefaultRequiredItems");
+        _form.AddTextField(fields, "DefaultRequiredConstructions");
     }
 
     private void AddCommonItemFields(Dictionary<string, object?> fields)
     {
-        AddTextField(fields, "DisplayName");
-        AddTextField(fields, "Description");
+        _form.AddTextField(fields, "DisplayName");
+        _form.AddTextField(fields, "Description");
         AddTextFieldWithOptions(fields, "Actor", _actorOptions);
-        AddDropdown(fields, "Tags", _enumOptions.GetValueOrDefault("Tags") ?? []);
-        AddDropdown(fields, "Portability", ["Inventory", "CanCarry", "Stationary"]);
-        AddTextField(fields, "MaxStackSize");
-        AddTextField(fields, "SlotSize");
-        AddTextField(fields, "BaseTradeValue");
-        AddDropdown(fields, "EnabledState", ["Live", "Disabled", "Testing"], label: "Enabled State");
+        _form.AddDropdown(fields, "Tags", _enumOptions.GetValueOrDefault("Tags") ?? []);
+        _form.AddDropdown(fields, "Portability", ["Inventory", "CanCarry", "Stationary"]);
+        _form.AddTextField(fields, "MaxStackSize");
+        _form.AddTextField(fields, "SlotSize");
+        _form.AddTextField(fields, "BaseTradeValue");
+        _form.AddDropdown(fields, "EnabledState", ["Live", "Disabled", "Testing"], label: "Enabled State");
     }
 
     private void AddConstructionDefinitionFields(Dictionary<string, object?> fields)
     {
-        AddTextField(fields, "Name", label: "Row Name", readOnly: true);
-        AddTextField(fields, "DisplayName");
-        AddTextField(fields, "Description");
+        _form.AddTextField(fields, "Name", label: "Row Name", readOnly: true);
+        _form.AddTextField(fields, "DisplayName");
+        _form.AddTextField(fields, "Description");
         AddTextFieldWithOptions(fields, "Actor", _actorOptions);
-        AddTextField(fields, "Icon", readOnly: true);
-        AddDropdown(fields, "Tags", _enumOptions.GetValueOrDefault("Tags") ?? []);
+        _form.AddTextField(fields, "Icon", readOnly: true);
+        _form.AddDropdown(fields, "Tags", _enumOptions.GetValueOrDefault("Tags") ?? []);
         AddTextFieldWithOptions(fields, "BackwardCompatibilityActors", _actorOptions);
-        AddDropdown(fields, "EnabledState", ["Live", "Disabled", "Testing"], label: "Enabled State");
-    }
-
-    /// <summary>Add multiple fields in a single horizontal row.</summary>
-    private void AddInlineRow(Dictionary<string, object?> fields, params string[] names)
-    {
-        var inlineFields = new List<FormField>();
-        foreach (var name in names)
-        {
-            var value = fields.GetValueOrDefault(name)?.ToString() ?? "";
-            inlineFields.Add(new FormField
-            {
-                Name = name,
-                Label = FieldDescriptions.ToFriendlyLabel(name),
-                Tooltip = FieldDescriptions.GetTooltip(name),
-                FieldType = FormFieldType.Text,
-                Value = value,
-                OriginalValue = value,
-            });
-        }
-
-        FormFields.Add(new FormField
-        {
-            Name = $"__inline_{string.Join("_", names)}",
-            FieldType = FormFieldType.InlineRow,
-            InlineFields = inlineFields,
-        });
+        _form.AddDropdown(fields, "EnabledState", ["Live", "Disabled", "Testing"], label: "Enabled State");
     }
 
     /// <summary>Text field that also has dropdown options for autocomplete-like behavior.</summary>
@@ -784,9 +649,9 @@ public partial class BuildingsViewModel : ObservableObject
         string? label = null)
     {
         if (options.Count > 0)
-            AddDropdown(fields, name, options, label);
+            _form.AddDropdown(fields, name, options, label);
         else
-            AddTextField(fields, name, label);
+            _form.AddTextField(fields, name, label);
     }
 
     // =========================================================================
