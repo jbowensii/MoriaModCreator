@@ -319,19 +319,46 @@ public partial class DefinitionsViewModel : ObservableObject
                 var fileName = Path.GetFileName(modFile.FilePath);
                 foreach (var change in modFile.Changes)
                 {
-                    var oldVal = change.Original
-                        ?? LookupOriginalValueCached(modFile.FilePath, change.Item, change.Property, jsonCache);
-
-                    ChangeCards.Add(new ChangeCard
+                    if (change.AddProperty != null)
                     {
-                        FileName = fileName,
-                        ItemName = change.Item,
-                        PropertyName = change.Property,
-                        NewValue = change.Value,
-                        OldValue = oldVal,
-                        ChangeType = "CHANGE",
-                        CardColor = "#2E7D32",
-                    });
+                        // This <change> wraps an <add_property> child.
+                        // Represent it as a single ADD card that carries all the
+                        // parent <change> attributes so the save path can reconstruct
+                        // the correct nested XML: <change><add_property/></change>.
+                        var ap = change.AddProperty;
+                        ChangeCards.Add(new ChangeCard
+                        {
+                            FileName = fileName,
+                            ItemName = ap.Item,
+                            PropertyName = ap.PropertyName,
+                            NewValue = ap.DefaultValue,
+                            OldValue = "(new property)",
+                            ChangeType = "ADD",
+                            CardColor = "#8B5CF6",
+                            AddPropertyName = ap.PropertyName,
+                            AddPropertyDefaultValue = ap.DefaultValue,
+                            AddPropertyType = ap.PropertyType,
+                            ParentChangeProperty = change.Property,
+                            ParentChangeValue = change.Value,
+                            ParentChangeOriginal = change.Original ?? "",
+                        });
+                    }
+                    else
+                    {
+                        var oldVal = change.Original
+                            ?? LookupOriginalValueCached(modFile.FilePath, change.Item, change.Property, jsonCache);
+
+                        ChangeCards.Add(new ChangeCard
+                        {
+                            FileName = fileName,
+                            ItemName = change.Item,
+                            PropertyName = change.Property,
+                            NewValue = change.Value,
+                            OldValue = oldVal,
+                            ChangeType = "CHANGE",
+                            CardColor = "#2E7D32",
+                        });
+                    }
                 }
                 foreach (var del in modFile.Deletes)
                 {
@@ -346,23 +373,8 @@ public partial class DefinitionsViewModel : ObservableObject
                         CardColor = "#d32f2f",
                     });
                 }
-
-                // Gap #13: add_property entries
-                foreach (var addProp in modFile.AddProperties)
-                {
-                    ChangeCards.Add(new ChangeCard
-                    {
-                        FileName = fileName,
-                        ItemName = addProp.Item,
-                        PropertyName = $"{addProp.PropertyName} ({addProp.PropertyType})",
-                        NewValue = addProp.JsonContent.Length > 200
-                            ? addProp.JsonContent[..200] + "..."
-                            : addProp.JsonContent,
-                        OldValue = "(new property)",
-                        ChangeType = "ADD",
-                        CardColor = "#8B5CF6",
-                    });
-                }
+                // Note: modFile.AddProperties is also populated (same data as the ADD cards above),
+                // but we do NOT iterate it here — the cards were already created in the Changes loop.
             }
 
             if (ChangeCards.Count == 0)
@@ -450,13 +462,36 @@ public partial class DefinitionsViewModel : ObservableObject
                     }
                     else if (card.ChangeType == "ADD")
                     {
-                        // ADD PROPERTY card — restore as <add_property> child of a <change>
-                        // The card stores item + property in the form "PropName (PropType)";
-                        // we can only write back a best-effort <add_property> block.
-                        var addElem = new System.Xml.Linq.XElement("add_property",
+                        // ADD PROPERTY card — write as <change><add_property/></change>
+                        // to match the Python build_manager schema.
+                        // The parent <change> attributes come from ParentChangeProperty/Value;
+                        // the <add_property> item attr and JSON content come from the AddProperty* fields.
+                        var jsonContent = System.Text.Json.JsonSerializer.Serialize(
+                            new System.Collections.Generic.Dictionary<string, object>
+                            {
+                                ["Name"] = card.AddPropertyName,
+                                ["DefaultValue"] = card.AddPropertyDefaultValue,
+                                ["Type"] = card.AddPropertyType,
+                            });
+
+                        var changeElem = new System.Xml.Linq.XElement("change",
+                            new System.Xml.Linq.XAttribute("item", card.ItemName),
+                            new System.Xml.Linq.XAttribute("property",
+                                string.IsNullOrEmpty(card.ParentChangeProperty)
+                                    ? card.AddPropertyName
+                                    : card.ParentChangeProperty),
+                            new System.Xml.Linq.XAttribute("value",
+                                string.IsNullOrEmpty(card.ParentChangeValue)
+                                    ? card.AddPropertyDefaultValue
+                                    : card.ParentChangeValue));
+                        if (!string.IsNullOrEmpty(card.ParentChangeOriginal))
+                            changeElem.Add(new System.Xml.Linq.XAttribute("original", card.ParentChangeOriginal));
+
+                        var addPropElem = new System.Xml.Linq.XElement("add_property",
                             new System.Xml.Linq.XAttribute("item", card.ItemName));
-                        addElem.Value = card.NewValue;
-                        modElem.Add(addElem);
+                        addPropElem.Value = jsonContent;
+                        changeElem.Add(addPropElem);
+                        modElem.Add(changeElem);
                     }
                     else
                     {
@@ -801,4 +836,18 @@ public partial class ChangeCard : ObservableObject
     [ObservableProperty] private string _oldValue = "";
     public string ChangeType { get; init; } = "CHANGE";
     public string CardColor { get; init; } = "#2E7D32";
+
+    // ADD-type fields — used when ChangeType == "ADD".
+    // Stored separately so the save path can reconstruct the correct JSON content
+    // without having to parse a mangled "PropName (PropType)" string.
+    // The parent <change> attrs are stored so we can reconstruct the full XML element on save.
+    [ObservableProperty] private string _addPropertyName = "";
+    [ObservableProperty] private string _addPropertyDefaultValue = "";
+    [ObservableProperty] private string _addPropertyType = "";
+    /// <summary>The parent &lt;change&gt; property attribute (e.g. "Durability").</summary>
+    [ObservableProperty] private string _parentChangeProperty = "";
+    /// <summary>The parent &lt;change&gt; value attribute (e.g. "100").</summary>
+    [ObservableProperty] private string _parentChangeValue = "";
+    /// <summary>The parent &lt;change&gt; original attribute (may be empty).</summary>
+    [ObservableProperty] private string _parentChangeOriginal = "";
 }

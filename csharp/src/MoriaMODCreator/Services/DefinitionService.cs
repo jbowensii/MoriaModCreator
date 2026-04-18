@@ -76,15 +76,56 @@ public class DefinitionService
             var filePath = modElem.Attribute("file")?.Value ?? "";
             var changes = new List<ModChange>();
             var deletes = new List<ModDelete>();
+            var addProps = new List<ModAddProperty>();
 
             foreach (var changeElem in modElem.Elements("change"))
             {
+                // Python schema: <add_property> is a child of <change>, not a sibling of it.
+                // The JSON text content has keys: Name, DefaultValue, Type.
+                ModAddProperty? addProp = null;
+                var addPropElem = changeElem.Element("add_property");
+                if (addPropElem != null)
+                {
+                    var jsonText = addPropElem.Value.Trim();
+                    var item = addPropElem.Attribute("item")?.Value
+                               ?? changeElem.Attribute("item")?.Value
+                               ?? "";
+
+                    // Parse the JSON to extract Name, DefaultValue, Type fields.
+                    string propName = "", propDefaultValue = "", propType = "";
+                    try
+                    {
+                        var parsed = System.Text.Json.JsonDocument.Parse(jsonText);
+                        propName = parsed.RootElement.TryGetProperty("Name", out var n) ? n.GetString() ?? "" : "";
+                        propType = parsed.RootElement.TryGetProperty("Type", out var t) ? t.GetString() ?? "" : "";
+                        // DefaultValue may be any JSON type (number, string, bool)
+                        propDefaultValue = parsed.RootElement.TryGetProperty("DefaultValue", out var dv)
+                            ? dv.ToString()
+                            : "";
+                    }
+                    catch
+                    {
+                        // Malformed JSON — fall back to empty fields; raw JSON stored in JsonContent.
+                    }
+
+                    addProp = new ModAddProperty
+                    {
+                        Item = item,
+                        PropertyName = propName,
+                        PropertyType = propType,
+                        DefaultValue = propDefaultValue,
+                        JsonContent = jsonText,
+                    };
+                    addProps.Add(addProp);
+                }
+
                 changes.Add(new ModChange
                 {
                     Item = changeElem.Attribute("item")?.Value ?? "",
                     Property = changeElem.Attribute("property")?.Value ?? "",
                     Value = changeElem.Attribute("value")?.Value ?? "",
                     Original = changeElem.Attribute("original")?.Value,
+                    AddProperty = addProp,
                 });
             }
 
@@ -103,6 +144,7 @@ public class DefinitionService
                 FilePath = filePath,
                 Changes = changes,
                 Deletes = deletes,
+                AddProperties = addProps,
             };
         }
     }
