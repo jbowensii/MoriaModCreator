@@ -302,7 +302,6 @@ public partial class DefCreatorViewModel : ObservableObject
         Status = $"Selected: {Path.GetFileName(filePath)}";
     }
 
-    [RelayCommand]
     private void SelectGeneratedFile(GeneratedFile? file)
     {
         if (file == null) return;

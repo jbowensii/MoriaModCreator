@@ -9,7 +9,7 @@
              Background="{StaticResource BackgroundBrush}">
 
     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-        <StackPanel Margin="20,15,20,15" MaxWidth="900" HorizontalAlignment="Stretch">
+        <StackPanel Margin="20,15,20,15" MaxWidth="900" HorizontalAlignment="Center">
 
             <!-- Title -->
             <TextBlock Text="Create DEF Files" FontSize="18" FontWeight="Bold"
