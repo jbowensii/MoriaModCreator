@@ -9,6 +9,7 @@
         Height="900" Width="900"
         MinHeight="700" MinWidth="700"
         WindowStartupLocation="CenterScreen"
+        WindowState="Maximized"
         Icon="Assets/Icons/app_icon.ico"
         Background="{StaticResource BackgroundBrush}">
 
@@ -47,10 +48,10 @@
                             Style="{StaticResource ToolbarButton}"
                             Background="{StaticResource ButtonInactiveBrush}"
                             Click="OnSecretsClick" Margin="3,0"/>
-                    <Button x:Name="ObjectEditorBtn" Content="Create/Edit Secret"
-                            Style="{StaticResource ToolbarButton}" MinWidth="140"
+                    <Button x:Name="CreateEditSecretBtn" Content="Create/Edit Secret"
+                            Style="{StaticResource ToolbarButton}"
                             Background="{StaticResource ButtonInactiveBrush}"
-                            Click="OnObjectEditorClick" Margin="3,0"/>
+                            Click="OnCreateEditSecretClick" Margin="3,0"/>
                     <Button x:Name="ConstructionsBtn" Content="Constructions"
                             Style="{StaticResource ToolbarButton}"
                             Background="{StaticResource ButtonInactiveBrush}"
@@ -99,14 +100,23 @@
             <views:DefinitionsView x:Name="DefinitionsTab" Visibility="Collapsed"/>
             <views:BuildingsView x:Name="SecretsTab" Visibility="Collapsed"/>
             <views:BuildingsView x:Name="ConstructionsTab" Visibility="Collapsed"/>
-            <views:ObjectEditorView x:Name="ObjectEditorTab" Visibility="Collapsed"/>
             <views:DefCreatorView x:Name="CreateDefTab" Visibility="Collapsed"/>
+            <views:ObjectEditorView x:Name="ObjectEditorTab" Visibility="Collapsed"/>
         </Grid>
 
         <!-- ===== STATUS BAR ===== -->
         <Border Grid.Row="2" Background="{StaticResource SurfaceBrush}" Padding="15,8">
-            <TextBlock x:Name="StatusText" Text="" FontSize="12"
-                       Foreground="{StaticResource TextSecondaryBrush}"/>
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock x:Name="StatusText" Text="" FontSize="12"
+                           Foreground="{StaticResource TextSecondaryBrush}"
+                           VerticalAlignment="Center"/>
+                <ProgressBar x:Name="StatusProgressBar" Grid.Column="1" Width="200" Height="8"
+                             Visibility="Collapsed" Maximum="1"/>
+            </Grid>
         </Border>
     </Grid>
 </Window>
