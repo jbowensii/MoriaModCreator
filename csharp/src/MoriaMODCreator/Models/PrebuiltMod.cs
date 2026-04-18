@@ -1,9 +1,11 @@
+using CommunityToolkit.Mvvm.ComponentModel;
+
 namespace MoriaMODCreator.Models;
 
 /// <summary>
 /// Represents a prebuilt mod .ini file for Novice mode.
 /// </summary>
-public class PrebuiltMod
+public partial class PrebuiltMod : ObservableObject
 {
     public string FilePath { get; init; } = "";
     public string Name { get; init; } = "";
@@ -12,5 +14,7 @@ public class PrebuiltMod
     public string Description { get; init; } = "";
     public bool IncludeSecrets { get; init; }
     public List<string> DefPaths { get; init; } = [];
-    public bool IsChecked { get; set; }
+
+    [ObservableProperty]
+    private bool _isChecked;
 }

@@ -87,10 +87,20 @@ public class ObjectTemplateService
         return false;
     }
 
-    /// <summary>Extract recipe fields from a DataTable row.</summary>
+    /// <summary>
+    /// Extract recipe fields from a DataTable row, converting UAssetAPI property nodes
+    /// to display-friendly values based on their $type.
+    /// Matches Python buildings_view.py extract_recipe_fields().
+    /// </summary>
     public Dictionary<string, object?> ExtractRecipeFields(JsonNode row)
     {
         var fields = new Dictionary<string, object?>();
+
+        // Add the row Name itself (not inside Value array)
+        var rowName = row["Name"]?.GetValue<string>();
+        if (rowName != null)
+            fields["Name"] = rowName;
+
         var valueArray = row["Value"] as JsonArray;
         if (valueArray == null) return fields;
 
@@ -98,9 +108,205 @@ public class ObjectTemplateService
         {
             var name = prop?["Name"]?.GetValue<string>();
             if (name == null) continue;
-            fields[name] = prop!["Value"];
+
+            try
+            {
+                var typeStr = prop!["$type"]?.GetValue<string>() ?? "";
+                var structType = prop["StructType"]?.GetValue<string>() ?? "";
+
+                // Flatten StructPropertyData (except GameplayTagContainer) with underscore prefix
+                // e.g., DefaultUnlocks → DefaultUnlocks_UnlockType, DefaultUnlocks_NumFragments, etc.
+                // This matches the Python extract_recipe_fields() behavior.
+                if (typeStr.Contains("StructPropertyData") && structType != "GameplayTagContainer")
+                {
+                    var innerValue = prop["Value"] as JsonArray;
+                    if (innerValue != null)
+                    {
+                        foreach (var innerProp in innerValue)
+                        {
+                            var innerName = innerProp?["Name"]?.GetValue<string>();
+                            if (innerName == null) continue;
+                            fields[$"{name}_{innerName}"] = ExtractPropertyValue(innerProp!);
+                        }
+                    }
+                    // Also store the raw struct value for code that accesses it directly
+                    fields[name] = ExtractPropertyValue(prop);
+                    continue;
+                }
+
+                // ArrayPropertyData — special handling for SoftObject arrays
+                if (typeStr.Contains("ArrayPropertyData"))
+                {
+                    var arrValue = prop["Value"] as JsonArray;
+                    if (arrValue != null && arrValue.Count > 0)
+                    {
+                        var firstType = arrValue[0]?["$type"]?.GetValue<string>() ?? "";
+                        var firstStructType = arrValue[0]?["StructType"]?.GetValue<string>() ?? "";
+
+                        // Direct SoftObjectPropertyData array
+                        if (firstType.Contains("SoftObjectPropertyData"))
+                        {
+                            var assetNames = new List<string>();
+                            foreach (var item in arrValue)
+                            {
+                                var assetName = item?["Value"]?["AssetPath"]?["AssetName"]?.GetValue<string>();
+                                if (!string.IsNullOrEmpty(assetName) && assetName != "None")
+                                    assetNames.Add(assetName);
+                            }
+                            fields[name] = assetNames;
+                            continue;
+                        }
+
+                        // StructPropertyData wrapping SoftObjectPath (e.g., BackwardCompatibilityActors)
+                        if (firstStructType == "SoftObjectPath" || firstType.Contains("StructPropertyData"))
+                        {
+                            var assetNames = new List<string>();
+                            foreach (var item in arrValue)
+                            {
+                                // Drill into struct → inner properties → find SoftObjectPath → AssetPath.AssetName
+                                var innerArr = item?["Value"] as JsonArray;
+                                if (innerArr != null)
+                                {
+                                    foreach (var innerProp in innerArr)
+                                    {
+                                        var innerVal = innerProp?["Value"];
+                                        // Check for FSoftObjectPath structure
+                                        var assetPath = innerVal?["AssetPath"];
+                                        if (assetPath != null)
+                                        {
+                                            var assetName = assetPath["AssetName"]?.GetValue<string>();
+                                            if (!string.IsNullOrEmpty(assetName) && assetName != "None")
+                                                assetNames.Add(assetName);
+                                        }
+                                    }
+                                }
+                            }
+                            if (assetNames.Count > 0)
+                            {
+                                fields[name] = assetNames;
+                                continue;
+                            }
+                        }
+                    }
+                }
+
+                fields[name] = ExtractPropertyValue(prop);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to extract property '{Name}' — skipping", name);
+                fields[name] = $"(error: {ex.Message})";
+            }
         }
         return fields;
+    }
+
+    /// <summary>
+    /// Extract a display-friendly value from a UAssetAPI property node based on its $type.
+    /// Matches Python _extract_property_value().
+    /// </summary>
+    public object? ExtractPropertyValue(JsonNode prop)
+    {
+        var typeStr = prop["$type"]?.GetValue<string>() ?? "";
+        var propName = prop["Name"]?.GetValue<string>() ?? "?";
+
+        if (typeStr.Contains("BoolPropertyData"))
+            return prop["Value"]?.GetValue<bool>() ?? false;
+
+        if (typeStr.Contains("IntPropertyData"))
+        {
+            var iVal = prop["Value"];
+            if (iVal == null) return 0;
+            try { return iVal.GetValue<int>(); }
+            catch { return iVal.ToString(); }
+        }
+
+        if (typeStr.Contains("FloatPropertyData"))
+        {
+            var fVal = prop["Value"];
+            if (fVal == null) return 0.0;
+            try { return fVal.GetValue<double>(); }
+            catch { return fVal.ToString(); } // Handle "None" or string values
+        }
+
+        // BytePropertyData — can be numeric (byte value) or string (enum)
+        if (typeStr.Contains("BytePropertyData"))
+        {
+            var enumVal = prop["EnumValue"]?.ToString();
+            if (!string.IsNullOrEmpty(enumVal) && enumVal != "None") return enumVal;
+            return prop["Value"]?.ToString() ?? "";
+        }
+
+        if (typeStr.Contains("EnumPropertyData") || typeStr.Contains("NamePropertyData") ||
+            typeStr.Contains("StrPropertyData"))
+        {
+            var valNode = prop["Value"];
+            if (valNode == null) return "";
+            try { return valNode.GetValue<string>(); }
+            catch { return valNode.ToString(); }
+        }
+
+        if (typeStr.Contains("TextPropertyData"))
+        {
+            // Prefer CultureInvariantString, fall back to Value
+            var cis = prop["CultureInvariantString"]?.GetValue<string>();
+            if (!string.IsNullOrEmpty(cis)) return cis;
+            return prop["Value"]?.ToString() ?? "";
+        }
+
+        if (typeStr.Contains("SoftObjectPropertyData"))
+        {
+            // Extract: Value.AssetPath.AssetName
+            return prop["Value"]?["AssetPath"]?["AssetName"]?.GetValue<string>() ?? "";
+        }
+
+        if (typeStr.Contains("ObjectPropertyData"))
+        {
+            // Import index (e.g., icon reference)
+            return prop["Value"]?.ToString() ?? "";
+        }
+
+        if (typeStr.Contains("StructPropertyData"))
+        {
+            var structType = prop["StructType"]?.GetValue<string>() ?? "";
+            if (structType == "GameplayTagContainer")
+            {
+                // Extract tag names
+                return ExtractTagNames(prop);
+            }
+
+            // Flatten struct into dict
+            var structDict = new Dictionary<string, object?>();
+            var structValue = prop["Value"] as JsonArray;
+            if (structValue != null)
+            {
+                foreach (var sp in structValue)
+                {
+                    var spName = sp?["Name"]?.GetValue<string>();
+                    if (spName != null)
+                        structDict[spName] = ExtractPropertyValue(sp!);
+                }
+            }
+            return structDict;
+        }
+
+        if (typeStr.Contains("ArrayPropertyData"))
+        {
+            var items = new List<object?>();
+            var arrValue = prop["Value"] as JsonArray;
+            if (arrValue != null)
+            {
+                foreach (var item in arrValue)
+                {
+                    if (item != null)
+                        items.Add(ExtractPropertyValue(item));
+                }
+            }
+            return items;
+        }
+
+        // Fallback
+        return prop["Value"]?.ToString() ?? "";
     }
 
     /// <summary>Extract construction/building fields from a row.</summary>
@@ -159,8 +365,16 @@ public class ObjectTemplateService
         {
             foreach (var tag in tagArray)
             {
-                var val = tag?.GetValue<string>();
-                if (val != null) tags.Add(val);
+                if (tag == null) continue;
+                // Tag may be a bare string, or a UAssetAPI NamePropertyData wrapper
+                string? val = null;
+                try { val = tag.GetValue<string>(); }
+                catch
+                {
+                    // Wrapped: { "Name": "...", "Value": "Tag.Foo" }
+                    val = tag["Value"]?.ToString() ?? tag.ToString();
+                }
+                if (!string.IsNullOrEmpty(val)) tags.Add(val);
             }
         }
         return tags;

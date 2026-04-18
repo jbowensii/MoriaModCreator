@@ -38,7 +38,7 @@ public class BuildingsDataService
 
     /// <summary>
     /// Refresh the cache by copying source JSON files into the cache directory.
-    /// Source is either output/jsondata (game) or Secrets Source/jsondata_full (secrets).
+    /// Source is either output/jsondata (game) or Secrets Source/jsondata_github/modified-json/Moria/ (secrets).
     /// </summary>
     public void RefreshCache(string mode, string prefix, string category, CategoryPaths paths)
     {

@@ -19,7 +19,8 @@ public class JsonDataService
     }
 
     /// <summary>
-    /// Strip rows from secrets JSON that already exist in the game JSON.
+    /// Strip rows from secrets JSON that are IDENTICAL to game JSON rows (same Name AND same content).
+    /// Rows where Name matches but content differs (Tobi's modifications) are KEPT.
     /// Modifies the secrets file in-place.
     /// Returns (rowsRemoved, rowsRemaining).
     /// </summary>
@@ -31,25 +32,41 @@ public class JsonDataService
         if (secretsNode == null || gameNode == null)
             return (0, 0);
 
-        var gameRowNames = GetRowNames(gameNode);
-        if (gameRowNames.Count == 0)
+        // Build a lookup: game row name → serialized row content (for deep equality check)
+        var gameRows = new Dictionary<string, string>();
+        var gameData = GetDataArray(gameNode);
+        if (gameData == null || gameData.Count == 0)
             return (0, 0);
+
+        foreach (var row in gameData)
+        {
+            var name = row?["Name"]?.GetValue<string>();
+            if (name != null)
+                gameRows[name] = row!.ToJsonString();
+        }
 
         var secretsData = GetDataArray(secretsNode);
         if (secretsData == null)
             return (0, 0);
 
-        int originalCount = secretsData.Count;
         int removed = 0;
 
-        // Remove rows whose Name exists in game data (iterate backwards)
+        // Remove rows that are identical to game rows (name + content match). Iterate backwards.
         for (int i = secretsData.Count - 1; i >= 0; i--)
         {
             var rowName = secretsData[i]?["Name"]?.GetValue<string>();
-            if (rowName != null && gameRowNames.Contains(rowName))
+            if (rowName == null) continue;
+
+            if (gameRows.TryGetValue(rowName, out var gameRowJson))
             {
-                secretsData.RemoveAt(i);
-                removed++;
+                var secretsRowJson = secretsData[i]!.ToJsonString();
+                if (secretsRowJson == gameRowJson)
+                {
+                    // Identical content — this is an unmodified game row, safe to strip
+                    secretsData.RemoveAt(i);
+                    removed++;
+                }
+                // else: same name but different content — Tobi's modification, KEEP it
             }
         }
 
@@ -57,7 +74,7 @@ public class JsonDataService
         {
             var options = new JsonSerializerOptions { WriteIndented = true };
             File.WriteAllText(secretsJsonPath, secretsNode.ToJsonString(options));
-            _logger.LogInformation("Stripped {Removed} rows from {File}, {Remaining} remain",
+            _logger.LogInformation("Stripped {Removed} identical rows from {File}, {Remaining} remain",
                 removed, Path.GetFileName(secretsJsonPath), secretsData.Count);
         }
 

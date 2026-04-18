@@ -77,19 +77,8 @@ public class BuildService
                 () => PhaseC_ApplyChanges(definitions, jsonFilesDir), ct);
             _logger.LogInformation("Phase C: {Applied} changes applied, {Errors} errors", applied, errors);
 
-            // Phase D: Convert JSON to uasset
+            // Phase D: Convert JSON back to uasset (json→uasset via UAssetGUI fromjson)
             progress?.Report(new("Converting to uasset...", 0.40));
-            var jsonFiles = Directory.GetFiles(jsonFilesDir, "*.json", SearchOption.AllDirectories);
-            var convResult = await _uassetService.BatchToJsonAsync(
-                jsonFiles.ToList(), jsonFilesDir, uassetDir,
-                new Progress<(int Done, int Total)>(p =>
-                    progress?.Report(new($"Converting {p.Done}/{p.Total}...",
-                        0.40 + 0.30 * p.Done / Math.Max(p.Total, 1)))),
-                ct);
-
-            // Wait — Phase D needs fromjson, not tojson. Fix the call:
-            // Actually BatchToJsonAsync converts uasset→json. We need the reverse.
-            // For Phase D, we convert json→uasset one at a time.
             await PhaseD_ConvertToUasset(jsonFilesDir, uassetDir, progress, ct);
 
             // Phase E: Package with retoc
@@ -168,24 +157,29 @@ public class BuildService
 
     private void PhaseB_OverlaySecrets(string jsonFilesDir)
     {
-        var secretsFullDir = _config.SecretsJsonDataFullDir;
-        if (!Directory.Exists(secretsFullDir))
+        // Source is jsondata_github/modified-json/Moria/ — post-processed DataTable JSON
+        // (copied from Secrets Source/github/json/Moria/Content/ during import).
+        var sourceDir = Path.Combine(_config.SecretsJsonDataGitHubDir, "modified-json", "Moria");
+        if (!Directory.Exists(sourceDir) ||
+            Directory.GetFiles(sourceDir, "*.json", SearchOption.AllDirectories).Length == 0)
         {
-            _logger.LogWarning("Phase B: jsondata_full not found — re-import secrets");
-            return;
+            throw new InvalidOperationException(
+                "Phase B: Secrets JSON not found at jsondata_github/modified-json/Moria/. " +
+                "Run Import to download secrets data from GitHub first.");
         }
 
         int copied = 0;
-        foreach (var jsonFile in Directory.GetFiles(secretsFullDir, "*.json", SearchOption.AllDirectories))
+        foreach (var jsonFile in Directory.GetFiles(sourceDir, "*.json", SearchOption.AllDirectories))
         {
-            var relPath = Path.GetRelativePath(secretsFullDir, jsonFile);
-            var dstPath = Path.Combine(jsonFilesDir, relPath);
+            // Destination should be jsonFiles/Moria/... (matches game JSON layout)
+            var relFromMoria = Path.GetRelativePath(Path.GetDirectoryName(sourceDir)!, jsonFile);
+            var dstPath = Path.Combine(jsonFilesDir, relFromMoria);
             Directory.CreateDirectory(Path.GetDirectoryName(dstPath)!);
             File.Copy(jsonFile, dstPath, overwrite: true);
             copied++;
         }
 
-        _logger.LogInformation("Phase B: Overlaid {Count} secrets files", copied);
+        _logger.LogInformation("Phase B: Overlaid {Count} secrets files from jsondata_github/modified-json/Moria/", copied);
     }
 
     private (int Applied, int Errors) PhaseC_ApplyChanges(
@@ -298,10 +292,13 @@ public class BuildService
 
     private void PhaseF_CopySecretsPaks(string modFinalDir)
     {
-        var secretsDir = _config.SecretsSourceDir;
+        // These companion paks must be included as-is in the final mod ZIP.
+        // They come from the user-provided Nexus Secrets ZIP, extracted during import
+        // to Secrets Source/companion_paks/
+        var companionDir = Path.Combine(_config.SecretsSourceDir, "companion_paks");
         var secretsFiles = new[]
         {
-            "SecretsOfKhazadDum_Localization_P.pak",
+            "SecretsOfKhazadDum_LocTags_P.pak",
             "TobiModsAddons_P.pak",
             "TobiModsAddons_P.ucas",
             "TobiModsAddons_P.utoc",
@@ -309,16 +306,24 @@ public class BuildService
 
         foreach (var fileName in secretsFiles)
         {
-            var matches = Directory.GetFiles(secretsDir, fileName, SearchOption.AllDirectories);
-            if (matches.Length > 0)
+            // Check companion_paks first, then search all of Secrets Source as fallback
+            var src = Path.Combine(companionDir, fileName);
+            if (!File.Exists(src))
             {
-                File.Copy(matches[0], Path.Combine(modFinalDir, fileName), overwrite: true);
-                _logger.LogInformation("Phase F: Copied {File}", fileName);
+                var matches = Directory.Exists(_config.SecretsSourceDir)
+                    ? Directory.GetFiles(_config.SecretsSourceDir, fileName, SearchOption.AllDirectories)
+                    : [];
+                if (matches.Length > 0)
+                    src = matches[0];
+                else
+                {
+                    _logger.LogWarning("Phase F: Companion pak not found: {File}", fileName);
+                    continue;
+                }
             }
-            else
-            {
-                _logger.LogWarning("Phase F: Secrets file not found: {File}", fileName);
-            }
+
+            File.Copy(src, Path.Combine(modFinalDir, fileName), overwrite: true);
+            _logger.LogInformation("Phase F: Copied {File}", fileName);
         }
     }
 

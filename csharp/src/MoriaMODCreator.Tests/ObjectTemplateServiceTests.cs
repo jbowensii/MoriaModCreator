@@ -181,8 +181,70 @@ public class ObjectTemplateServiceTests
     {
         var row = CreateRow("Recipe1", ("Material", "Iron"), ("Amount", 5));
         var fields = _service.ExtractRecipeFields(row);
-        Assert.Equal(2, fields.Count);
+        Assert.Equal(3, fields.Count); // Name + Material + Amount
+        Assert.True(fields.ContainsKey("Name"));
         Assert.True(fields.ContainsKey("Material"));
         Assert.True(fields.ContainsKey("Amount"));
+    }
+
+    [Fact]
+    public void ExtractTagNames_HandlesPlainStringTags()
+    {
+        var container = JsonNode.Parse("""
+            {
+              "Name": "Tags",
+              "StructType": "GameplayTagContainer",
+              "Value": [
+                { "Name": "GameplayTags", "Value": [ "Tag.One", "Tag.Two" ] }
+              ]
+            }
+            """)!;
+        var tags = _service.ExtractTagNames(container);
+        Assert.Equal(2, tags.Count);
+        Assert.Contains("Tag.One", tags);
+        Assert.Contains("Tag.Two", tags);
+    }
+
+    [Fact]
+    public void ExtractTagNames_HandlesWrappedNamePropertyData()
+    {
+        // Some UAssetAPI dumps wrap tags in NamePropertyData objects instead of bare strings.
+        // Previously this crashed with GetValue<string>(). Must no longer crash.
+        var container = JsonNode.Parse("""
+            {
+              "Name": "Tags",
+              "StructType": "GameplayTagContainer",
+              "Value": [
+                { "Name": "GameplayTags", "Value": [
+                  { "$type": "NamePropertyData", "Name": "Tag", "Value": "Tag.Wrapped" }
+                ] }
+              ]
+            }
+            """)!;
+        var tags = _service.ExtractTagNames(container);
+        Assert.Single(tags);
+        Assert.Equal("Tag.Wrapped", tags[0]);
+    }
+
+    [Fact]
+    public void ExtractPropertyValue_FloatWithStringNoneValue_DoesNotThrow()
+    {
+        // UAssetAPI sometimes emits "None" as a string for a nulled-out Float slot.
+        // This used to crash Tools/Weapons forms.
+        var prop = JsonNode.Parse("""
+            { "$type": "FloatPropertyData", "Name": "Speed", "Value": "None" }
+            """)!;
+        var result = _service.ExtractPropertyValue(prop);
+        Assert.NotNull(result);
+    }
+
+    [Fact]
+    public void ExtractPropertyValue_IntWithStringValue_DoesNotThrow()
+    {
+        var prop = JsonNode.Parse("""
+            { "$type": "IntPropertyData", "Name": "Count", "Value": "None" }
+            """)!;
+        var result = _service.ExtractPropertyValue(prop);
+        Assert.NotNull(result);
     }
 }

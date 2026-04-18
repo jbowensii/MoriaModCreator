@@ -28,7 +28,10 @@ public class ConfigService
     public string DefinitionsDir => GetValue("Directories", "definitions") ?? Path.Combine(AppDataDir, "Definitions");
     public string PrebuiltModfilesDir => Path.Combine(AppDataDir, "prebuilt modfiles");
     public string SecretsSourceDir => Path.Combine(AppDataDir, "Secrets Source");
-    public string SecretsJsonDataFullDir => Path.Combine(SecretsSourceDir, "jsondata_full");
+    /// <summary>Raw extracted repo contents (full tree including /json, /StringTables, /scripts, etc.).</summary>
+    public string SecretsGitHubRawDir => Path.Combine(SecretsSourceDir, "github");
+    /// <summary>Post-processed DataTable JSON copied out of /github/json/Moria/Content/.</summary>
+    public string SecretsJsonDataGitHubDir => Path.Combine(SecretsSourceDir, "jsondata_github");
     public string SecretsJsonDataDir => Path.Combine(SecretsSourceDir, "jsondata");
     public string OutputDir => GetValue("Directories", "output") ?? Path.Combine(AppDataDir, "output");
     public string OutputJsonDataDir => Path.Combine(OutputDir, "jsondata");
@@ -114,34 +117,90 @@ public class ConfigService
     public void SetConstructionsJsonDir(string path) =>
         SetValue("Settings", "constructions_json_dir", path);
 
-    /// <summary>Apply a color scheme to the WPF application theme.</summary>
     /// <summary>
-    /// Find a source JSON file by checking secrets jsondata_full first (for secrets mode),
-    /// then game output jsondata. Shared utility for CategoryDataService and BuildingsDataService.
+    /// Find a source JSON file by checking Secrets Source/jsondata_github/modified-json/Moria/Content/ first
+    /// (for secrets mode), then game output jsondata.
+    /// Shared utility for CategoryDataService and BuildingsDataService.
     /// </summary>
     public string? FindSourceJson(string mode, string relativePath)
     {
-        // Check secrets jsondata_full first for secrets mode
+        // Secrets mode: use New Secrets (filtered, secrets-only rows)
         if (mode == "secrets")
         {
-            var secretsPath = Path.Combine(SecretsJsonDataFullDir, "Moria", "Content", relativePath);
-            if (File.Exists(secretsPath)) return secretsPath;
+            var newSecretsPath = Path.Combine(NewSecretsJsonDataDir, "Moria", "Content", relativePath);
+            if (File.Exists(newSecretsPath)) return newSecretsPath;
+
+            // Fallback to jsondata_github full data
+            var githubPath = Path.Combine(
+                SecretsJsonDataGitHubDir, "modified-json", "Moria", "Content", relativePath);
+            if (File.Exists(githubPath)) return githubPath;
         }
 
-        // Check game output jsondata
+        // Constructions mode + default: use game output ONLY (no secrets data)
         var gamePath = Path.Combine(OutputJsonDataDir, "Moria", "Content", relativePath);
         if (File.Exists(gamePath)) return gamePath;
 
         return null;
     }
 
-    /// <summary>Apply a color scheme to the WPF application theme.</summary>
+    /// <summary>Color palette definition for a theme.</summary>
+    private record ColorPalette(
+        string Background, string Surface, string Primary, string Accent,
+        string Button, string ButtonHover, string ButtonInactive, string ButtonInactiveHover,
+        string Import, string ListItemHover, string ListItemSelected);
+
+    private static readonly Dictionary<string, ColorPalette> Palettes = new()
+    {
+        ["Blue (Default)"] = new("#1a1a2e", "#2d2d44", "#1f6aa5", "#3b8ed0",
+            "#1f6aa5", "#3b8ed0", "#4d4d4d", "#666666",
+            "#2E7D32", "#3a3a55", "#2a4a6b"),
+        ["Dark Blue"] = new("#0d1b2a", "#1b2838", "#1565C0", "#42A5F5",
+            "#1565C0", "#42A5F5", "#37474F", "#546E7A",
+            "#0D47A1", "#263850", "#1a3a5c"),
+        ["Green"] = new("#1a2e1a", "#2d442d", "#2E7D32", "#4CAF50",
+            "#2E7D32", "#4CAF50", "#4d4d4d", "#666666",
+            "#1B5E20", "#3a553a", "#2a6b2a"),
+    };
+
+    /// <summary>
+    /// Apply a color scheme by updating existing SolidColorBrush.Color properties.
+    /// This works with StaticResource because the brush objects stay the same — only their Color changes.
+    /// </summary>
     public static void ApplyColorScheme(string scheme)
     {
-        // WPF themes are handled via ResourceDictionary at application level.
-        // This is a placeholder — the actual theme switching would update
-        // Application.Current.Resources merged dictionaries.
-        // For now, only dark theme is supported.
+        var app = System.Windows.Application.Current;
+        if (app == null) return;
+
+        if (!Palettes.TryGetValue(scheme, out var palette))
+            palette = Palettes["Blue (Default)"];
+
+        static System.Windows.Media.Color Parse(string hex) =>
+            (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(hex);
+
+        static void SetBrush(System.Windows.Application a, string key, string hex)
+        {
+            if (a.Resources[key] is System.Windows.Media.SolidColorBrush brush)
+                brush.Color = Parse(hex);
+        }
+
+        try
+        {
+            SetBrush(app, "BackgroundBrush", palette.Background);
+            SetBrush(app, "SurfaceBrush", palette.Surface);
+            SetBrush(app, "PrimaryBrush", palette.Primary);
+            SetBrush(app, "AccentBrush", palette.Accent);
+            SetBrush(app, "ButtonBrush", palette.Button);
+            SetBrush(app, "ButtonHoverBrush", palette.ButtonHover);
+            SetBrush(app, "ButtonInactiveBrush", palette.ButtonInactive);
+            SetBrush(app, "ButtonInactiveHoverBrush", palette.ButtonInactiveHover);
+            SetBrush(app, "ImportBrush", palette.Import);
+            SetBrush(app, "ListItemHoverBrush", palette.ListItemHover);
+            SetBrush(app, "ListItemSelectedBrush", palette.ListItemSelected);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Failed to apply color scheme '{scheme}': {ex.Message}");
+        }
     }
 
     public bool IsConfigValid()

@@ -119,6 +119,44 @@ public class JsonDataServiceTests
         finally { File.Delete(secretsPath); File.Delete(gamePath); }
     }
 
+    [Fact]
+    public void StripDuplicateRows_KeepsModifiedRowsWithSameName()
+    {
+        // Game row: MaxStackSize=100. Secrets row: same name but MaxStackSize=999 (Tobi's mod).
+        var gameJson = CreateDataTableJson("SharedSword");
+        var secretsJson = $$"""
+        {
+            "NameMap": ["MaxStackSize", "EnabledState"],
+            "Exports": [{
+                "Table": {
+                    "Data": [
+                        {"Name": "SharedSword", "Value": [{"Name": "MaxStackSize", "Value": 999, "$type": "UAssetAPI.PropertyTypes.Structs.IntPropertyData, UAssetAPI"}]},
+                        {"Name": "NewDagger", "Value": [{"Name": "MaxStackSize", "Value": 50, "$type": "UAssetAPI.PropertyTypes.Structs.IntPropertyData, UAssetAPI"}]}
+                    ]
+                }
+            }]
+        }
+        """;
+
+        var secretsPath = Path.GetTempFileName();
+        var gamePath = Path.GetTempFileName();
+        File.WriteAllText(secretsPath, secretsJson);
+        File.WriteAllText(gamePath, gameJson);
+
+        try
+        {
+            var (removed, remaining) = _service.StripDuplicateRows(secretsPath, gamePath);
+            // SharedSword has different content (999 vs 100), so it should NOT be stripped
+            Assert.Equal(0, removed);
+            Assert.Equal(2, remaining);
+
+            var result = JsonNode.Parse(File.ReadAllText(secretsPath));
+            var data = result!["Exports"]![0]!["Table"]!["Data"] as JsonArray;
+            Assert.Equal(2, data!.Count);
+        }
+        finally { File.Delete(secretsPath); File.Delete(gamePath); }
+    }
+
     // --- MergeSecretsRows tests ---
 
     [Fact]

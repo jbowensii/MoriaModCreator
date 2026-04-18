@@ -112,16 +112,22 @@ public partial class ConfigDialog : Window
                 selected.Name == "Custom" ? GamePathLabel.Text : selected.Path);
         }
 
-        _config.SetValue("Settings", "utilities_dir", UtilitiesBox.Text);
-        _config.SetValue("Settings", "output_dir", OutputBox.Text);
-        _config.SetValue("Settings", "mymodfiles_dir", MyModFilesBox.Text);
-        _config.SetValue("Settings", "definitions_dir", DefinitionsBox.Text);
-        _config.SetValue("Settings", "final_destination", FinalDestBox.Text);
+        // Write to Directories section for Python compatibility
+        _config.SetValue("Directories", "utilities", UtilitiesBox.Text);
+        _config.SetValue("Directories", "output", OutputBox.Text);
+        _config.SetValue("Directories", "mymodfiles", MyModFilesBox.Text);
+        _config.SetValue("Directories", "definitions", DefinitionsBox.Text);
+        _config.SetValue("Directories", "final_destination", FinalDestBox.Text);
         _config.SetValue("Settings", "color_scheme", ColorSchemeDropdown.SelectedItem?.ToString() ?? "Blue (Default)");
         _config.SetValue("Settings", "max_workers", WorkersDropdown.SelectedItem?.ToString() ?? "4");
         _config.SetValue("Debug", "debug_mode", DebugCheck.IsChecked == true ? "true" : "false");
 
         _config.Save();
+
+        // Apply color scheme immediately
+        var scheme = ColorSchemeDropdown.SelectedItem?.ToString() ?? "Blue (Default)";
+        ConfigService.ApplyColorScheme(scheme);
+
         DialogResult = true;
         Close();
     }

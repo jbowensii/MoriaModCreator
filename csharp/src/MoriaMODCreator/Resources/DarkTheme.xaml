@@ -36,6 +36,24 @@
     <SolidColorBrush x:Key="BuildBrush" Color="{StaticResource BuildColor}"/>
     <SolidColorBrush x:Key="ImportBrush" Color="{StaticResource ImportColor}"/>
 
+    <!-- List item hover/selection colors -->
+    <Color x:Key="ListItemHoverColor">#3a3a55</Color>
+    <Color x:Key="ListItemSelectedColor">#2a4a6b</Color>
+    <SolidColorBrush x:Key="ListItemHoverBrush" Color="{StaticResource ListItemHoverColor}"/>
+    <SolidColorBrush x:Key="ListItemSelectedBrush" Color="{StaticResource ListItemSelectedColor}"/>
+
+    <!-- Reusable list item style with hover effect -->
+    <Style x:Key="ListItemBorder" TargetType="Border">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Padding" Value="8,6"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Background" Value="{StaticResource ListItemHoverBrush}"/>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
     <!-- Window style -->
     <Style TargetType="Window">
         <Setter Property="Background" Value="{StaticResource BackgroundBrush}"/>
@@ -90,7 +108,7 @@
         <Setter Property="Height" Value="36"/>
     </Style>
 
-    <!-- TextBox -->
+    <!-- TextBox — Tag renders as a watermark/placeholder when Text is empty -->
     <Style TargetType="TextBox">
         <Setter Property="Background" Value="{StaticResource SurfaceBrush}"/>
         <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
@@ -99,6 +117,46 @@
         <Setter Property="Padding" Value="8,6"/>
         <Setter Property="FontSize" Value="14"/>
         <Setter Property="CaretBrush" Value="{StaticResource TextBrush}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="TextBox">
+                    <Grid>
+                        <Border x:Name="Bd" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="3"
+                                SnapsToDevicePixels="True"/>
+                        <TextBlock x:Name="Watermark"
+                                   Text="{TemplateBinding Tag}"
+                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   Opacity="0.6"
+                                   IsHitTestVisible="False"
+                                   Margin="{TemplateBinding Padding}"
+                                   VerticalAlignment="Center"
+                                   HorizontalAlignment="Left"
+                                   Visibility="Collapsed"/>
+                        <ScrollViewer x:Name="PART_ContentHost"
+                                      Margin="{TemplateBinding Padding}"
+                                      VerticalAlignment="Center"
+                                      Focusable="False"
+                                      HorizontalScrollBarVisibility="Hidden"
+                                      VerticalScrollBarVisibility="Hidden"/>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <MultiTrigger>
+                            <MultiTrigger.Conditions>
+                                <Condition Property="Text" Value=""/>
+                                <Condition Property="IsKeyboardFocused" Value="False"/>
+                            </MultiTrigger.Conditions>
+                            <Setter TargetName="Watermark" Property="Visibility" Value="Visible"/>
+                        </MultiTrigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="Bd" Property="Opacity" Value="0.6"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
     </Style>
 
     <!-- CheckBox -->
@@ -128,6 +186,8 @@
         <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
         <Setter Property="FontSize" Value="14"/>
         <Setter Property="MinHeight" Value="30"/>
+        <Setter Property="IsTextSearchEnabled" Value="True"/>
+        <Setter Property="StaysOpenOnEdit" Value="True"/>
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="ComboBox">
@@ -136,11 +196,23 @@
                                       Template="{StaticResource DarkComboBoxToggle}"
                                       IsChecked="{Binding Path=IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}"
                                       Focusable="False" ClickMode="Press"/>
+                        <!-- Non-editable mode: show selected item -->
                         <ContentPresenter Name="ContentSite" IsHitTestVisible="False"
                                           Content="{TemplateBinding SelectionBoxItem}"
                                           ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
                                           Margin="8,4,28,4" VerticalAlignment="Center"
                                           HorizontalAlignment="Left"/>
+                        <!-- Editable mode: TextBox that displays the Text property -->
+                        <TextBox x:Name="PART_EditableTextBox"
+                                 Style="{x:Null}"
+                                 HorizontalAlignment="Stretch" VerticalAlignment="Center"
+                                 Margin="6,2,24,2" Focusable="True"
+                                 Background="Transparent"
+                                 Foreground="{StaticResource TextBrush}"
+                                 CaretBrush="{StaticResource TextBrush}"
+                                 BorderThickness="0" FontSize="{TemplateBinding FontSize}"
+                                 Visibility="Collapsed"
+                                 IsReadOnly="{TemplateBinding IsReadOnly}"/>
                         <Popup Name="Popup" Placement="Bottom"
                                IsOpen="{TemplateBinding IsDropDownOpen}"
                                AllowsTransparency="True" Focusable="False"
@@ -157,6 +229,16 @@
                             </Grid>
                         </Popup>
                     </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsEditable" Value="True">
+                            <Setter TargetName="PART_EditableTextBox" Property="Visibility" Value="Visible"/>
+                            <Setter TargetName="ContentSite" Property="Visibility" Value="Collapsed"/>
+                        </Trigger>
+                        <!-- Open dropdown when the editable TextBox gets focus (click to open) -->
+                        <Trigger SourceName="PART_EditableTextBox" Property="IsFocused" Value="True">
+                            <Setter Property="IsDropDownOpen" Value="True"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value>
         </Setter>

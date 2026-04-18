@@ -19,7 +19,8 @@ public class ConfigServiceTests
         var config = new ConfigService();
         Assert.StartsWith(config.AppDataDir, config.DefinitionsDir);
         Assert.StartsWith(config.AppDataDir, config.SecretsSourceDir);
-        Assert.StartsWith(config.AppDataDir, config.SecretsJsonDataFullDir);
+        Assert.StartsWith(config.AppDataDir, config.SecretsGitHubRawDir);
+        Assert.StartsWith(config.AppDataDir, config.SecretsJsonDataGitHubDir);
         Assert.StartsWith(config.AppDataDir, config.OutputJsonDataDir);
         Assert.StartsWith(config.AppDataDir, config.UtilitiesDir);
     }

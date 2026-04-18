@@ -8,7 +8,7 @@
     <UseWPF>true</UseWPF>
     <EnableNETAnalyzers>true</EnableNETAnalyzers>
     <AnalysisLevel>latest-recommended</AnalysisLevel>
-    <NoWarn>CA1515;CA2007;CA1848;CA1822;CA1852;CA1859;CA1310;CA1307;CA1305</NoWarn>
+    <NoWarn>CA1515;CA2007;CA1848;CA1822;CA1852;CA1859;CA1310;CA1307;CA1305;CA1001</NoWarn>
   </PropertyGroup>
 
   <PropertyGroup>
@@ -26,6 +26,7 @@
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.5" />
     <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.5" />
     <PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.5" />
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.3856.49" />
   </ItemGroup>
 
 </Project>

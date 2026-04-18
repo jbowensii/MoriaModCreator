@@ -55,6 +55,9 @@ public partial class ImportDialog : Window, IDisposable
                 StatusText.Text = p.Status;
                 ProgressBar.Value = p.Progress;
                 FileText.Text = $"{p.Progress:P0}";
+                // Gap #14: per-file progress counts
+                if (p.FilesTotal > 0)
+                    CountText.Text = $"Converted {p.FilesDone}/{p.FilesTotal} ({p.Errors} errors)";
             });
         });
 
@@ -64,7 +67,23 @@ public partial class ImportDialog : Window, IDisposable
             StatusText.Text = "Checking configuration...";
             FileText.Text = "";
 
-            var result = await _importService.RunCombinedImportAsync(progress, _cts.Token);
+            // Secrets ZIP provider — prompts user on UI thread when needed
+            var configSvc = App.Services.GetRequiredService<ConfigService>();
+            Func<Task<string?>> secretsZipProvider = async () =>
+            {
+                var tcs = new TaskCompletionSource<string?>();
+                await Dispatcher.InvokeAsync(() =>
+                {
+                    var dlg = new SecretsDownloadDialog(configSvc) { Owner = this };
+                    if (dlg.ShowDialog() == true)
+                        tcs.SetResult(dlg.SelectedZipPath);
+                    else
+                        tcs.SetResult(null);
+                });
+                return await tcs.Task;
+            };
+
+            var result = await _importService.RunCombinedImportAsync(progress, secretsZipProvider, _cts.Token);
             ImportSuccess = result.Success;
 
             TitleText.Text = result.Success ? "Import Complete" : "Import Failed";

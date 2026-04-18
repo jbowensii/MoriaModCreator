@@ -45,7 +45,7 @@ public static class Constants
     public const string SecretsPakStem = "RtoMSecretsOfKhazaddum_NoFatStacks_P";
     public static readonly string[] SecretsCompanionFiles =
     [
-        "SecretsOfKhazadDum_Localization_P.pak",
+        "SecretsOfKhazadDum_LocTags_P.pak",
         "TobiModsAddons_P.pak",
         "TobiModsAddons_P.ucas",
         "TobiModsAddons_P.utoc",
@@ -64,7 +64,7 @@ public static class Constants
 
     // Application info
     public const string AppName = "Moria MOD Creator";
-    public const string AppVersion = "2.10.0";
+    public const string AppVersion = "2.11.0";
     public const string AppDate = "April 2026";
     public const string AppAuthor = "John B Owens II";
     public const string GitHubUrl = "https://github.com/jbowensii/MoriaModCreator";
