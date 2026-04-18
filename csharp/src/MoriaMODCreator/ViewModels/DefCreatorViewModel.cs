@@ -30,6 +30,12 @@ public partial class DefCreatorViewModel : ObservableObject
     [ObservableProperty] private string _defChangeNote = "";
     [ObservableProperty] private bool _includeComments;
     [ObservableProperty] private string _logText = "";
+    [ObservableProperty] private GeneratedFile? _selectedGeneratedFile;
+
+    partial void OnSelectedGeneratedFileChanged(GeneratedFile? value)
+    {
+        if (value != null) SelectGeneratedFile(value);
+    }
 
     public ObservableCollection<string> ExtractedFiles { get; } = [];
     public ObservableCollection<DiffEntry> Differences { get; } = [];
