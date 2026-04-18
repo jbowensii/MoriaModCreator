@@ -161,6 +161,18 @@ public class DiffServiceTests
             new() { ItemName = "Axe", PropertyPath = "Weight", NewValue = "10", OriginalValue = "5", DiffType = DiffType.Change },
         };
         var xml = _service.GenerateDefXml("Test", "DT.json", diffs, includeComments: true);
-        Assert.Contains("<!--", xml);
+        Assert.Matches(@"<!--\s*Axe\s*(→|->)\s*Weight\s*-->\s*<change", xml);
+    }
+
+    [Fact]
+    public void GenerateDefXml_DoesNotApplyChangeNoteToDeleteDiffs()
+    {
+        var diffs = new List<PropertyDiff>
+        {
+            new() { ItemName = "Shield", PropertyPath = "Tags", NewValue = "Item.Removed", DiffType = DiffType.Delete },
+        };
+        var xml = _service.GenerateDefXml("Test", "DT.json", diffs, changeNote: "balance pass");
+        Assert.Contains("<delete", xml);
+        Assert.DoesNotContain("note=\"balance pass\"", xml);
     }
 }

@@ -107,7 +107,7 @@ public class DiffService
             };
             if (diff.DiffType == DiffType.Change && !string.IsNullOrEmpty(diff.OriginalValue))
                 elem.Add(new XAttribute("original", diff.OriginalValue));
-            if (!string.IsNullOrEmpty(changeNote))
+            if (diff.DiffType == DiffType.Change && !string.IsNullOrEmpty(changeNote))
                 elem.Add(new XAttribute("note", changeNote));
             if (includeComments)
                 modElem.Add(new XComment($" {diff.ItemName} → {diff.PropertyPath} "));
