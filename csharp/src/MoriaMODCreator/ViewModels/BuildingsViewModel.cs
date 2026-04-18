@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Text.Json.Nodes;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.Extensions.Logging;
 using MoriaMODCreator.Models;
 using MoriaMODCreator.Services;
 
@@ -21,6 +22,7 @@ public partial class BuildingsViewModel : ObservableObject
     private readonly DiffService _diffService;
     private readonly ObjectTemplateService _templates;
     private readonly string _mode;
+    private readonly ILogger<BuildingsViewModel> _logger;
 
     [ObservableProperty] private string _prefix = "";
     [ObservableProperty] private string _selectedCategory = "";
@@ -59,7 +61,8 @@ public partial class BuildingsViewModel : ObservableObject
         BuildService buildService,
         DiffService diffService,
         ObjectTemplateService templates,
-        string mode)
+        string mode,
+        ILogger<BuildingsViewModel> logger)
     {
         _config = config;
         _categoryData = categoryData;
@@ -68,6 +71,7 @@ public partial class BuildingsViewModel : ObservableObject
         _diffService = diffService;
         _templates = templates;
         _mode = mode;
+        _logger = logger;
         ModeLabel = mode == "secrets" ? "Change Secrets" : "Change Constructions";
         _form = new FormBuilder(FormFields);
 
@@ -122,7 +126,10 @@ public partial class BuildingsViewModel : ObservableObject
             _enumOptions["AllValues"] = opts.GetValueOrDefault("AllValues") ?? [];
             _enumOptions["Tags"] = opts.GetValueOrDefault("Tags") ?? [];
         }
-        catch { /* ignore scan failures on startup */ }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to load dropdown options on startup");
+        }
     }
 
     // =========================================================================
@@ -164,16 +171,7 @@ public partial class BuildingsViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            // Log the full exception to file for diagnostics
-            try
-            {
-                var logPath = System.IO.Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                    "MoriaMODCreator", "MoriaMODCreator.log");
-                System.IO.File.AppendAllText(logPath,
-                    $"  ERROR loading {category}: {ex.GetType().Name}: {ex.Message}\n  {ex.StackTrace}\n");
-            }
-            catch { }
+            _logger.LogError(ex, "Error loading category {Category}", category);
             BuildStatus = $"Error loading {category}: {ex.Message}";
         }
     }
@@ -581,7 +579,10 @@ public partial class BuildingsViewModel : ObservableObject
                     }
                 }
             }
-            catch { /* ignore parse errors */ }
+            catch (System.Text.Json.JsonException ex)
+            {
+                _logger.LogWarning(ex, "Failed to parse material section {Field}", fieldName);
+            }
         }
 
         MaterialSections.Add(section);

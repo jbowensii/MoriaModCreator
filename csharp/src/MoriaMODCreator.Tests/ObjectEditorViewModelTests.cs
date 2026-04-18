@@ -17,7 +17,8 @@ public class ObjectEditorViewModelTests
         return new ObjectEditorViewModel(cfg, tpl, cat,
             /* buildService */ null!,
             /* buildingsData */ null!,
-            /* diffService */ null!);
+            /* diffService */ null!,
+            NullLogger<ObjectEditorViewModel>.Instance);
     }
 
     [Fact]

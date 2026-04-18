@@ -3,6 +3,7 @@ using System.IO;
 using System.Text.Json.Nodes;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.Extensions.Logging;
 using MoriaMODCreator.Models;
 using MoriaMODCreator.Services;
 
@@ -24,6 +25,7 @@ public partial class ObjectEditorViewModel : ObservableObject
     private readonly BuildService? _buildService;
     private readonly BuildingsDataService? _buildingsData;
     private readonly DiffService? _diffService;
+    private readonly ILogger<ObjectEditorViewModel> _logger;
 
     [ObservableProperty] private string _selectedCategory = "";
     [ObservableProperty] private CategoryItem? _selectedItem;
@@ -55,7 +57,8 @@ public partial class ObjectEditorViewModel : ObservableObject
         CategoryDataService categoryData,
         BuildService? buildService,
         BuildingsDataService? buildingsData,
-        DiffService? diffService)
+        DiffService? diffService,
+        ILogger<ObjectEditorViewModel> logger)
     {
         _config = config;
         _templates = templates;
@@ -63,6 +66,7 @@ public partial class ObjectEditorViewModel : ObservableObject
         _buildService = buildService;
         _buildingsData = buildingsData;
         _diffService = diffService;
+        _logger = logger;
 
         _form = new FormBuilder(FormFields);
 
@@ -84,7 +88,10 @@ public partial class ObjectEditorViewModel : ObservableObject
             _enumOptions["AllValues"] = opts.GetValueOrDefault("AllValues") ?? [];
             _enumOptions["Tags"] = opts.GetValueOrDefault("Tags") ?? [];
         }
-        catch { /* ignore scan failures on startup */ }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to load dropdown options on startup");
+        }
     }
 
     // =========================================================================
@@ -479,7 +486,10 @@ public partial class ObjectEditorViewModel : ObservableObject
                     }
                 }
             }
-            catch { /* ignore parse errors */ }
+            catch (System.Text.Json.JsonException ex)
+            {
+                _logger.LogWarning(ex, "Failed to parse material section {Field}", fieldName);
+            }
         }
 
         MaterialSections.Add(section);

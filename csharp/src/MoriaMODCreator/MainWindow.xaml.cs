@@ -3,6 +3,7 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using MoriaMODCreator.Services;
 using MoriaMODCreator.ViewModels;
 using MoriaMODCreator.Views.Dialogs;
@@ -33,8 +34,9 @@ public partial class MainWindow : Window
         var buildService = App.Services.GetRequiredService<BuildService>();
         var diffService = App.Services.GetRequiredService<DiffService>();
         var templates = App.Services.GetRequiredService<ObjectTemplateService>();
-        SecretsTab.DataContext = new BuildingsViewModel(config, catData, buildingsData, buildService, diffService, templates, "secrets");
-        ConstructionsTab.DataContext = new BuildingsViewModel(config, catData, buildingsData, buildService, diffService, templates, "constructions");
+        var buildingsLogger = App.Services.GetRequiredService<ILogger<BuildingsViewModel>>();
+        SecretsTab.DataContext = new BuildingsViewModel(config, catData, buildingsData, buildService, diffService, templates, "secrets", buildingsLogger);
+        ConstructionsTab.DataContext = new BuildingsViewModel(config, catData, buildingsData, buildService, diffService, templates, "constructions", buildingsLogger);
         ObjectEditorTab.DataContext = App.Services.GetRequiredService<ObjectEditorViewModel>();
         CreateDefTab.DataContext = new DefCreatorViewModel(
             config,
