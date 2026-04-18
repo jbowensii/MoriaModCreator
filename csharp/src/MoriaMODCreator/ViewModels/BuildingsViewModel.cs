@@ -257,22 +257,7 @@ public partial class BuildingsViewModel : ObservableObject
         {
             try
             {
-                // Dump all field keys + value types for diagnostics
-                foreach (var (key, val) in item.Fields.Take(15))
-                {
-                    var valStr = FormBuilder.FieldValueToString(val);
-                    var valType = val?.GetType().Name ?? "null";
-                    System.IO.File.AppendAllText(
-                        System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                            "MoriaMODCreator", "MoriaMODCreator.log"),
-                        $"  FIELD: {key} = [{valType}] '{valStr}'\n");
-                }
-
                 BuildFormForCategory(item);
-                System.IO.File.AppendAllText(
-                    System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                        "MoriaMODCreator", "MoriaMODCreator.log"),
-                    $"  FORM: {FormFields.Count} fields, {MaterialSections.Count} material sections\n");
             }
             catch (Exception ex)
             {

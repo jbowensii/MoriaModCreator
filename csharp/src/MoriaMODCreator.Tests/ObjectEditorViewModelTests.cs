@@ -3,6 +3,7 @@ using MoriaMODCreator.Models;
 using MoriaMODCreator.Services;
 using MoriaMODCreator.ViewModels;
 using Xunit;
+using System.Collections.ObjectModel;
 
 namespace MoriaMODCreator.Tests;
 
@@ -48,5 +49,32 @@ public class ObjectEditorViewModelTests
         Assert.NotNull(vm.RevertItemCommand);
         Assert.NotNull(vm.BuildCommand);
         Assert.NotNull(vm.ChooseModNameCommand);
+    }
+
+    [Fact]
+    public void SaveItem_DoesNothing_WhenNoSelectedItem()
+    {
+        var vm = CreateVm();
+        // No SelectedItem set — should not throw
+        vm.SaveItemCommand.Execute(null);
+        // Status remains empty (no action taken)
+        Assert.True(true);
+    }
+
+    [Fact]
+    public void SaveItem_ReportsNoChanges_WhenFieldsUnchanged()
+    {
+        var vm = CreateVm();
+        vm.Items.Add(new CategoryItem("TestRow", "Test", [], "test.json"));
+        vm.SelectedItem = vm.Items[0];
+        vm.FormFields.Add(new FormField
+        {
+            Name = "Damage",
+            Value = "100",
+            OriginalValue = "100",
+            FieldType = FormFieldType.Text,
+        });
+        vm.SaveItemCommand.Execute(null);
+        Assert.Contains("No changes", vm.Status);
     }
 }

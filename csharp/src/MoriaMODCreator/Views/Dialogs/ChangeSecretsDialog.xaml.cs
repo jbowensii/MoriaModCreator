@@ -26,7 +26,12 @@ public partial class ChangeSecretsDialog : Window
         var baseDir = _mode == "secrets" ? _config.ChangeSecretsDir : _config.ChangeConstructionsDir;
         if (!Directory.Exists(baseDir)) return;
         foreach (var dir in Directory.GetDirectories(baseDir))
-            ExistingCombo.Items.Add(Path.GetFileName(dir));
+        {
+            var name = Path.GetFileName(dir);
+            // Hide internal sentinel directories (e.g. "__object_editor__") from user listing.
+            if (name.StartsWith("__", StringComparison.Ordinal)) continue;
+            ExistingCombo.Items.Add(name);
+        }
     }
 
     private void OnSet(object sender, RoutedEventArgs e)
