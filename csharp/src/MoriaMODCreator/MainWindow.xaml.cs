@@ -89,7 +89,9 @@ public partial class MainWindow : Window
             // Show all nav buttons + Import
             ModBuilderBtn.Visibility = Visibility.Visible;
             SecretsBtn.Visibility = Visibility.Visible;
-            CreateEditSecretBtn.Visibility = Visibility.Visible;
+            // Create/Edit Secret: hidden until ObjectEditor VM/View is production-ready.
+            // Code (VM, View, DI registration, toolbar wiring) is preserved for re-enable.
+            CreateEditSecretBtn.Visibility = Visibility.Collapsed;
             ConstructionsBtn.Visibility = Visibility.Visible;
             CreateDefBtn.Visibility = Visibility.Visible;
             ToolbarSep.Visibility = Visibility.Visible;
